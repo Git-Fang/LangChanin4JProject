@@ -9,32 +9,32 @@ import dev.langchain4j.data.document.splitter.DocumentByParagraphSplitter;
 import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.model.embedding.EmbeddingModel;
-import dev.langchain4j.model.output.Response;
 import dev.langchain4j.store.embedding.EmbeddingMatch;
 import dev.langchain4j.store.embedding.EmbeddingSearchRequest;
 import dev.langchain4j.store.embedding.EmbeddingStore;
 import dev.langchain4j.store.embedding.EmbeddingStoreIngestor;
 import io.qdrant.client.QdrantClient;
-import io.qdrant.client.grpc.Collections;
 import io.qdrant.client.grpc.Points;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.fb.service.ChatAssistant;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.io.IOException;
 import java.nio.file.FileSystems;
 import java.nio.file.PathMatcher;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 
 @RestController
-@RequestMapping("/lc4j")
+@RequestMapping("/ragTranslation")
 @Slf4j
 @Tag(name = "9013--RAG增强检索测试")
 public class LangChain4JChatRag01ChatController {
@@ -53,18 +53,66 @@ public class LangChain4JChatRag01ChatController {
 
     private static final String DOC_FilePath = "D:\\个人资料\\java后端求职简历--方彪--251202.pdf";
 
+    @GetMapping(value = "/rag01/ask")
+    @Operation(summary = "1-直接查询")
+    public Object ask(@RequestParam("question") String question) throws IOException {
+        try {
+            return chatAssistant.chat(question);
+        } catch (IllegalArgumentException e) {
+            if (e.getMessage().contains("textSegment cannot be null")) {
+                // 记录错误并返回友好错误信息
+                log.error("Embedding store contains null text segments, please check your data", e);
+                return ResponseEntity.badRequest()
+                        .body("暂时无法处理您的请求，请稍后重试");
+            }
+            throw e;
+        }
+    }
+
+    @GetMapping(value = "/rag01/add")
+    @Operation(summary = "2-向量数据库添加文档")
+    public String add() throws IOException {
+        // 1.读取文档
+        Document document = FileSystemDocumentLoader.loadDocument(DOC_FilePath, new ApacheTikaDocumentParser());
+        document.metadata().put("author", "fb");
+
+        // 2. 按段落切分
+        DocumentByParagraphSplitter splitter = new DocumentByParagraphSplitter(800, 80);
+        List<TextSegment> segments = splitter.split(document);
+
+        // 3. 分批调用 embedding（一次最多 10 条）
+        int batchSize = 10;
+        for (int i = 0; i < segments.size(); i += batchSize) {
+            int end = Math.min(i + batchSize, segments.size());
+            List<TextSegment> batch = segments.subList(i, end);
+
+            // 调用 embedding API
+            List<Embedding> embeddings = embeddedModel.embedAll(batch).content();
+
+            // 存入向量数据库
+            embeddingStore.addAll(embeddings, batch);
+        }
+        return "Inserted " + segments.size() + " chunks into Qdrant";
+    }
+
+    /**
+     * 待修改
+     * */
     @GetMapping("/embeddingFile")
-    @Operation(summary = "添加数据")
+    @Operation(summary = "3-添加数据")
     public String embeddingFile() {
         String str = "咏鸭 鸭子嘎嘎嘎，肉食石子花。";
 
         TextSegment segment1 = TextSegment.from(str);
-        segment1.metadata().put("author","fb");
+        segment1.metadata().put("author", "fb");
 
-        Response<Embedding> embed = embeddedModel.embed(str);
-        embeddingStore.add(str, embed.content());
+        Embedding embedding = embeddedModel.embed(segment1.text()).content();
 
-        return embed.content().toString();
+        // 使用UUID作为ID，而不是原始文本
+        String id = UUID.randomUUID().toString();
+        embeddingStore.add(id,embedding);
+
+        return embedding.toString();
     }
 
     @GetMapping("/embeddingFile2")
@@ -121,42 +169,11 @@ public class LangChain4JChatRag01ChatController {
         return "success";
     }
 
-    @GetMapping(value = "/rag01/add")
-    @Operation(summary = "1-向量数据库添加文档")
-    public String add() throws IOException {
-        // 读取文档
-        Document document = FileSystemDocumentLoader.loadDocument(DOC_FilePath, new ApacheTikaDocumentParser());
-        document.metadata().put("author", "paperfly");
-        // 2. 按段落切分
-        DocumentByParagraphSplitter splitter = new DocumentByParagraphSplitter(500, 50);
-        List<TextSegment> segments = splitter.split(document);
-
-        // 3. 分批调用 embedding（一次最多 10 条）
-        int batchSize = 10;
-        for (int i = 0; i < segments.size(); i += batchSize) {
-            int end = Math.min(i + batchSize, segments.size());
-            List<TextSegment> batch = segments.subList(i, end);
-
-            // 调用 embedding API
-            List<Embedding> embeddings = embeddedModel.embedAll(batch).content();
-
-            // 存入向量数据库
-            embeddingStore.addAll(embeddings, batch);
-        }
-        return "Inserted " + segments.size() + " chunks into Qdrant";
-    }
-
-    @GetMapping(value = "/rag01/ask")
-    @Operation(summary = "2-直接查询")
-    public Object ask(String question) throws IOException {
-        return chatAssistant.chat(question);
-    }
-
 
     /*=======================以下只是从向量数据库查询获取相似向量数据的动作（与LLM的返回不是一回事）==========================*/
 
     @GetMapping(value = "/rag01/query")
-    @Operation(summary = "3-基于向量数据库查询")
+//    @Operation(summary = "3-基于向量数据库查询")
     public Object query(String question) throws IOException {
         // 查询条件向量化
         Embedding queryEmbedding = embeddedModel.embed(question).content();
@@ -177,7 +194,7 @@ public class LangChain4JChatRag01ChatController {
     }
 
     @GetMapping(value = "/rag01/query2")
-    @Operation(summary = "4-基于向量数据库查询2")
+//    @Operation(summary = "4-基于向量数据库查询2")
     public Object query2(String  question) throws IOException {
         Embedding queryEmbedding = embeddedModel.embed(question).content();
         EmbeddingSearchRequest embeddingSearchRequest = EmbeddingSearchRequest.builder()
