@@ -20,6 +20,7 @@ import io.qdrant.client.QdrantGrpcClient;
 import lombok.extern.slf4j.Slf4j;
 import org.fb.service.assistant.ChatAssistant;
 import org.fb.config.toolsConfig.MongoChatMemoryStore;
+import org.fb.service.assistant.ChatAssistantStream;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -96,6 +97,22 @@ public class LLMConfig {
         return AiServices
                 .builder(ChatAssistant.class)
                 .chatModel(chatModel)
+                .chatMemoryProvider(memoryId -> MessageWindowChatMemory.withMaxMessages(10))
+                .contentRetriever(contentRetriever)
+                .build();
+    }
+
+    @Bean
+    public ChatAssistantStream chatAssistantStream(StreamingChatModel chatModel, EmbeddingStore<TextSegment> embeddingStore, EmbeddingModel embeddingModel) {
+
+        // 构建支撑检索曾强的EmbeddingStore工具实例
+        EmbeddingStoreContentRetriever contentRetriever = EmbeddingStoreContentRetriever.builder()
+                .embeddingStore(embeddingStore)
+                .embeddingModel(embeddingModel)
+                .maxResults(5).build();
+        return AiServices
+                .builder(ChatAssistantStream.class)
+                .streamingChatModel(chatModel)
                 .chatMemoryProvider(memoryId -> MessageWindowChatMemory.withMaxMessages(10))
                 .contentRetriever(contentRetriever)
                 .build();

@@ -11,12 +11,12 @@ import reactor.core.publisher.Flux;
 /**
  * 流式调用agent
  * */
-@AiService(wiringMode = AiServiceWiringMode.EXPLICIT,
+/*@AiService(wiringMode = AiServiceWiringMode.EXPLICIT,
         streamingChatModel = "streamingChatModel",
         chatMemoryProvider = "chatMemoryProvider"
 //        , tools = "commonTools"
 //        , contentRetriever = "contentRetriever"
-)
+)*/
 public interface ChatAssistantStream {
 
     public Flux<String> chat(@MemoryId long memoryId, @UserMessage String userMessage);
