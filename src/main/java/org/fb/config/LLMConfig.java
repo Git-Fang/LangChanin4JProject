@@ -15,12 +15,17 @@ import io.qdrant.client.QdrantClient;
 import io.qdrant.client.QdrantGrpcClient;
 import lombok.extern.slf4j.Slf4j;
 import org.fb.service.ChatAssistant;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
 @Slf4j
 public class LLMConfig {
+
+    @Autowired
+    private EnvConf envConf;
+
     @Bean
     public ChatModel chatModel() {
         return OpenAiChatModel.builder()
@@ -43,7 +48,7 @@ public class LLMConfig {
     public QdrantClient qdrantClient() {
         QdrantClient client =
                 new QdrantClient(
-                        QdrantGrpcClient.newBuilder("192.168.179.130", 6334, false)
+                        QdrantGrpcClient.newBuilder(envConf.qdrantHost, envConf.qdrantPort, false)
                                 .build());
 
         return client;
@@ -53,9 +58,9 @@ public class LLMConfig {
     public EmbeddingStore<TextSegment> embeddingStore() {
         EmbeddingStore<TextSegment> embeddingStore =
                 QdrantEmbeddingStore.builder()
-                        .host("192.168.179.130")
-                        .port(6334)
-                        .collectionName("ragTranslation-1226")
+                        .host(envConf.qdrantHost)
+                        .port(envConf.qdrantPort)
+                        .collectionName(envConf.collectionName)
                         .build();
         return embeddingStore;
     }

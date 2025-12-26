@@ -51,15 +51,6 @@ public class LangChain4JChatRag01ChatController {
     @Autowired
     private EmbeddingStore<TextSegment> embeddingStore;
 
-    @PostConstruct
-    public void createCollection() throws IOException {
-        Collections.VectorParams vectorParams = Collections.VectorParams.newBuilder()
-                .setDistance(Collections.Distance.Cosine)
-                .setSize(embeddedModel.dimension())
-                .build();
-        qdrantClient.createCollectionAsync("wx-estate", vectorParams);
-    }
-
     private static final String DOC_FilePath = "D:\\个人资料\\java后端求职简历--方彪--251202.pdf";
 
     @GetMapping("/embeddingFile")

@@ -10,4 +10,11 @@ spring:
   application:
     name: RAGTranslationApplication
 
+ai:
+  embeddingStore:
+    qdrant:
+      collectionName: ragTranslation-1226
+      host: 192.168.179.130
+      port: 6334
+
 
