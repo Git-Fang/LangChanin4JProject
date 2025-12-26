@@ -1,0 +1,79 @@
+package org.fb.config;
+
+
+import dev.langchain4j.data.segment.TextSegment;
+import dev.langchain4j.memory.chat.MessageWindowChatMemory;
+import dev.langchain4j.model.chat.ChatModel;
+import dev.langchain4j.model.embedding.EmbeddingModel;
+import dev.langchain4j.model.embedding.onnx.allminilml6v2.AllMiniLmL6V2EmbeddingModel;
+import dev.langchain4j.model.openai.OpenAiChatModel;
+import dev.langchain4j.rag.content.retriever.EmbeddingStoreContentRetriever;
+import dev.langchain4j.service.AiServices;
+import dev.langchain4j.store.embedding.EmbeddingStore;
+import dev.langchain4j.store.embedding.qdrant.QdrantEmbeddingStore;
+import io.qdrant.client.QdrantClient;
+import io.qdrant.client.QdrantGrpcClient;
+import lombok.extern.slf4j.Slf4j;
+import org.fb.service.ChatAssistant;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+@Slf4j
+public class LLMConfig {
+    @Bean
+    public ChatModel chatModel() {
+        return OpenAiChatModel.builder()
+                .apiKey(System.getenv("DASHSCOPE_API_KEY"))
+                .modelName("qwen-plus")
+                .logRequests(true)
+                .logResponses(true)
+                .baseUrl("https://dashscope.aliyuncs.com/compatible-mode/v1")
+                .build();
+    }
+
+    @Bean("allMiniLmL6V2EmbeddingModel")
+    public EmbeddingModel allMiniLmL6V2EmbeddingModel() {
+        EmbeddingModel embeddingModel = new AllMiniLmL6V2EmbeddingModel();
+        return embeddingModel;
+    }
+
+    // 支持qdrant向量数据存储
+    @Bean
+    public QdrantClient qdrantClient() {
+        QdrantClient client =
+                new QdrantClient(
+                        QdrantGrpcClient.newBuilder("192.168.179.130", 6334, false)
+                                .build());
+
+        return client;
+    }
+
+    @Bean
+    public EmbeddingStore<TextSegment> embeddingStore() {
+        EmbeddingStore<TextSegment> embeddingStore =
+                QdrantEmbeddingStore.builder()
+                        .host("192.168.179.130")
+                        .port(6334)
+                        .collectionName("ragTranslation-1226")
+                        .build();
+        return embeddingStore;
+    }
+
+
+    @Bean
+    public ChatAssistant chatAssistant(ChatModel chatModel, EmbeddingStore<TextSegment> embeddingStore, EmbeddingModel embeddingModel) {
+
+        // 构建支撑检索曾强的EmbeddingStore工具实例
+        EmbeddingStoreContentRetriever contentRetriever = EmbeddingStoreContentRetriever.builder()
+                .embeddingStore(embeddingStore)
+                .embeddingModel(embeddingModel)
+                .maxResults(5).build();
+        return AiServices
+                .builder(ChatAssistant.class)
+                .chatModel(chatModel)
+                .chatMemoryProvider(memoryId -> MessageWindowChatMemory.withMaxMessages(10))
+                .contentRetriever(contentRetriever)
+                .build();
+    }
+}
