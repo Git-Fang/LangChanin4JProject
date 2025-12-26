@@ -68,8 +68,8 @@ public class LangChain4JChatRag01ChatController {
         }
     }
 
-    @GetMapping(value = "/rag01/add")
-    @Operation(summary = "2-向量数据库添加文档")
+    @PostMapping(value = "/rag01/add")
+    @Operation(summary = "2-读取本地文档解析至向量数据库")
     public String add() throws IOException {
         // 1.读取文档
         Document document = FileSystemDocumentLoader.loadDocument(DOC_FilePath2, new ApacheTikaDocumentParser());
@@ -95,7 +95,7 @@ public class LangChain4JChatRag01ChatController {
     }
 
     @PostMapping("/embeddingFile")
-    @Operation(summary = "3-添加数据")
+    @Operation(summary = "3-直接添加文本数据")
     public String embeddingFile(@RequestParam("content") String content) {
 
         // 创建文本段
