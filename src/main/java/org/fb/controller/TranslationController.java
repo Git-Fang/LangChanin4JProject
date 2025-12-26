@@ -3,19 +3,19 @@ package org.fb.controller;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.extern.slf4j.Slf4j;
+import org.fb.bean.ChatForm;
 import org.fb.service.assistant.ChatAssistant;
+import org.fb.service.assistant.ChatAssistantStream;
 import org.fb.service.assistant.TranslaterService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
+import reactor.core.publisher.Flux;
 
 import java.io.IOException;
 
 @RestController
-@RequestMapping("/ragTranslation/trans/")
+@RequestMapping("/ragTranslation/")
 @Slf4j
 @Tag(name = "RAG增强翻译")
 public class TranslationController {
@@ -24,9 +24,12 @@ public class TranslationController {
     private ChatAssistant chatAssistant;
 
     @Autowired
+    private ChatAssistantStream chatAssistantStream;
+
+    @Autowired
     private TranslaterService translaterService;
 
-    @GetMapping(value = "/rag01/chat")
+    @GetMapping(value = "/chat")
     @Operation(summary = "1-增强式对话")
     public Object ask(@RequestParam("question") String question) throws IOException {
         try {
@@ -42,8 +45,37 @@ public class TranslationController {
         }
     }
 
-    @GetMapping(value = "/rag02/trans")
-    @Operation(summary = "2-翻译对话")
+
+    @Operation(summary = "2-流式增强对话")
+    @PostMapping(value = "/chatStream", produces = "text/stream;charset=utf-8")
+    public Flux<String> chat2(@RequestBody ChatForm chatForm) {
+        Flux<String> chat = null;
+        try {
+            chat = chatAssistantStream.chat(chatForm.getMemoryId(), chatForm.getMessage());
+        } catch (Exception e) {
+            // 记录错误并返回友好错误信息
+            log.error("流式翻译过程出错：", e);
+            throw e;
+        }
+        return chat;
+    }
+
+    @Operation(summary = "2.2-流式增强对话")
+    @PostMapping(value = "/chatStream2", produces = "text/stream;charset=utf-8")
+    public Flux<String> chat3(@RequestParam("question") String question) {
+        Flux<String> chat = null;
+        try {
+            chat = chatAssistantStream.chat(question);
+        } catch (Exception e) {
+            // 记录错误并返回友好错误信息
+            log.error("流式翻译过程出错：", e);
+            throw e;
+        }
+        return chat;
+    }
+
+    @GetMapping(value = "/rag03/trans")
+    @Operation(summary = "3-翻译对话")
     public Object trans(@RequestParam("content") String content) throws IOException {
         try {
             return translaterService.translate(content);
