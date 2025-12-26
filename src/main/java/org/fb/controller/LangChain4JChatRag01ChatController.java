@@ -21,10 +21,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.fb.service.ChatAssistant;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
 import java.nio.file.FileSystems;
@@ -51,7 +48,9 @@ public class LangChain4JChatRag01ChatController {
     @Autowired
     private EmbeddingStore<TextSegment> embeddingStore;
 
-    private static final String DOC_FilePath = "D:\\个人资料\\java后端求职简历--方彪--251202.pdf";
+    private static final String DOC_FilePath0 = "D:\\个人资料\\java后端求职简历--方彪--251202.pdf";
+    private static final String DOC_FilePath1 = "D:\\个人资料\\java求职简历-方彪--250927.pdf";
+    private static final String DOC_FilePath2 = "D:\\个人资料\\方彪-离职证明.pdf";
 
     @GetMapping(value = "/rag01/ask")
     @Operation(summary = "1-直接查询")
@@ -73,7 +72,7 @@ public class LangChain4JChatRag01ChatController {
     @Operation(summary = "2-向量数据库添加文档")
     public String add() throws IOException {
         // 1.读取文档
-        Document document = FileSystemDocumentLoader.loadDocument(DOC_FilePath, new ApacheTikaDocumentParser());
+        Document document = FileSystemDocumentLoader.loadDocument(DOC_FilePath2, new ApacheTikaDocumentParser());
         document.metadata().put("author", "fb");
 
         // 2. 按段落切分
@@ -95,25 +94,25 @@ public class LangChain4JChatRag01ChatController {
         return "Inserted " + segments.size() + " chunks into Qdrant";
     }
 
-    /**
-     * 待修改
-     * */
-    @GetMapping("/embeddingFile")
+    @PostMapping("/embeddingFile")
     @Operation(summary = "3-添加数据")
-    public String embeddingFile() {
-        String str = "咏鸭 鸭子嘎嘎嘎，肉食石子花。";
+    public String embeddingFile(@RequestParam("content") String content) {
 
-        TextSegment segment1 = TextSegment.from(str);
+        // 创建文本段
+        TextSegment segment1 = TextSegment.from(content);
         segment1.metadata().put("author", "fb");
 
-        Embedding embedding = embeddedModel.embed(segment1.text()).content();
+        // 向量化
+        List<TextSegment> segments = List.of(segment1);
+        List<Embedding> embeddings = embeddedModel.embedAll(segments).content();
 
-        // 使用UUID作为ID，而不是原始文本
+        // 存储到向量数据库
         String id = UUID.randomUUID().toString();
-        embeddingStore.add(id,embedding);
+        embeddingStore.addAll(embeddings, segments);
 
-        return embedding.toString();
+        return "Content successfully embedded and stored with ID: " + id;
     }
+
 
     @GetMapping("/embeddingFile2")
     public String embeddingFile2() throws IOException, ExecutionException, InterruptedException {// 创建临时文件
