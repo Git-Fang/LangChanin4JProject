@@ -18,14 +18,15 @@ import io.qdrant.client.grpc.Points;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.extern.slf4j.Slf4j;
-import org.fb.service.ChatAssistant;
+import org.fb.service.assistant.ChatAssistant;
+import org.fb.service.impl.DocumentImpl;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
-import java.nio.file.FileSystems;
-import java.nio.file.PathMatcher;
+import java.nio.file.*;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
@@ -48,12 +49,11 @@ public class LangChain4JChatRag01ChatController {
     @Autowired
     private EmbeddingStore<TextSegment> embeddingStore;
 
-    private static final String DOC_FilePath0 = "D:\\个人资料\\java后端求职简历--方彪--251202.pdf";
-    private static final String DOC_FilePath1 = "D:\\个人资料\\java求职简历-方彪--250927.pdf";
-    private static final String DOC_FilePath2 = "D:\\个人资料\\方彪-离职证明.pdf";
+    @Autowired
+    private DocumentImpl documentImpl;
 
-    @GetMapping(value = "/rag01/ask")
-    @Operation(summary = "1-直接查询")
+    @GetMapping(value = "/rag01/chat")
+    @Operation(summary = "0-增强式对话")
     public Object ask(@RequestParam("question") String question) throws IOException {
         try {
             return chatAssistant.chat(question);
@@ -68,50 +68,61 @@ public class LangChain4JChatRag01ChatController {
         }
     }
 
+
+    @PostMapping("/uploadMultipleDocuments")
+    @Operation(summary = "1-上传多个文档到本地")
+    public Integer uploadMultipleDocuments(@RequestParam("files") MultipartFile[] files) {
+        if (files == null || files.length == 0) {
+            throw new IllegalArgumentException("请选择要上传的文件");
+        }
+
+        return documentImpl.saveFilesToLocal(files);
+    }
+
     @PostMapping(value = "/rag01/add")
     @Operation(summary = "2-读取本地文档解析至向量数据库")
-    public String add() throws IOException {
-        // 1.读取文档
-        Document document = FileSystemDocumentLoader.loadDocument(DOC_FilePath2, new ApacheTikaDocumentParser());
-        document.metadata().put("author", "fb");
-
-        // 2. 按段落切分
-        DocumentByParagraphSplitter splitter = new DocumentByParagraphSplitter(800, 80);
-        List<TextSegment> segments = splitter.split(document);
-
-        // 3. 分批调用 embedding（一次最多 10 条）
-        int batchSize = 10;
-        for (int i = 0; i < segments.size(); i += batchSize) {
-            int end = Math.min(i + batchSize, segments.size());
-            List<TextSegment> batch = segments.subList(i, end);
-
-            // 调用 embedding API
-            List<Embedding> embeddings = embeddedModel.embedAll(batch).content();
-
-            // 存入向量数据库
-            embeddingStore.addAll(embeddings, batch);
+    public String add(@RequestParam("filePath") String filePath) throws IOException {
+        List<TextSegment> segments = null;
+        try {
+            segments = documentImpl.parseAndEmbedding(filePath);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
         }
         return "Inserted " + segments.size() + " chunks into Qdrant";
     }
+
 
     @PostMapping("/embeddingFile")
     @Operation(summary = "3-直接添加文本数据")
     public String embeddingFile(@RequestParam("content") String content) {
 
-        // 创建文本段
-        TextSegment segment1 = TextSegment.from(content);
-        segment1.metadata().put("author", "fb");
-
-        // 向量化
-        List<TextSegment> segments = List.of(segment1);
-        List<Embedding> embeddings = embeddedModel.embedAll(segments).content();
-
-        // 存储到向量数据库
-        String id = UUID.randomUUID().toString();
-        embeddingStore.addAll(embeddings, segments);
-
-        return "Content successfully embedded and stored with ID: " + id;
+        try {
+            documentImpl.addText(content);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+        return "Content embedded and stored successfully";
     }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
     @GetMapping("/embeddingFile2")
@@ -209,4 +220,7 @@ public class LangChain4JChatRag01ChatController {
         System.out.println(embeddingMatch.embedded().text());
         return embeddingMatch.embedded().text();
     }
+
+
+
 }
