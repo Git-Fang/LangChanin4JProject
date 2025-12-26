@@ -2,6 +2,7 @@ package org.fb.config;
 
 
 import dev.langchain4j.data.segment.TextSegment;
+import dev.langchain4j.memory.chat.ChatMemoryProvider;
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.embedding.EmbeddingModel;
@@ -15,6 +16,7 @@ import io.qdrant.client.QdrantClient;
 import io.qdrant.client.QdrantGrpcClient;
 import lombok.extern.slf4j.Slf4j;
 import org.fb.service.assistant.ChatAssistant;
+import org.fb.service.assistant.MongoChatMemoryStore;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -25,6 +27,9 @@ public class LLMConfig {
 
     @Autowired
     private EnvConf envConf;
+
+    @Autowired
+    private MongoChatMemoryStore mongoChatMemoryStore;
 
     @Bean
     public ChatModel chatModel() {
@@ -79,6 +84,16 @@ public class LLMConfig {
                 .chatModel(chatModel)
                 .chatMemoryProvider(memoryId -> MessageWindowChatMemory.withMaxMessages(10))
                 .contentRetriever(contentRetriever)
+                .build();
+    }
+
+
+    @Bean
+    ChatMemoryProvider chatMemoryProvider() {
+        return memoryId -> MessageWindowChatMemory.builder()
+                .id(memoryId)
+                .maxMessages(10)
+                .chatMemoryStore(mongoChatMemoryStore)//配置持久化对象
                 .build();
     }
 }

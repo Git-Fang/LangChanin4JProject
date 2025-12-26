@@ -1,59 +1,28 @@
 package org.fb.controller;
 
 import dev.langchain4j.data.segment.TextSegment;
-import dev.langchain4j.model.embedding.EmbeddingModel;
-import dev.langchain4j.store.embedding.EmbeddingStore;
-import io.qdrant.client.QdrantClient;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.extern.slf4j.Slf4j;
-import org.fb.service.assistant.ChatAssistant;
 import org.fb.service.impl.DocumentImpl;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.util.List;
 
 @RestController
-@RequestMapping("/ragTranslation")
+@RequestMapping("/ragTranslation/doc")
 @Slf4j
-@Tag(name = "9013--RAG增强检索测试")
-public class LangChain4JChatRag01ChatController {
-
-    @Autowired
-    private EmbeddingModel embeddedModel;
-
-    @Autowired
-    private ChatAssistant chatAssistant;
-
-    @Autowired
-    private QdrantClient qdrantClient;
-
-    @Autowired
-    private EmbeddingStore<TextSegment> embeddingStore;
+@Tag(name = "RAG文档嵌入")
+public class DocumentController {
 
     @Autowired
     private DocumentImpl documentImpl;
-
-    @GetMapping(value = "/rag01/chat")
-    @Operation(summary = "0-增强式对话")
-    public Object ask(@RequestParam("question") String question) throws IOException {
-        try {
-            return chatAssistant.chat(question);
-        } catch (IllegalArgumentException e) {
-            if (e.getMessage().contains("textSegment cannot be null")) {
-                // 记录错误并返回友好错误信息
-                log.error("Embedding store contains null text segments, please check your data", e);
-                return ResponseEntity.badRequest()
-                        .body("暂时无法处理您的请求，请稍后重试");
-            }
-            throw e;
-        }
-    }
-
 
     @PostMapping("/uploadAndEmbeddingMultipleDocuments")
     @Operation(summary = "1-上传多个文档并向量存储")
