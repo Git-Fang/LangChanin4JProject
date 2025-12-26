@@ -14,7 +14,6 @@ import org.fb.constant.BusinessConstant;
 import org.fb.service.DocumentService;
 import org.fb.service.assistant.ChatAssistant;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -102,6 +101,23 @@ public class DocumentImpl implements DocumentService {
     }
 
     @Override
+    public Integer saveAndEmbedding(MultipartFile[] files) {
+
+        int successCount = 0;
+
+        for (MultipartFile file : files) {
+            String path = saveFileToLocal(file);
+            parseAndEmbedding(path);
+            log.info("{}向量化完成",file.getOriginalFilename());
+            successCount++;
+
+            // 向量完成后，删除path对应文件
+            deleteFile(path);
+        }
+        return successCount;
+    }
+
+    @Override
     public void addText(String document) {
         // 创建文本段
         TextSegment segment1 = TextSegment.from(document);
@@ -162,5 +178,68 @@ public class DocumentImpl implements DocumentService {
             return fileName.substring(lastDotIndex + 1);
         }
         return "unknown";
+    }
+
+    // 删除临时文件的辅助方法
+    private void deleteFile(String filePath) {
+        try {
+            Path path = Paths.get(filePath);
+            if (Files.exists(path)) {
+                boolean deleted = Files.deleteIfExists(path);
+                if (deleted) {
+                    log.info("临时文件删除成功: {}", filePath);
+                } else {
+                    log.warn("临时文件删除失败，文件不存在: {}", filePath);
+                }
+            } else {
+                log.warn("临时文件不存在，无法删除: {}", filePath);
+            }
+        } catch (IOException e) {
+            log.error("删除临时文件时发生错误: {}", filePath, e);
+        }
+    }
+
+
+    /**存储单个文件*/
+    private String saveFileToLocal(MultipartFile file) {
+
+        Path storageDir = Paths.get(storagePath);
+        try {
+            // 创建目录（如果不存在）
+            if (!Files.exists(storageDir)) {
+                Files.createDirectories(storageDir);
+            }
+
+            if (file.isEmpty()) {
+               log.error("文件上传失败: 文件为空");
+                return "";
+            }
+
+            String originalFileName = file.getOriginalFilename();
+            if (originalFileName == null) {
+               log.error("文件上传失败: 文件无文件名");
+                return "";
+            }
+
+            // 校验文件类型
+            if (!isValidDocumentType(originalFileName)) {
+                log.error("文件上传失败: 不支持的文件类型");
+                return "";
+            }
+
+            // 生成唯一文件名
+            String fileExtension = getFileExtension(originalFileName);
+            String uniqueFileName = UUID.randomUUID() + "." + fileExtension;
+            Path filePath = storageDir.resolve(uniqueFileName);
+
+            // 保存文件
+            file.transferTo(filePath.toFile());
+            log.info("文件上传成功:原文件{} 保存至{}", originalFileName, filePath);
+
+            return filePath.toString();
+        } catch (IOException e) {
+            log.error("文件上传失败", e);
+            throw new RuntimeException("文件上传失败", e);
+        }
     }
 }

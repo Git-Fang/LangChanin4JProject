@@ -9,6 +9,8 @@ public interface DocumentService {
 
     public Integer saveFilesToLocal(MultipartFile[] files);
 
+    public Integer saveAndEmbedding(MultipartFile[] files);
+
     public void addText(String document);
 
     public List<TextSegment> parseAndEmbedding(String filePath);
