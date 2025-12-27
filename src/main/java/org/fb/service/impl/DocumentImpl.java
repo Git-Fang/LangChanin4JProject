@@ -107,6 +107,7 @@ public class DocumentImpl implements DocumentService {
 
         for (MultipartFile file : files) {
             String path = saveFileToLocal(file);
+
             parseAndEmbedding(path);
             log.info("{}向量化完成",file.getOriginalFilename());
             successCount++;
@@ -229,7 +230,7 @@ public class DocumentImpl implements DocumentService {
 
             // 生成唯一文件名
             String fileExtension = getFileExtension(originalFileName);
-            String uniqueFileName = UUID.randomUUID() + "." + fileExtension;
+            String uniqueFileName = originalFileName+ "_" + UUID.randomUUID() + "." + fileExtension;
             Path filePath = storageDir.resolve(uniqueFileName);
 
             // 保存文件

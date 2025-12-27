@@ -9,6 +9,10 @@ server:
 spring:
   application:
     name: RAGTranslationApplication
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 100MB
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
     name: defaultDataSource
