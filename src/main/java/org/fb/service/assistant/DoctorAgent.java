@@ -1,0 +1,24 @@
+package org.fb.service.assistant;
+
+import dev.langchain4j.service.MemoryId;
+import dev.langchain4j.service.SystemMessage;
+import dev.langchain4j.service.UserMessage;
+import dev.langchain4j.service.spring.AiService;
+import dev.langchain4j.service.spring.AiServiceWiringMode;
+
+/**
+ * 单次调用agent
+ * */
+@AiService(wiringMode = AiServiceWiringMode.EXPLICIT,
+        chatModel = "chatModel",
+        chatMemoryProvider = "chatMemoryProvider",
+        tools = "appointmentTools",
+        contentRetriever = "contentRetriever"
+)
+public interface DoctorAgent {
+
+    @SystemMessage(fromResource = "doctorAgent-prompt-template.txt")
+    public String chat( @MemoryId long memoryId, @UserMessage String userMessage);
+}
+
+

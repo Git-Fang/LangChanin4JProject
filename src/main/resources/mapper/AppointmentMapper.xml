@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="mapper.AppointmentMapper">
+
+    <resultMap id="BaseResultMap" type="org.fb.bean.Appointment">
+            <id property="id" column="id" />
+            <result property="username" column="username" />
+            <result property="idCard" column="id_card" />
+            <result property="department" column="department" />
+            <result property="date" column="date" />
+            <result property="time" column="time" />
+            <result property="doctorName" column="doctor_name" />
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id,username,id_card,department,date,time,doctor_name
+    </sql>
+</mapper>
