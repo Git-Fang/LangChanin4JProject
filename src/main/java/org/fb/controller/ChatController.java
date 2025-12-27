@@ -41,7 +41,7 @@ public class ChatController {
 
         // 使用AI理解用户意图
         String intent = determineIntentWithAI(memoryId, userMessage);
-        log.info("用户意图：" + intent);
+        log.info("memoryId：{}；用户意图：{}。", memoryId, intent);
 
         // 根据用户消息内容选择不同的业务处理服务
         if (intent.equalsIgnoreCase(BusinessConstant.MEDICAL_TYPE)) {
@@ -88,7 +88,7 @@ public class ChatController {
 
         // 构造结构化的提示词
         String prompt = String.format(
-                "你是一个意图分类助手。请分析用户输入的内容，判断其属于以下哪个类别：\n\n" +
+                "你是一个意图分类助手。请充分结合上下文、用户输入的内容进行分析，判断当前对话属于以下哪个类别：\n\n" +
                         "类别定义：\n" +
                         "- medical: 涉及%s相关内容\n" +
                         "- translation: 涉及%s相关内容\n" +

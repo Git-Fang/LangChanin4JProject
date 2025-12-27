@@ -10,7 +10,6 @@ import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.model.embedding.onnx.allminilml6v2.AllMiniLmL6V2EmbeddingModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;
 import dev.langchain4j.model.openai.OpenAiStreamingChatModel;
-import dev.langchain4j.rag.content.retriever.ContentRetriever;
 import dev.langchain4j.rag.content.retriever.EmbeddingStoreContentRetriever;
 import dev.langchain4j.service.AiServices;
 import dev.langchain4j.store.embedding.EmbeddingStore;
@@ -18,8 +17,8 @@ import dev.langchain4j.store.embedding.qdrant.QdrantEmbeddingStore;
 import io.qdrant.client.QdrantClient;
 import io.qdrant.client.QdrantGrpcClient;
 import lombok.extern.slf4j.Slf4j;
-import org.fb.service.assistant.ChatAssistant;
 import org.fb.config.toolsConfig.MongoChatMemoryStore;
+import org.fb.service.assistant.ChatAssistant;
 import org.fb.service.assistant.ChatAssistantStream;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
@@ -39,7 +38,7 @@ public class LLMConfig {
     public ChatModel chatModel() {
         return OpenAiChatModel.builder()
                 .apiKey(System.getenv("DASHSCOPE_API_KEY"))
-                .modelName("qwen-plus")
+                .modelName("qwen-max")
                 .logRequests(true)
                 .logResponses(true)
                 .baseUrl("https://dashscope.aliyuncs.com/compatible-mode/v1")
@@ -50,7 +49,7 @@ public class LLMConfig {
     public StreamingChatModel streamingChatModel() {
         return OpenAiStreamingChatModel.builder()
                 .apiKey(System.getenv("DASHSCOPE_API_KEY"))
-                .modelName("qwen-plus")
+                .modelName("qwen-max")
                 .logRequests(true)
                 .logResponses(true)
                 .baseUrl("https://dashscope.aliyuncs.com/compatible-mode/v1")
@@ -123,7 +122,7 @@ public class LLMConfig {
     ChatMemoryProvider chatMemoryProvider() {
         return memoryId -> MessageWindowChatMemory.builder()
                 .id(memoryId)
-                .maxMessages(10)
+                .maxMessages(20)
                 .chatMemoryStore(mongoChatMemoryStore)//配置持久化对象
                 .build();
     }
