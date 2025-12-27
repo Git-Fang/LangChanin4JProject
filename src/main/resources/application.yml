@@ -6,9 +6,18 @@ server:
       charset: utf-8
       force: true
       enabled: true
+    context-parameters:
+      # 防止长时间请求挂起
+      tomcat-servlet:
+        async-supported: true
+  tomcat:
+    connection-timeout: 150000    # 60秒连接超时
+
 spring:
   application:
     name: RAGTranslationApplication
+  web:
+    timeout: 150s                 # Web请求超时
   servlet:
     multipart:
       max-file-size: 20MB
