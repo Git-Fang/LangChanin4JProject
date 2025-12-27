@@ -1,8 +1,10 @@
 package org.fb.service.assistant;
 
 
+import dev.langchain4j.service.MemoryId;
 import dev.langchain4j.service.SystemMessage;
 import dev.langchain4j.service.UserMessage;
+import dev.langchain4j.service.V;
 import dev.langchain4j.service.spring.AiService;
 import dev.langchain4j.service.spring.AiServiceWiringMode;
 
@@ -16,5 +18,9 @@ public interface TranslaterService {
     @SystemMessage(fromResource = "transPrompt.txt")
     @UserMessage("用户输入的待翻译操作内容为：{{userMessage}}")
     String translate(String userMessage);
+
+    @SystemMessage(fromResource = "transPrompt.txt")
+    @UserMessage("用户输入的待翻译操作内容为：{{userMessage}}")
+    String translate(@MemoryId long memoryId,  @V("userMessage") String userMessage);
 
 }
