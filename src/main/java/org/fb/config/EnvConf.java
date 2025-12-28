@@ -14,4 +14,8 @@ public class EnvConf {
 
     @Value("${ai.embeddingStore.qdrant.collectionName}")
     public String collectionName;
+
+    @Value("${ai.ollama.base-url}")
+    public String ollamaUrl;
+
 }

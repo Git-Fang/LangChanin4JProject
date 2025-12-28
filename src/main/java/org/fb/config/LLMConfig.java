@@ -34,6 +34,16 @@ public class LLMConfig {
     @Autowired
     private MongoChatMemoryStore mongoChatMemoryStore;
 
+
+    @Bean
+    public ChatModel ollamaChatModel() {
+        return OpenAiChatModel.builder()
+                .logRequests(true)
+                .logResponses(true)
+                .baseUrl("http://localhost:11434/api/chat")
+                .build();
+    }
+
     @Bean
     public ChatModel chatModel() {
         return OpenAiChatModel.builder()
