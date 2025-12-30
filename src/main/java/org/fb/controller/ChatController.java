@@ -33,6 +33,9 @@ public class ChatController {
     @Autowired
     private ChatTypeAssistant chatTypeAssistant;
 
+    @Autowired
+    private TermExtractionAgent termExtractionAgent;
+
     @Operation(summary = "智能对话")
     @PostMapping("/chat")
     public String chat(@RequestBody ChatForm chatForm) {
@@ -50,6 +53,9 @@ public class ChatController {
         } else if (intent.equalsIgnoreCase(BusinessConstant.TRANSLATION_TYPE)) {
             // 翻译相关业务，使用翻译服务
             return translaterService.translate(memoryId, userMessage);
+        } else if (intent.equalsIgnoreCase(BusinessConstant.TERM_EXTRACTION_TYPE)) {
+            // 术语提取相关业务，使用术语提取助手
+            return termExtractionAgent.chat(memoryId, userMessage);
         } else {
             // 默认业务，使用普通聊天助手
             return chatAssistant.chat(memoryId, userMessage);
@@ -85,6 +91,7 @@ public class ChatController {
         // 定义意图分类
         String medicalKeywords = BusinessConstant.MEDICAL_KEYWORDS;
         String translationKeywords = BusinessConstant.TRANSLATION_KEYWORDS;
+        String termExtractionKeywords = BusinessConstant.TERM_EXTRACTION_KEYWORDS;
 
         // 构造结构化的提示词
         String prompt = String.format(
@@ -92,6 +99,7 @@ public class ChatController {
                         "类别定义：\n" +
                         "- medical: 涉及%s相关内容\n" +
                         "- translation: 涉及%s相关内容\n" +
+                        "- term_extraction: 涉及%s相关内容\n" +
                         "- general: 其他一般性对话\n\n" +
                         "用户输入：%s\n\n" +
                         "请严格按照以下JSON格式返回结果：\n" +
@@ -99,7 +107,7 @@ public class ChatController {
                         "  \"intent\": \"category\",\n" +
                         "  \"confidence\": 0.0-1.0\n" +
                         "}",
-                medicalKeywords, translationKeywords, message
+                medicalKeywords, translationKeywords, termExtractionKeywords, message
         );
 
         // 调用AI模型进行意图识别
@@ -111,6 +119,8 @@ public class ChatController {
             return BusinessConstant.MEDICAL_TYPE;
         } else if (lowerResponse.contains("translation") || lowerResponse.contains("翻译")) {
             return BusinessConstant.TRANSLATION_TYPE;
+        } else if (lowerResponse.contains("term_extraction") || lowerResponse.contains("术语")) {
+            return BusinessConstant.TERM_EXTRACTION_TYPE;
         } else {
             return BusinessConstant.DEFAULT_TYPE;
         }

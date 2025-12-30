@@ -12,5 +12,8 @@ public class BusinessConstant {
     public static final String TRANSLATION_KEYWORDS = "翻译、译、语言、多语言";
     public static final String TRANSLATION_TYPE = "translation";
 
+    public static final String TERM_EXTRACTION_KEYWORDS = "术语、专业、专业名词、职业名词、术语词汇、提取";
+    public static final String TERM_EXTRACTION_TYPE = "term_extraction";
+
     public static final String DEFAULT_TYPE = "general";
 }
