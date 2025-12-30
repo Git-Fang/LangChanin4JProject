@@ -8,12 +8,12 @@ import dev.langchain4j.service.spring.AiServiceWiringMode;
 
 /**
  * 单次调用agent
+ * chatModel = "ollamaChatModel",表示使用ollama模型
  * */
 @AiService(wiringMode = AiServiceWiringMode.EXPLICIT,
-//        chatModel = "chatModel",
-        chatModel = "ollamaChatModel",
+        chatModel = "chatModel",
+        tools = "qdrantOperationTools",
         chatMemoryProvider = "chatMemoryProvider",
-//        tools = "qdrantOperationTools",
         contentRetriever = "contentRetriever"
 )
 public interface TermExtractionAgent {

@@ -8,10 +8,12 @@ import dev.langchain4j.service.V;
 import dev.langchain4j.service.spring.AiService;
 import dev.langchain4j.service.spring.AiServiceWiringMode;
 
+/*
+* chatModel = "ollamaChatModel",表示使用ollama模型
+* */
 @AiService(wiringMode = AiServiceWiringMode.EXPLICIT,
-//        chatModel = "chatModel",
-        chatModel = "ollamaChatModel",
-//        tools = "mongoDBTools",
+        chatModel = "chatModel",
+        tools = "mongoDBTools",
         chatMemoryProvider = "chatMemoryProvider"
 
 )

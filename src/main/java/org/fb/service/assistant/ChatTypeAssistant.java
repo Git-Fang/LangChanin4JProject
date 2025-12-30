@@ -5,9 +5,11 @@ import dev.langchain4j.service.UserMessage;
 import dev.langchain4j.service.spring.AiService;
 import dev.langchain4j.service.spring.AiServiceWiringMode;
 
+/**
+ * chatModel = "ollamaChatModel",表示使用ollama模型
+ * */
 @AiService(wiringMode = AiServiceWiringMode.EXPLICIT,
-//        chatModel = "chatModel",
-        chatModel = "ollamaChatModel",
+        chatModel = "chatModel",
         chatMemoryProvider = "chatMemoryProvider",
         contentRetriever = "contentRetriever"
 )
