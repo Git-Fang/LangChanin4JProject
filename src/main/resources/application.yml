@@ -36,7 +36,7 @@ mybatis-plus:
 ai:
   dashscope:
     apiKey: ${DASHSCOPE_API_KEY}
-    model: qwen-turbo
+    model: qwen3-max
     base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
 
   embeddingStore:
