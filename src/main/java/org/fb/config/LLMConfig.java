@@ -132,7 +132,7 @@ public class LLMConfig {
     ChatMemoryProvider chatMemoryProvider() {
         return memoryId -> MessageWindowChatMemory.builder()
                 .id(memoryId)
-                .maxMessages(20)
+                .maxMessages(5)
                 .chatMemoryStore(mongoChatMemoryStore)//配置持久化对象
                 .build();
     }
