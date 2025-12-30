@@ -8,6 +8,7 @@ import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.StreamingChatModel;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.model.embedding.onnx.allminilml6v2.AllMiniLmL6V2EmbeddingModel;
+import dev.langchain4j.model.ollama.OllamaChatModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;
 import dev.langchain4j.model.openai.OpenAiStreamingChatModel;
 import dev.langchain4j.rag.content.retriever.EmbeddingStoreContentRetriever;
@@ -24,6 +25,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import java.time.Duration;
+
 @Configuration
 @Slf4j
 public class LLMConfig {
@@ -37,10 +40,13 @@ public class LLMConfig {
 
     @Bean
     public ChatModel ollamaChatModel() {
-        return OpenAiChatModel.builder()
+        return OllamaChatModel.builder()
+                .baseUrl(envConf.ollamaUrl)
+                .modelName(envConf.ollamaModel)
+                .temperature(0.8)
+                .timeout(Duration.ofSeconds(60))
                 .logRequests(true)
                 .logResponses(true)
-                .baseUrl("http://localhost:11434/api/chat")
                 .build();
     }
 

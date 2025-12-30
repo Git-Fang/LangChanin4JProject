@@ -18,6 +18,9 @@ public class EnvConf {
     @Value("${ai.ollama.base-url}")
     public String ollamaUrl;
 
+    @Value("${ai.ollama.model}")
+    public String ollamaModel;
+
     @Value("${ai.dashscope.apiKey}")
     public String dashscopeApiKey;
 
