@@ -17,7 +17,7 @@ import dev.langchain4j.store.embedding.qdrant.QdrantEmbeddingStore;
 import io.qdrant.client.QdrantClient;
 import io.qdrant.client.QdrantGrpcClient;
 import lombok.extern.slf4j.Slf4j;
-import org.fb.config.toolsConfig.MongoChatMemoryStore;
+import org.fb.tools.MongoChatMemoryStore;
 import org.fb.service.assistant.ChatAssistant;
 import org.fb.service.assistant.ChatAssistantStream;
 import org.springframework.beans.factory.annotation.Autowired;

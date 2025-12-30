@@ -1,4 +1,4 @@
-package org.fb.config.toolsConfig;
+package org.fb.tools;
 
 import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;

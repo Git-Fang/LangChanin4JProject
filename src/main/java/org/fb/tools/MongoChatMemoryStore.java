@@ -1,4 +1,4 @@
-package org.fb.config.toolsConfig;
+package org.fb.tools;
 
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.ChatMessageDeserializer;
