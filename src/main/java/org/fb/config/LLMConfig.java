@@ -47,22 +47,22 @@ public class LLMConfig {
     @Bean
     public ChatModel chatModel() {
         return OpenAiChatModel.builder()
-                .apiKey(System.getenv("DASHSCOPE_API_KEY"))
-                .modelName("qwen-max")
+                .apiKey(envConf.dashscopeApiKey)
+                .modelName(envConf.dashscopeModel)
                 .logRequests(true)
                 .logResponses(true)
-                .baseUrl("https://dashscope.aliyuncs.com/compatible-mode/v1")
+                .baseUrl(envConf.dashscopeUrl)
                 .build();
     }
 
     @Bean
     public StreamingChatModel streamingChatModel() {
         return OpenAiStreamingChatModel.builder()
-                .apiKey(System.getenv("DASHSCOPE_API_KEY"))
-                .modelName("qwen-max")
+                .apiKey(envConf.dashscopeApiKey)
+                .modelName(envConf.dashscopeModel)
                 .logRequests(true)
                 .logResponses(true)
-                .baseUrl("https://dashscope.aliyuncs.com/compatible-mode/v1")
+                .baseUrl(envConf.dashscopeUrl)
                 .build();
     }
 
