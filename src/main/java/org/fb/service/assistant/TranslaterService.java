@@ -15,11 +15,11 @@ import dev.langchain4j.service.spring.AiServiceWiringMode;
 )
 public interface TranslaterService {
 
-    @SystemMessage(fromResource = "transPrompt.txt")
+    @SystemMessage(fromResource = "translate-prompt.txt")
     @UserMessage("{{userMessage}}")
     String translate(String userMessage);
 
-    @SystemMessage(fromResource = "transPrompt.txt")
+    @SystemMessage(fromResource = "translate-prompt.txt")
     @UserMessage("{{userMessage}}")
     String translate(@MemoryId long memoryId,  @V("userMessage") String userMessage);
 
