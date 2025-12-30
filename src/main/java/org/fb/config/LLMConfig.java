@@ -101,22 +101,22 @@ public class LLMConfig {
     }
 
 
-    @Bean
-    public ChatAssistant chatAssistant(ChatModel chatModel, EmbeddingStore<TextSegment> embeddingStore, EmbeddingModel embeddingModel) {
-
-        // 构建支撑检索曾强的EmbeddingStore工具实例
-        EmbeddingStoreContentRetriever contentRetriever = EmbeddingStoreContentRetriever.builder()
-                .embeddingStore(embeddingStore)
-                .embeddingModel(embeddingModel)
-                .maxResults(5).build();
-        return AiServices
-                .builder(ChatAssistant.class)
-                .chatModel(chatModel)
-                .chatMemoryProvider(memoryId -> MessageWindowChatMemory.withMaxMessages(10))
-                .contentRetriever(contentRetriever)
-                .tools("commonTools")
-                .build();
-    }
+//    @Bean
+//    public ChatAssistant chatAssistant(ChatModel chatModel, EmbeddingStore<TextSegment> embeddingStore, EmbeddingModel embeddingModel) {
+//
+//        // 构建支撑检索曾强的EmbeddingStore工具实例
+//        EmbeddingStoreContentRetriever contentRetriever = EmbeddingStoreContentRetriever.builder()
+//                .embeddingStore(embeddingStore)
+//                .embeddingModel(embeddingModel)
+//                .maxResults(5).build();
+//        return AiServices
+//                .builder(ChatAssistant.class)
+//                .chatModel(chatModel)
+//                .chatMemoryProvider(memoryId -> MessageWindowChatMemory.withMaxMessages(10))
+//                .contentRetriever(contentRetriever)
+//                .tools("commonTools")
+//                .build();
+//    }
 
     @Bean
     public ChatAssistantStream chatAssistantStream(StreamingChatModel chatModel, EmbeddingStore<TextSegment> embeddingStore, EmbeddingModel embeddingModel) {

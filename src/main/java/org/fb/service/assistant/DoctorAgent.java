@@ -10,9 +10,10 @@ import dev.langchain4j.service.spring.AiServiceWiringMode;
  * 单次调用agent
  * */
 @AiService(wiringMode = AiServiceWiringMode.EXPLICIT,
-        chatModel = "chatModel",
+//        chatModel = "chatModel",
+        chatModel = "ollamaChatModel",
         chatMemoryProvider = "chatMemoryProvider",
-        tools = "appointmentTools",
+//        tools = "appointmentTools",
         contentRetriever = "contentRetriever"
 )
 public interface DoctorAgent {

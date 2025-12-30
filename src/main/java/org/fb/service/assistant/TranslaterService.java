@@ -9,9 +9,11 @@ import dev.langchain4j.service.spring.AiService;
 import dev.langchain4j.service.spring.AiServiceWiringMode;
 
 @AiService(wiringMode = AiServiceWiringMode.EXPLICIT,
-        chatModel = "chatModel",
-        chatMemoryProvider = "chatMemoryProvider",
-        tools = "mongoDBTools"
+//        chatModel = "chatModel",
+        chatModel = "ollamaChatModel",
+//        tools = "mongoDBTools",
+        chatMemoryProvider = "chatMemoryProvider"
+
 )
 public interface TranslaterService {
 
