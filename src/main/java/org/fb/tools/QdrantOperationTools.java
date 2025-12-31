@@ -39,13 +39,15 @@ public class QdrantOperationTools {
     private EmbeddingModel embeddedModel;
 
     @Tool(name = "文本内容向量化与保存", value = "将传入数据进行向量化，并保存写入qdrant向量数据库中。")
-    public void embeddingAndSave(@P(value = "传入数据") String text) {
+    public void embeddingTermAndSave(@P(value = "传入数据") String text) {
+
+        String fileName = "专业术语词";
 
         log.debug("开始向量化。传入数据：{}", text);
-        String path = saveTxtContentToLocal(text);
+        String path = saveTxtContentToLocal(text,fileName);
         log.info("开始向量化。内容地址：{}", path);
 
-        parseAndEmbedding(path);
+        parseAndEmbedding(path, fileName);
         log.info("向量化完成。");
 
         deleteFile(path);
@@ -71,10 +73,11 @@ public class QdrantOperationTools {
     }
 
 
-    private List<TextSegment> parseAndEmbedding( String filePath) {
+    private List<TextSegment> parseAndEmbedding(String filePath, String fileName) {
 
         // 1.读取文档
         Document document = FileSystemDocumentLoader.loadDocument(filePath, new ApacheTikaDocumentParser());
+        document.metadata().put("fileName", fileName);
         document.metadata().put("author", "fb");
 
         // 2. 按段落切分
@@ -100,7 +103,7 @@ public class QdrantOperationTools {
     /**
      * 存储单个文件
      */
-    private String saveTxtContentToLocal(String text) {
+    private String saveTxtContentToLocal(String text, String fileName) {
         Path storageDir = Paths.get(storagePath);
         try {
             // 创建目录（如果不存在）
@@ -113,7 +116,7 @@ public class QdrantOperationTools {
             }
 
             // 生成唯一文件名
-            String uniqueFileName = UUID.randomUUID().toString() + ".txt";
+            String uniqueFileName = fileName + "_" + UUID.randomUUID().toString() + ".txt";
             Path filePath = storageDir.resolve(uniqueFileName);
 
             // 将文本内容写入文件
