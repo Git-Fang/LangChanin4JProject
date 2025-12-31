@@ -99,7 +99,7 @@ public class ChatController {
                         "类别定义：\n" +
                         "- medical: 涉及%s相关内容\n" +
                         "- translation: 涉及%s相关内容\n" +
-                        "- term_extraction: 涉及%s相关内容\n" +
+                        "- term_extraction: 关键词为%s\n" +
                         "- general: 其他一般性对话\n\n" +
                         "用户输入：%s\n\n" +
                         "请严格按照以下JSON格式返回结果：\n" +
