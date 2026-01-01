@@ -11,13 +11,13 @@ server:
       tomcat-servlet:
         async-supported: true
   tomcat:
-    connection-timeout: 150000    # 60秒连接超时
+    connection-timeout: 180000    # 60秒连接超时
 
 spring:
   application:
     name: RAGTranslationApplication
   web:
-    timeout: 150s                 # Web请求超时
+    timeout: 180s                 # Web请求超时
   servlet:
     multipart:
       max-file-size: 20MB

@@ -1,5 +1,6 @@
 package org.fb.service.assistant;
 
+import dev.langchain4j.agent.tool.Tool;
 import dev.langchain4j.service.MemoryId;
 import dev.langchain4j.service.SystemMessage;
 import dev.langchain4j.service.UserMessage;
@@ -20,6 +21,11 @@ public interface TermExtractionAgent {
 
     @SystemMessage(fromResource = "termExtractionAgent-prompt-template.txt")
     public String chat( @MemoryId long memoryId, @UserMessage String userMessage);
+
+
+    @Tool(name = "提取术语词汇", value="从传入数据{{question}}中提取符合规范的术语词汇")
+    @SystemMessage(fromResource = "termExtractionAgent-prompt-template.txt")
+    public String chatWithTermTool(  @UserMessage String userMessage);
 }
 
 
