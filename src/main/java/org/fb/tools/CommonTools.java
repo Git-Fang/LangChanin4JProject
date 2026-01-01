@@ -28,6 +28,18 @@ public class CommonTools {
     public String embeddingSearch(@P(value="question", required = true) String question) {
         log.info("开始向量化。传入数据：{}", question);
 
+        EmbeddingSearchResult<TextSegment> searchResult = getMatchWords(question);
+
+        //3.获取匹配项的相似度得分与答案
+        EmbeddingMatch<TextSegment> embeddingMatch = searchResult.matches().get(0);
+        log.info("答案相似度score：{}; 结果为：{}",embeddingMatch.score(),embeddingMatch.embedded().text());
+
+        return embeddingMatch.embedded().text();
+    }
+
+
+
+    public EmbeddingSearchResult<TextSegment> getMatchWords(String question) {
         //1.1提问，并将问题转成向量数据
         Embedding queryEmbedding = embeddingModel.embed(question).content();
 
@@ -39,15 +51,8 @@ public class CommonTools {
                 .build();
 
         //2.根据搜索请求 searchRequest 在向量存储中进行相似度搜索
-        EmbeddingSearchResult<TextSegment> searchResult = embeddingStore.search(searchRequest);
-        EmbeddingMatch<TextSegment> embeddingMatch = searchResult.matches().get(0);
-
-        //3.获取匹配项的相似度得分与答案
-        log.info("答案相似度score：{}; 结果为：{}",embeddingMatch.score(),embeddingMatch.embedded().text());
-
-        return embeddingMatch.embedded().text();
+        return embeddingStore.search(searchRequest);
     }
-
 
 
 }

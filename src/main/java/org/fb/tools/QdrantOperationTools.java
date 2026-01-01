@@ -9,6 +9,8 @@ import dev.langchain4j.data.document.splitter.DocumentByParagraphSplitter;
 import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.model.embedding.EmbeddingModel;
+import dev.langchain4j.store.embedding.EmbeddingMatch;
+import dev.langchain4j.store.embedding.EmbeddingSearchResult;
 import dev.langchain4j.store.embedding.EmbeddingStore;
 import io.qdrant.client.QdrantClient;
 import lombok.extern.slf4j.Slf4j;
@@ -38,9 +40,22 @@ public class QdrantOperationTools {
     @Autowired
     private EmbeddingModel embeddedModel;
 
-    @Tool(name = "文本内容向量化与保存", value = "将传入数据进行向量化，并保存写入qdrant向量数据库中。")
+    @Autowired
+    private CommonTools commonTools;
+
+    @Tool(name = "文本内容向量化、查询与保存", value = "将传入数据{{text}}先进行向量化然后进行查询；若相似度>=0.85则不保存，否则将内容保存写入qdrant向量数据库中。")
     public void embeddingTermAndSave(@P(value = "传入数据") String text) {
 
+        EmbeddingSearchResult<TextSegment> searchResult = commonTools.getMatchWords(text);
+        EmbeddingMatch<TextSegment> embeddingMatch = searchResult.matches().get(0);
+        log.info("相似度得分：{}; 匹配结果：{}",embeddingMatch.score(),embeddingMatch.embedded().text());
+
+        if(embeddingMatch.score() < 0.85){
+            saveTerms(text);
+        }
+    }
+
+    private void saveTerms(String text) {
         String fileName = "专业术语词";
 
         log.debug("开始向量化。传入数据：{}", text);
