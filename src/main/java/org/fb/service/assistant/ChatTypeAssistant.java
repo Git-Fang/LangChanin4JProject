@@ -16,8 +16,9 @@ import dev.langchain4j.service.spring.AiServiceWiringMode;
         contentRetriever = "contentRetriever"
 )
 public interface ChatTypeAssistant {
+
     String chat(String userMessage);
 
-    @SystemMessage("对输入信息首先进行意图分析，然后将相关数据转为ChatInfo类对应的数据结构后调用chatInfoTools中的saveChatInfo工具方法保存写入chatInfo表。")
+    @SystemMessage(fromResource = "chat-type-prompt.txt")
     public String chat(@MemoryId long memoryId, @UserMessage String userMessage);
 }
