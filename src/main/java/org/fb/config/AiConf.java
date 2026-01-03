@@ -1,18 +1,28 @@
 package org.fb.config;
 
 import dev.langchain4j.data.segment.TextSegment;
+import dev.langchain4j.mcp.McpToolProvider;
+import dev.langchain4j.mcp.client.DefaultMcpClient;
+import dev.langchain4j.mcp.client.McpClient;
+import dev.langchain4j.mcp.client.transport.McpTransport;
+import dev.langchain4j.mcp.client.transport.stdio.StdioMcpTransport;
+import dev.langchain4j.model.chat.StreamingChatModel;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.rag.content.retriever.ContentRetriever;
 import dev.langchain4j.rag.content.retriever.EmbeddingStoreContentRetriever;
+import dev.langchain4j.service.AiServices;
 import dev.langchain4j.store.embedding.EmbeddingStore;
 import io.qdrant.client.QdrantClient;
 import io.qdrant.client.grpc.Collections;
 import jakarta.annotation.PostConstruct;
+import org.fb.service.assistant.BaiduMapMcpAssistant;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 import java.io.IOException;
+import java.util.List;
+import java.util.Map;
 
 @Configuration
 public class AiConf {
@@ -28,6 +38,9 @@ public class AiConf {
 
     @Autowired
     private EmbeddingStore<TextSegment> embeddingStore;
+
+    @Autowired
+    private StreamingChatModel streamingChatModel;
 
     @PostConstruct
     public void createCollection() throws IOException {
@@ -55,6 +68,35 @@ public class AiConf {
                 // 设置最小得分阈值，只有得分大于等于 0.8 的结果才会被返回
                 .minScore(0.8)
                 // 构建最终的 EmbeddingStoreContentRetriever 实例
+                .build();
+    }
+
+
+    /**
+     * 创建百度地图MCP服务实例
+     * */
+    @Bean
+    BaiduMapMcpAssistant baiduMapMcpAssistant() {
+        // 1.启动百度地图MCP服务
+        McpTransport transport = new StdioMcpTransport.Builder()
+                .command(List.of("cmd", "/c", "npx", "-y", "@baidumap/mcp-server-baidu-map"))
+                .environment(Map.of("BAIDU_MAP_API_KEY", "8qM3bsI6oakw1ICy1g1T9Vo0peSP90of"))
+                .logEvents(true) // only if you want to see the traffic in the log
+                .build();
+
+        // 2.初始化MCP client、实例MCP工具提供者对象
+        McpClient mcpClient = new DefaultMcpClient.Builder()
+                .transport(transport)
+                .build();
+
+        McpToolProvider toolProvider = McpToolProvider.builder()
+                .mcpClients(mcpClient)
+                .build();
+
+        // 3.将chatModel和工具提供者注入MCP助手
+        return AiServices.builder(BaiduMapMcpAssistant.class)
+                .streamingChatModel(streamingChatModel)
+                .toolProvider(toolProvider)
                 .build();
     }
 }
