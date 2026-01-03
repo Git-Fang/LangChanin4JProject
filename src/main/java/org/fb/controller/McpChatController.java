@@ -3,7 +3,7 @@ package org.fb.controller;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.extern.slf4j.Slf4j;
-import org.fb.service.assistant.BaiduMapMcpAssistant;
+import org.fb.service.assistant.BaiduMapMcpStreamAssistant;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -31,13 +31,13 @@ import java.io.IOException;
 public class McpChatController {
 
     @Autowired
-    private BaiduMapMcpAssistant baiduMapMcpAssistant;
+    private BaiduMapMcpStreamAssistant baiduMapMcpStreamAssistant;
 
     @GetMapping(value = "/chat0")
     @Operation(summary = "MCP助手0--默认百度地图")
     public Flux<String> defaultChat(String prompt) throws IOException {
 
-        return baiduMapMcpAssistant.chat(prompt);
+        return baiduMapMcpStreamAssistant.chat(prompt);
     }
 
 
