@@ -15,5 +15,8 @@ public class BusinessConstant {
     public static final String TERM_EXTRACTION_KEYWORDS = "术语、提取";
     public static final String TERM_EXTRACTION_TYPE = "term_extraction";
 
+    public static final String SQL_OPERATION_KEYWORDS = "SQL、转换、数据库、表、查询";
+    public static final String SQL_OPERATION_TYPE = "sql_transfer";
+
     public static final String DEFAULT_TYPE = "general";
 }

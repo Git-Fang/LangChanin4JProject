@@ -6,6 +6,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.fb.bean.ChatForm;
 import org.fb.constant.BusinessConstant;
 import org.fb.service.assistant.*;
+import org.fb.service.impl.NL2SQLService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -36,6 +37,9 @@ public class ChatController {
     @Autowired
     private TermExtractionAgent termExtractionAgent;
 
+    @Autowired
+    private NL2SQLService nl2SQLService;
+
     @Operation(summary = "智能对话")
     @PostMapping("/chat")
     public String chat(@RequestBody ChatForm chatForm) {
@@ -53,6 +57,9 @@ public class ChatController {
         } else if (intent.equalsIgnoreCase(BusinessConstant.TRANSLATION_TYPE)) {
             // 翻译相关业务，使用翻译服务
             return translaterService.translate(memoryId, userMessage);
+        }  else if (intent.equalsIgnoreCase(BusinessConstant.SQL_OPERATION_TYPE)) {
+            // 自然语言转为sql
+            return nl2SQLService.executeNaturalLanguageQuery(userMessage).toString();
         } else if (intent.equalsIgnoreCase(BusinessConstant.TERM_EXTRACTION_TYPE)) {
             // 术语提取相关业务，使用术语提取助手
             return termExtractionAgent.chat(memoryId, userMessage);
@@ -92,6 +99,7 @@ public class ChatController {
         String medicalKeywords = BusinessConstant.MEDICAL_KEYWORDS;
         String translationKeywords = BusinessConstant.TRANSLATION_KEYWORDS;
         String termExtractionKeywords = BusinessConstant.TERM_EXTRACTION_KEYWORDS;
+        String sqlOperationKeywords = BusinessConstant.SQL_OPERATION_KEYWORDS;
 
         // 构造结构化的提示词
         String prompt = String.format(
@@ -99,6 +107,7 @@ public class ChatController {
                         "类别定义：\n" +
                         "- medical: 涉及%s相关内容\n" +
                         "- translation: 涉及%s相关内容\n" +
+                        "- sql_transfer: 关键词为%s\n" +
                         "- term_extraction: 关键词为%s\n" +
                         "- general: 其他一般性对话\n\n" +
                         "用户输入：%s\n\n" +
@@ -107,7 +116,7 @@ public class ChatController {
                         "  \"intent\": \"category\",\n" +
                         "  \"confidence\": 0.0-1.0\n" +
                         "}",
-                medicalKeywords, translationKeywords, termExtractionKeywords, message
+                medicalKeywords, translationKeywords, sqlOperationKeywords, termExtractionKeywords, message
         );
 
         // 调用AI模型进行意图识别
@@ -121,6 +130,8 @@ public class ChatController {
             return BusinessConstant.TRANSLATION_TYPE;
         } else if (lowerResponse.contains("term_extraction") || lowerResponse.contains("术语")) {
             return BusinessConstant.TERM_EXTRACTION_TYPE;
+        } else if (lowerResponse.contains("sql_transfer") || lowerResponse.contains("sql")) {
+            return BusinessConstant.SQL_OPERATION_TYPE;
         } else {
             return BusinessConstant.DEFAULT_TYPE;
         }
