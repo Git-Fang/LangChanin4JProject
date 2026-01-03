@@ -3,6 +3,7 @@ package org.fb.service.assistant;
 import dev.langchain4j.service.MemoryId;
 import dev.langchain4j.service.SystemMessage;
 import dev.langchain4j.service.UserMessage;
+import dev.langchain4j.service.V;
 import dev.langchain4j.service.spring.AiService;
 import dev.langchain4j.service.spring.AiServiceWiringMode;
 
@@ -20,5 +21,6 @@ public interface ChatTypeAssistant {
     String chat(String userMessage);
 
     @SystemMessage(fromResource = "chat-type-prompt.txt")
-    public String chat(@MemoryId long memoryId, @UserMessage String userMessage);
+    @UserMessage("{{userMessage}}")
+    public String chat(@MemoryId long memoryId, @V("userMessage") String userMessage);
 }

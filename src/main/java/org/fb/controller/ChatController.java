@@ -95,32 +95,9 @@ public class ChatController {
      * @return 意图分类
      */
     private String determineIntentWithAI(Long memoryId, String message) {
-        // 定义意图分类
-        String medicalKeywords = BusinessConstant.MEDICAL_KEYWORDS;
-        String translationKeywords = BusinessConstant.TRANSLATION_KEYWORDS;
-        String termExtractionKeywords = BusinessConstant.TERM_EXTRACTION_KEYWORDS;
-        String sqlOperationKeywords = BusinessConstant.SQL_OPERATION_KEYWORDS;
-
-        // 构造结构化的提示词
-        String prompt = String.format(
-                "你是一个意图分类助手。请充分结合上下文、用户输入的内容进行分析，判断当前对话属于以下哪个类别：\n\n" +
-                        "类别定义：\n" +
-                        "- medical: 涉及%s相关内容\n" +
-                        "- translation: 涉及%s相关内容\n" +
-                        "- sql_transfer: 关键词为%s\n" +
-                        "- term_extraction: 关键词为%s\n" +
-                        "- general: 其他一般性对话\n\n" +
-                        "用户输入：%s\n\n" +
-                        "请严格按照以下JSON格式返回结果：\n" +
-                        "{\n" +
-                        "  \"intent\": \"category\",\n" +
-                        "  \"confidence\": 0.0-1.0\n" +
-                        "}",
-                medicalKeywords, translationKeywords, sqlOperationKeywords, termExtractionKeywords, message
-        );
 
         // 调用AI模型进行意图识别
-        String aiResponse = chatTypeAssistant.chat(memoryId, prompt);
+        String aiResponse = chatTypeAssistant.chat(memoryId, message);
 
         // 简单解析AI响应中的意图
         String lowerResponse = aiResponse.toLowerCase();
