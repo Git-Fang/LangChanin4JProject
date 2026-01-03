@@ -46,71 +46,38 @@ public class ChatController {
         Long memoryId = chatForm.getMemoryId();
         String userMessage = chatForm.getMessage();
 
-        // 使用AI理解用户意图
-        String intent = determineIntentWithAI(memoryId, userMessage);
-        log.info("memoryId：{}；用户意图：{}。", memoryId, intent);
-
-        // 根据用户消息内容选择不同的业务处理服务
-        if (intent.equalsIgnoreCase(BusinessConstant.MEDICAL_TYPE)) {
-            // 医疗相关业务，使用医生助手
-            return doctorAgent.chat(memoryId, userMessage);
-        } else if (intent.equalsIgnoreCase(BusinessConstant.TRANSLATION_TYPE)) {
-            // 翻译相关业务，使用翻译服务
-            return translaterService.translate(memoryId, userMessage);
-        }  else if (intent.equalsIgnoreCase(BusinessConstant.SQL_OPERATION_TYPE)) {
-            // 自然语言转为sql
-            return nl2SQLService.executeNaturalLanguageQuery(userMessage).toString();
-        } else if (intent.equalsIgnoreCase(BusinessConstant.TERM_EXTRACTION_TYPE)) {
-            // 术语提取相关业务，使用术语提取助手
-            return termExtractionAgent.chat(memoryId, userMessage);
-        } else {
-            // 默认业务，使用普通聊天助手
-            return chatAssistant.chat(memoryId, userMessage);
-        }
-    }
-
-    /**
-     * 检查消息中是否包含指定关键词
-     * @param message 消息内容
-     * @param keywords 关键词数组
-     * @return 是否包含关键词
-     */
-    private boolean containsKeywords(String message, String... keywords) {
-        if (message == null || message.trim().isEmpty()) {
-            return false;
-        }
-
-        String lowerMessage = message.toLowerCase();
-        for (String keyword : keywords) {
-            if (lowerMessage.contains(keyword.toLowerCase())) {
-                return true;
-            }
-        }
-        return false;
+        // 使用AI理解用户意图后执行业务
+        return  processByUserMeanings(memoryId, userMessage);
     }
 
     /**
      * 使用AI模型理解用户消息意图
-     * @param message 用户消息
+     * @param userMessage 用户消息
      * @return 意图分类
      */
-    private String determineIntentWithAI(Long memoryId, String message) {
+    private String processByUserMeanings(Long memoryId, String userMessage) {
 
         // 调用AI模型进行意图识别
-        String aiResponse = chatTypeAssistant.chat(memoryId, message);
-
-        // 简单解析AI响应中的意图
+        String aiResponse = chatTypeAssistant.chat(memoryId, userMessage);
         String lowerResponse = aiResponse.toLowerCase();
-        if (lowerResponse.contains("medical") || lowerResponse.contains("医疗")) {
-            return BusinessConstant.MEDICAL_TYPE;
-        } else if (lowerResponse.contains("translation") || lowerResponse.contains("翻译")) {
-            return BusinessConstant.TRANSLATION_TYPE;
-        } else if (lowerResponse.contains("term_extraction") || lowerResponse.contains("术语")) {
-            return BusinessConstant.TERM_EXTRACTION_TYPE;
-        } else if (lowerResponse.contains("sql_transfer") || lowerResponse.contains("sql")) {
-            return BusinessConstant.SQL_OPERATION_TYPE;
+        log.info("memoryId：{}；用户意图：{}。", memoryId, lowerResponse);
+
+        // 根据解析后的意图，选择不同的业务处理服务
+        if (lowerResponse.contains(BusinessConstant.MEDICAL_TYPE) || lowerResponse.contains("医疗")) {
+            // 医疗相关业务，使用医生助手
+            return doctorAgent.chat(memoryId, userMessage);
+        } else if (lowerResponse.contains(BusinessConstant.TRANSLATION_TYPE) || lowerResponse.contains("翻译")) {
+            // 翻译相关业务，使用翻译服务
+            return translaterService.translate(memoryId, userMessage);
+        } else if (lowerResponse.contains(BusinessConstant.TERM_EXTRACTION_TYPE) || lowerResponse.contains("术语")) {
+            // 术语提取相关业务，使用术语提取助手
+            return termExtractionAgent.chat(memoryId, userMessage);
+        } else if (lowerResponse.contains(BusinessConstant.SQL_OPERATION_TYPE) || lowerResponse.contains("sql")) {
+            // 自然语言转为sql
+            return nl2SQLService.executeNaturalLanguageQuery(userMessage).toString();
         } else {
-            return BusinessConstant.DEFAULT_TYPE;
+            // 默认业务，使用普通聊天助手
+            return chatAssistant.chat(memoryId, userMessage);
         }
     }
 
