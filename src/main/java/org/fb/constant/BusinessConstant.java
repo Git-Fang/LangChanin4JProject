@@ -6,6 +6,8 @@ public class BusinessConstant {
 
     public static final String TEMP_FILE_PATH = "D:\\个人资料\\uploaded_documents\\";
 
+    public static final String BAIDU_MAP_MCP_SERVER = "@baidumap/mcp-server-baidu-map";
+
     public static final String MEDICAL_TYPE = "medical";
 
     public static final String TRANSLATION_TYPE = "translation";

@@ -16,6 +16,7 @@ import dev.langchain4j.store.embedding.EmbeddingStore;
 import io.qdrant.client.QdrantClient;
 import io.qdrant.client.grpc.Collections;
 import jakarta.annotation.PostConstruct;
+import org.fb.constant.BusinessConstant;
 import org.fb.service.assistant.BaiduMapMcpAssistant;
 import org.fb.service.assistant.BaiduMapMcpStreamAssistant;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -84,38 +85,42 @@ public class AiConf {
      * */
     @Bean
     BaiduMapMcpStreamAssistant baiduMapMcpStreamAssistant() {
-        // 1.启动百度地图MCP服务
-        McpTransport transport = new StdioMcpTransport.Builder()
-                .command(List.of("cmd", "/c", "npx", "-y", "@baidumap/mcp-server-baidu-map"))
-                .environment(Map.of("BAIDU_MAP_API_KEY", "8qM3bsI6oakw1ICy1g1T9Vo0peSP90of"))
-                .logEvents(true) // only if you want to see the traffic in the log
-                .build();
 
-        // 2.初始化MCP client、实例MCP工具提供者对象
-        McpClient mcpClient = new DefaultMcpClient.Builder()
-                .transport(transport)
-                .build();
+        McpToolProvider toolProvider = buildBaiduMapMcpTool();
 
-        McpToolProvider toolProvider = McpToolProvider.builder()
-                .mcpClients(mcpClient)
-                .build();
-
-        // 3.将chatModel和工具提供者注入MCP助手
+        // 将streamingChatModel和工具提供者注入MCP助手
         return AiServices.builder(BaiduMapMcpStreamAssistant.class)
                 .streamingChatModel(streamingChatModel)
                 .toolProvider(toolProvider)
                 .build();
     }
 
+
+
     /**
      * 创建百度地图MCP服务实例（非流式）
      * */
     @Bean
     BaiduMapMcpAssistant baiduMapMcpAssistant() {
+
+        McpToolProvider toolProvider = buildBaiduMapMcpTool();
+
+        // 将chatModel和工具提供者注入MCP助手
+        return AiServices.builder(BaiduMapMcpAssistant.class)
+                .chatModel(chatModel)
+                .toolProvider(toolProvider)
+                .build();
+    }
+
+
+
+
+
+    private McpToolProvider buildBaiduMapMcpTool() {
         // 1.启动百度地图MCP服务
         McpTransport transport = new StdioMcpTransport.Builder()
-                .command(List.of("cmd", "/c", "npx", "-y", "@baidumap/mcp-server-baidu-map"))
-                .environment(Map.of("BAIDU_MAP_API_KEY", "8qM3bsI6oakw1ICy1g1T9Vo0peSP90of"))
+                .command(List.of("cmd", "/c", "npx", "-y", BusinessConstant.BAIDU_MAP_MCP_SERVER))
+                .environment(Map.of("BAIDU_MAP_API_KEY", envConf.baiduMapApiKey))
                 .logEvents(true) // only if you want to see the traffic in the log
                 .build();
 
@@ -127,11 +132,6 @@ public class AiConf {
         McpToolProvider toolProvider = McpToolProvider.builder()
                 .mcpClients(mcpClient)
                 .build();
-
-        // 3.将chatModel和工具提供者注入MCP助手
-        return AiServices.builder(BaiduMapMcpAssistant.class)
-                .chatModel(chatModel)
-                .toolProvider(toolProvider)
-                .build();
+        return toolProvider;
     }
 }

@@ -51,4 +51,8 @@ ai:
     options:
       temperature: 0.7
 
+  mcp:
+    baiduMap:
+      apiKey: ${BAIDU_MAP_API_KEY}
+
 

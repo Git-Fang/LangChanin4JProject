@@ -30,4 +30,7 @@ public class EnvConf {
     @Value("${ai.dashscope.base-url}")
     public String dashscopeUrl;
 
+    @Value("${ai.mcp.baiduMap.apiKey}")
+    public String baiduMapApiKey;
+
 }
