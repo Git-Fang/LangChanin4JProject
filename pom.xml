@@ -52,6 +52,12 @@
             <artifactId>langchain4j-ollama</artifactId>
         </dependency>
 
+        <!--mcp大模型上下文协议相关依赖-->
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-mcp</artifactId>
+        </dependency>
+
         <!--================ -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
