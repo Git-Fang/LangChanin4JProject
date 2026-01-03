@@ -86,16 +86,8 @@ public class AiConf {
     @Bean
     BaiduMapMcpStreamAssistant baiduMapMcpStreamAssistant() {
 
-        McpToolProvider toolProvider = buildBaiduMapMcpTool();
-
-        // 将streamingChatModel和工具提供者注入MCP助手
-        return AiServices.builder(BaiduMapMcpStreamAssistant.class)
-                .streamingChatModel(streamingChatModel)
-                .toolProvider(toolProvider)
-                .build();
+        return buildGenericMcpAssistant(BaiduMapMcpStreamAssistant.class, streamingChatModel);
     }
-
-
 
     /**
      * 创建百度地图MCP服务实例（非流式）
@@ -103,20 +95,14 @@ public class AiConf {
     @Bean
     BaiduMapMcpAssistant baiduMapMcpAssistant() {
 
-        McpToolProvider toolProvider = buildBaiduMapMcpTool();
-
-        // 将chatModel和工具提供者注入MCP助手
-        return AiServices.builder(BaiduMapMcpAssistant.class)
-                .chatModel(chatModel)
-                .toolProvider(toolProvider)
-                .build();
+        return  buildGenericMcpAssistant(BaiduMapMcpAssistant.class, chatModel);
     }
 
 
-
-
-
-    private McpToolProvider buildBaiduMapMcpTool() {
+    /**
+     * 使用泛型方式创建MCP工具提供者，支持不同类型的助手
+     */
+    private <T> T buildGenericMcpAssistant(Class<T> assistantClass, Object model) {
         // 1.启动百度地图MCP服务
         McpTransport transport = new StdioMcpTransport.Builder()
                 .command(List.of("cmd", "/c", "npx", "-y", BusinessConstant.BAIDU_MAP_MCP_SERVER))
@@ -128,10 +114,19 @@ public class AiConf {
         McpClient mcpClient = new DefaultMcpClient.Builder()
                 .transport(transport)
                 .build();
-
         McpToolProvider toolProvider = McpToolProvider.builder()
                 .mcpClients(mcpClient)
                 .build();
-        return toolProvider;
+
+        // 3.根据传入的助手类型创建对应的AI服务实例
+        AiServices<T> aiServices = AiServices.builder(assistantClass).toolProvider(toolProvider);
+        if(model instanceof ChatModel){
+            aiServices.chatModel((ChatModel) model);
+        } else if(model instanceof StreamingChatModel){
+            aiServices.streamingChatModel((StreamingChatModel) model);
+        }
+        return aiServices.build();
     }
+
+
 }
