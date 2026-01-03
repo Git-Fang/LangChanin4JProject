@@ -41,6 +41,19 @@
     </properties>
 
     <dependencies>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
+
+        <!-- 如果需要Stdio传输 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter</artifactId>
+        </dependency>
+
+        <!--========================== -->
+
         <!--doc接口测试组件-->
         <dependency>
             <groupId>com.github.xiaoymin</groupId>
