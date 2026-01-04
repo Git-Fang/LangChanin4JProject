@@ -52,7 +52,7 @@ public class LLMConfig {
     /**
      * ds大模型*/
     @Bean
-    public ChatModel chatModel() {
+    public ChatModel chatModel1() {
         return OpenAiChatModel.builder()
                 .apiKey(envConf.deepSeekApiKey)
                 .modelName(envConf.deepSeekModel)
@@ -65,7 +65,7 @@ public class LLMConfig {
     /**
      * kimi大模型*/
     @Bean
-    public ChatModel chatModel2() {
+    public ChatModel chatModel() {
         return OpenAiChatModel.builder()
                 .apiKey(envConf.kimiApiKey)
                 .modelName(envConf.kimiModel)
