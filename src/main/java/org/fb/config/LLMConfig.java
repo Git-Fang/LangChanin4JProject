@@ -49,8 +49,36 @@ public class LLMConfig {
                 .build();
     }
 
+    /**
+     * ds大模型*/
     @Bean
     public ChatModel chatModel() {
+        return OpenAiChatModel.builder()
+                .apiKey(envConf.deepSeekApiKey)
+                .modelName(envConf.deepSeekModel)
+                .logRequests(true)
+                .logResponses(true)
+                .baseUrl(envConf.deepSeekUrl)
+                .build();
+    }
+
+    /**
+     * kimi大模型*/
+    @Bean
+    public ChatModel chatModel2() {
+        return OpenAiChatModel.builder()
+                .apiKey(envConf.kimiApiKey)
+                .modelName(envConf.kimiModel)
+                .logRequests(true)
+                .logResponses(true)
+                .baseUrl(envConf.kimiUrl)
+                .build();
+    }
+
+    /**
+     * 千问大模型*/
+    @Bean
+    public ChatModel chatModel3() {
         return OpenAiChatModel.builder()
                 .apiKey(envConf.dashscopeApiKey)
                 .modelName(envConf.dashscopeModel)
