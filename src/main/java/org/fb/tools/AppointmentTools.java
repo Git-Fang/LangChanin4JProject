@@ -13,7 +13,7 @@ public class AppointmentTools {
     @Autowired
     private AppointmentService appointmentService;
 
-    @Tool(name="预约挂号", value = "根据参数，先执行工具方法queryDepartment查询是否可预约，并直接给用户回答是否可预约，并让用户确认所有预约信息，用户确认后再进行预约。")
+    @Tool(name="book_appointment", value = "预约挂号：根据参数，先执行工具方法queryDepartment查询是否可预约，并直接给用户回答是否可预约，并让用户确认所有预约信息，用户确认后再进行预约。")
     public String bookAppointment(Appointment appointment){
         //查找数据库中是否包含对应的预约记录
 //        Appointment appointmentDB = appointmentService.getOne(appointment);
@@ -30,7 +30,7 @@ public class AppointmentTools {
         return "您在相同的科室和时间已有预约";
     }
 
-    @Tool(name="取消预约挂号", value = "根据参数，查询预约是否存在，如果存在则删除预约记录并返回取 消预约成功，否则返回取消预约失败")
+    @Tool(name="cancel_appointment", value = "取消预约挂号:根据参数，查询预约是否存在，如果存在则删除预约记录并返回取 消预约成功，否则返回取消预约失败")
     public String cancelAppointment(Appointment appointment){
         Appointment appointmentDB = appointmentService.getOne(appointment);
 
@@ -46,7 +46,7 @@ public class AppointmentTools {
         return "您没有预约记录，请核对预约科室和时间";
     }
 
-    @Tool(name = "查询是否有号源", value="根据科室名称，日期，时间和医生查询是否有号源，并返回给用户")
+    @Tool(name = "query_department", value="查询是否有号源:根据科室名称，日期，时间和医生查询是否有号源，并返回给用户")
     public boolean queryDepartment(
             @P(value = "科室名称") String name,
             @P(value = "日期") String date,
@@ -65,7 +65,7 @@ public class AppointmentTools {
         return true;
     }
 
-    @Tool(name = "查询患者是否已经挂号", value="根据患者姓名和身份证号查询该患者是否已经挂号，并返回给用户")
+    @Tool(name = "query_info", value="查询患者是否已经挂号:根据患者姓名和身份证号查询该患者是否已经挂号，并返回给用户")
     public Appointment queryInfo(
             @P(value = "姓名") String username,
             @P(value = "身份证号") String idCard

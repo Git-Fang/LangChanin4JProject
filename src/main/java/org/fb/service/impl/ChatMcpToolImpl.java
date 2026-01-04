@@ -17,12 +17,12 @@ public class ChatMcpToolImpl implements McpTool {
 
     @Override
     public String getName() {
-        return "复合智能Agent对话";
+        return "composite_intelligent_agent";
     }
 
     @Override
     public String getDescription() {
-        return "支持本地知识库对话、术语提取、术语增强式翻译、智能医疗助手、数据库操作助手等多种类型功能。";
+        return "复合智能助手，支持本地知识库对话、术语提取、术语增强式翻译、智能医疗助手、数据库操作助手等多种类型功能。";
     }
 
     @Override

@@ -24,7 +24,7 @@ public class CommonTools {
     private EmbeddingStore<TextSegment> embeddingStore;
 
 
-    @Tool(name = "查询qdrant向量数据信息", value="根据传入数据{{question}}从qdrant向量数据库中查询并返回")
+    @Tool(name = "embedding_search", value="查询qdrant向量数据信息:根据传入数据{{question}}从qdrant向量数据库中查询并返回")
     public String embeddingSearch(@P(value="question", required = true) String question) {
         log.info("开始向量化。传入数据：{}", question);
 

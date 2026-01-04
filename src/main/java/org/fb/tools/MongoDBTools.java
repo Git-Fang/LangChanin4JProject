@@ -16,7 +16,7 @@ public class MongoDBTools {
     private MongoChatMemoryStore mongoChatMemoryStore;
 
 
-    @Tool(name = "查询mongoDB数据库信息", value="根据用户输入信息从mongoDB数据库中查询后，并返回给用户")
+    @Tool(name = "mongo_search", value="查询mongoDB数据库信息:根据用户输入信息从mongoDB数据库中查询后，并返回给用户")
     public String embeddingSearch(@P(value="memoryId", required = true) Object memoryId) {
         List<ChatMessage> messages = mongoChatMemoryStore.getMessages(memoryId);
 

@@ -7,6 +7,6 @@ import dev.langchain4j.agent.tool.Tool;
  * */
 public interface BaiduMapMcpAssistant {
 
-    @Tool(name = "百度地图mcp", value="根据传入数据{{userMessage}}调用百度地图mcp server完成路径规划等需求")
+    @Tool(name = "baidu_map_mcp", value="根据传入数据{{userMessage}}调用百度地图mcp server完成路径规划等需求")
     String chatDirectly(String userMessage);
 }

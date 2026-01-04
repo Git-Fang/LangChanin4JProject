@@ -43,7 +43,7 @@ public class QdrantOperationTools {
     @Autowired
     private CommonTools commonTools;
 
-    @Tool(name = "文本内容向量化、查询与保存", value = "将传入数据{{text}}先进行向量化然后进行查询；若相似度>=0.85则不保存，否则将内容保存写入qdrant向量数据库中。")
+    @Tool(name = "embedding_term_and_save", value = "文本内容向量化、查询与保存:将传入数据{{text}}先进行向量化然后进行查询；若相似度>=0.85则不保存，否则将内容保存写入qdrant向量数据库中。")
     public void embeddingTermAndSave(@P(value = "传入数据") String text) {
 
         EmbeddingSearchResult<TextSegment> searchResult = commonTools.getMatchWords(text);

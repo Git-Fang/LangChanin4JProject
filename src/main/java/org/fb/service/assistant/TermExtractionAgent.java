@@ -23,7 +23,7 @@ public interface TermExtractionAgent {
     public String chat( @MemoryId long memoryId, @UserMessage String userMessage);
 
 
-    @Tool(name = "提取术语词汇", value="从传入数据{{question}}中提取符合规范的术语词汇")
+    @Tool(name = "term_exact", value="提取术语词汇:从传入数据{{question}}中提取符合规范的术语词汇")
     @SystemMessage(fromResource = "termExtractionAgent-prompt-template.txt")
     public String chatWithTermTool(  @UserMessage String userMessage);
 }

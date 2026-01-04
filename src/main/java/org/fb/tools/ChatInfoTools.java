@@ -14,7 +14,7 @@ public class ChatInfoTools {
     @Autowired
     private ChatInfoMapper chatInfoMapper;
 
-    @Tool(name="对话记录保存", value = "将对话相关数据保存写入数据库ChatInfo表")
+    @Tool(name="save_chat_info", value = "对话记录保存:将对话相关数据保存写入数据库ChatInfo表")
     public void saveChatInfo(ChatInfo chatInfo){
 
         chatInfoMapper.insert(chatInfo);
