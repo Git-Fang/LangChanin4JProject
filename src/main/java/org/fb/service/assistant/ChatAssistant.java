@@ -12,7 +12,7 @@ import dev.langchain4j.service.spring.AiServiceWiringMode;
  * */
 @AiService(wiringMode = AiServiceWiringMode.EXPLICIT,
         chatModel = "chatModel",
-        tools = "commonTools",
+        tools = {"commonTools","mongoDBTools","naturalLanguageSQLAgent"},
         chatMemoryProvider = "chatMemoryProvider",
         contentRetriever = "contentRetriever"
 )
@@ -20,6 +20,6 @@ public interface ChatAssistant {
     String chat(String userMessage);
 
     @SystemMessage(fromResource = "default-prompt.txt")
-    @UserMessage("先根据你本地的知识库数据及上下文信息回答如下问题：{{question}}")
+    @UserMessage("{{question}}")
     public String chat(@MemoryId long memoryId,  @V("question") String question);
 }
