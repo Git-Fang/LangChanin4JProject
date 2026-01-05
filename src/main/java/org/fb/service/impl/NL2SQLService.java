@@ -1,7 +1,8 @@
 package org.fb.service.impl;
 
-import lombok.extern.slf4j.Slf4j;
 import org.fb.service.assistant.NaturalLanguageSQLAgent;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -10,8 +11,8 @@ import java.util.List;
 import java.util.Map;
 
 @Service
-@Slf4j
 public class NL2SQLService {
+    private static final Logger log = LoggerFactory.getLogger(NL2SQLService.class);
     
     @Autowired
     private JdbcTemplate jdbcTemplate;

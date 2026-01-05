@@ -2,11 +2,12 @@ package org.fb.controller;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import lombok.extern.slf4j.Slf4j;
 import org.fb.bean.ChatForm;
 import org.fb.service.assistant.ChatAssistant;
 import org.fb.service.assistant.ChatAssistantStream;
 import org.fb.service.assistant.TranslaterService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -16,9 +17,9 @@ import java.io.IOException;
 
 @RestController
 @RequestMapping("/ragTranslation/")
-@Slf4j
 @Tag(name = "RAG增强翻译")
 public class TranslationController {
+    private static final Logger log = LoggerFactory.getLogger(TranslationController.class);
 
     @Autowired
     private ChatAssistant chatAssistant;

@@ -13,10 +13,12 @@ import dev.langchain4j.store.embedding.EmbeddingMatch;
 import dev.langchain4j.store.embedding.EmbeddingSearchResult;
 import dev.langchain4j.store.embedding.EmbeddingStore;
 import io.qdrant.client.QdrantClient;
-import lombok.extern.slf4j.Slf4j;
 import org.fb.constant.BusinessConstant;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -26,8 +28,8 @@ import java.util.List;
 import java.util.UUID;
 
 @Component
-@Slf4j
 public class QdrantOperationTools {
+    private static final Logger log = LoggerFactory.getLogger(QdrantOperationTools.class);
 
     private static final String storagePath = BusinessConstant.TEMP_FILE_PATH;
 

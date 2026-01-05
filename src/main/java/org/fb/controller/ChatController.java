@@ -2,22 +2,24 @@ package org.fb.controller;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import lombok.extern.slf4j.Slf4j;
 import org.fb.bean.ChatForm;
 import org.fb.service.ChatService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+
 import java.util.Random;
 
 @Tag(name = "智能对话")
 @RestController
 @RequestMapping("/xiaozhi")
-@Slf4j
 public class ChatController {
+    private static final Logger log = LoggerFactory.getLogger(ChatController.class);
 
     @Autowired
     private ChatService chatService;

@@ -1,10 +1,7 @@
 package org.fb.bean.mcpbean;
 
-import lombok.Data;
-
 import java.util.Map;
 
-@Data
 public class JsonRpcResponse {
 
     private String jsonrpc = "2.0";
@@ -28,5 +25,37 @@ public class JsonRpcResponse {
         r.error = Map.of("code", -32603, "message", message);
         r.id = id;
         return r;
+    }
+
+    public String getJsonrpc() {
+        return jsonrpc;
+    }
+
+    public void setJsonrpc(String jsonrpc) {
+        this.jsonrpc = jsonrpc;
+    }
+
+    public Object getResult() {
+        return result;
+    }
+
+    public void setResult(Object result) {
+        this.result = result;
+    }
+
+    public Object getError() {
+        return error;
+    }
+
+    public void setError(Object error) {
+        this.error = error;
+    }
+
+    public String getId() {
+        return id;
+    }
+
+    public void setId(String id) {
+        this.id = id;
     }
 }

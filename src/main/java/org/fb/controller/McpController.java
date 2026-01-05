@@ -7,9 +7,11 @@ import org.fb.bean.mcpbean.JsonRpcResponse;
 import org.fb.bean.mcpbean.ToolDefinition;
 import org.fb.service.McpTool;
 import org.springframework.web.bind.annotation.*;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 @RestController
@@ -21,6 +23,20 @@ public class McpController {
 
     public McpController(List<McpTool> tools) {
         this.tools = tools; // Spring 自动注入所有 McpTool Bean
+    }
+
+    /**
+     * MCP服务根路径，用于健康检查
+     * */
+    @GetMapping
+    @Operation(summary = "MCP服务健康检查")
+    public Map<String, Object> healthCheck() {
+        return Map.of(
+            "status", "ok",
+            "service", "MCP",
+            "version", "1.0.0",
+            "timestamp", System.currentTimeMillis()
+        );
     }
 
     /**

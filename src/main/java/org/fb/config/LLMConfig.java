@@ -17,18 +17,20 @@ import dev.langchain4j.store.embedding.EmbeddingStore;
 import dev.langchain4j.store.embedding.qdrant.QdrantEmbeddingStore;
 import io.qdrant.client.QdrantClient;
 import io.qdrant.client.QdrantGrpcClient;
-import lombok.extern.slf4j.Slf4j;
 import org.fb.service.assistant.ChatAssistantStream;
 import org.fb.tools.MongoChatMemoryStore;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+
 import java.time.Duration;
 
 @Configuration
-@Slf4j
 public class LLMConfig {
+    private static final Logger log = LoggerFactory.getLogger(LLMConfig.class);
 
     @Autowired
     private EnvConf envConf;
@@ -52,7 +54,7 @@ public class LLMConfig {
     /**
      * ds大模型*/
     @Bean
-    public ChatModel chatModel1() {
+    public ChatModel chatModel() {
         return OpenAiChatModel.builder()
                 .apiKey(envConf.deepSeekApiKey)
                 .modelName(envConf.deepSeekModel)
@@ -65,7 +67,7 @@ public class LLMConfig {
     /**
      * kimi大模型*/
     @Bean
-    public ChatModel chatModel() {
+    public ChatModel chatModel2() {
         return OpenAiChatModel.builder()
                 .apiKey(envConf.kimiApiKey)
                 .modelName(envConf.kimiModel)
