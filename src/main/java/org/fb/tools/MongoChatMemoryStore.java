@@ -43,7 +43,11 @@ public class MongoChatMemoryStore implements ChatMemoryStore {
         Query query = new Query(criteria);
 
         Update update = new Update();
-        update.set("content", ChatMessageSerializer.messagesToJson(list));
+        String contentJson = ChatMessageSerializer.messagesToJson(list);
+        update.set("content", contentJson);
+        
+        System.out.println("保存消息到MongoDB: memoryId=" + memoryIdStr + ", 消息数量=" + list.size());
+        
         mongoTemplate.upsert(query, update, ChatMessages.class);
     }
 
@@ -79,6 +83,7 @@ public class MongoChatMemoryStore implements ChatMemoryStore {
         try {
             return mongoTemplate.find(new Query(), ChatMessages.class)
                     .stream()
+                    .filter(chatMessages -> chatMessages.getContent() != null && !chatMessages.getContent().trim().isEmpty())
                     .map(ChatMessages::getMemoryId)
                     .collect(java.util.stream.Collectors.toList());
         } catch (Exception e) {

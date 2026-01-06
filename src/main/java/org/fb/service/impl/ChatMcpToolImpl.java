@@ -68,7 +68,14 @@ public class ChatMcpToolImpl implements McpTool {
     public Mono<Object> execute(Object params) {
         Map<String, Object> p = (Map<String, Object>) params;
         String text = (String) p.get("userMessage");
-        Long memoryId = p.containsKey("memoryId") ? Long.parseLong(p.get("memoryId").toString()) : new Random().nextLong();
+        
+        Long memoryId;
+        if (p.containsKey("memoryId") && p.get("memoryId") != null) {
+            memoryId = Long.parseLong(p.get("memoryId").toString());
+        } else {
+            // HTTP模式下不使用历史会话，生成临时memoryId
+            memoryId = System.currentTimeMillis();
+        }
 
         String result = chatService.chat(memoryId, text);
         return Mono.just(Map.of(
