@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>小智Agent</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -414,6 +415,162 @@
         .file-input {
             display: none;
         }
+
+        /* Markdown渲染样式 */
+        .message-content h1 {
+            font-size: 1.8em;
+            font-weight: 600;
+            margin: 0.8em 0 0.4em 0;
+            border-bottom: 1px solid #e0e0e0;
+            padding-bottom: 0.3em;
+        }
+
+        .message-content h2 {
+            font-size: 1.5em;
+            font-weight: 600;
+            margin: 0.7em 0 0.3em 0;
+            border-bottom: 1px solid #e0e0e0;
+            padding-bottom: 0.2em;
+        }
+
+        .message-content h3 {
+            font-size: 1.3em;
+            font-weight: 600;
+            margin: 0.6em 0 0.3em 0;
+        }
+
+        .message-content h4 {
+            font-size: 1.1em;
+            font-weight: 600;
+            margin: 0.5em 0 0.3em 0;
+        }
+
+        .message-content h5 {
+            font-size: 1em;
+            font-weight: 600;
+            margin: 0.4em 0 0.2em 0;
+        }
+
+        .message-content h6 {
+            font-size: 0.9em;
+            font-weight: 600;
+            margin: 0.4em 0 0.2em 0;
+            color: #666;
+        }
+
+        .message-content p {
+            margin: 0.5em 0;
+        }
+
+        .message-content ul,
+        .message-content ol {
+            margin: 0.5em 0;
+            padding-left: 1.5em;
+        }
+
+        .message-content ul {
+            list-style-type: disc;
+        }
+
+        .message-content ol {
+            list-style-type: decimal;
+        }
+
+        .message-content li {
+            margin: 0.3em 0;
+        }
+
+        .message-content ul ul,
+        .message-content ol ol,
+        .message-content ul ol,
+        .message-content ol ul {
+            margin: 0.2em 0;
+        }
+
+        .message-content code {
+            background-color: #f0f0f0;
+            padding: 0.2em 0.4em;
+            border-radius: 3px;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.9em;
+        }
+
+        .message-content pre {
+            background-color: #2d2d2d;
+            color: #f8f8f2;
+            padding: 1em;
+            border-radius: 6px;
+            overflow-x: auto;
+            margin: 0.8em 0;
+        }
+
+        .message-content pre code {
+            background-color: transparent;
+            padding: 0;
+            color: inherit;
+        }
+
+        .message-content blockquote {
+            border-left: 4px solid #667eea;
+            padding-left: 1em;
+            margin: 0.8em 0;
+            color: #666;
+            background-color: #f9f9f9;
+            padding: 0.5em 1em;
+            border-radius: 0 4px 4px 0;
+        }
+
+        .message-content a {
+            color: #667eea;
+            text-decoration: none;
+        }
+
+        .message-content a:hover {
+            text-decoration: underline;
+        }
+
+        .message-content strong {
+            font-weight: 600;
+        }
+
+        .message-content em {
+            font-style: italic;
+        }
+
+        .message-content hr {
+            border: none;
+            border-top: 1px solid #e0e0e0;
+            margin: 1em 0;
+        }
+
+        .message-content table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 0.8em 0;
+        }
+
+        .message-content table th,
+        .message-content table td {
+            border: 1px solid #e0e0e0;
+            padding: 0.5em 0.8em;
+            text-align: left;
+        }
+
+        .message-content table th {
+            background-color: #f5f5f5;
+            font-weight: 600;
+        }
+
+        .message-content table tr:nth-child(even) {
+            background-color: #fafafa;
+        }
+
+        .message-content img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 4px;
+            margin: 0.5em 0;
+        }
     </style>
 </head>
 <body>
@@ -494,7 +651,13 @@
             
             const contentDiv = document.createElement('div');
             contentDiv.className = 'message-content';
-            contentDiv.textContent = content;
+            
+            // 如果是助手消息，使用markdown解析
+            if (!isUser) {
+                contentDiv.innerHTML = marked.parse(content);
+            } else {
+                contentDiv.textContent = content;
+            }
             
             messageDiv.appendChild(avatar);
             messageDiv.appendChild(contentDiv);
