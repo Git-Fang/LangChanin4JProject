@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MCP SSE测试客户端</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+            background-color: #f5f5f5;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 24px;
+        }
+
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+        }
+
+        .section h2 {
+            color: #667eea;
+            margin-bottom: 15px;
+            font-size: 18px;
+        }
+
+        .control-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #666;
+            font-size: 14px;
+        }
+
+        input[type="text"],
+        input[type="url"],
+        textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            font-size: 14px;
+            font-family: inherit;
+        }
+
+        textarea {
+            min-height: 100px;
+            resize: vertical;
+        }
+
+        button {
+            padding: 10px 20px;
+            background-color: #667eea;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.2s;
+        }
+
+        button:hover {
+            background-color: #5568d3;
+        }
+
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+            font-size: 14px;
+        }
+
+        .status.connected {
+            background-color: #d4edda;
+            color: #155724;
+        }
+
+        .status.disconnected {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+
+        .status.pending {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+
+        .log-container {
+            background-color: #2d2d2d;
+            color: #f8f8f2;
+            padding: 15px;
+            border-radius: 4px;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 12px;
+            line-height: 1.6;
+        }
+
+        .log-entry {
+            margin-bottom: 5px;
+            padding: 5px;
+            border-left: 3px solid #667eea;
+        }
+
+        .log-entry.request {
+            border-left-color: #4caf50;
+        }
+
+        .log-entry.response {
+            border-left-color: #2196f3;
+        }
+
+        .log-entry.error {
+            border-left-color: #f44336;
+        }
+
+        .log-entry .timestamp {
+            color: #888;
+            margin-right: 10px;
+        }
+
+        .log-entry .type {
+            color: #667eea;
+            margin-right: 10px;
+            font-weight: bold;
+        }
+
+        .tools-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 15px;
+        }
+
+        .tool-card {
+            padding: 15px;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            background-color: #f9f9f9;
+        }
+
+        .tool-card h3 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 16px;
+        }
+
+        .tool-card p {
+            color: #666;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        .quick-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .quick-actions button {
+            padding: 8px 16px;
+            font-size: 13px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>MCP SSE测试客户端</h1>
+
+        <!-- 连接配置 -->
+        <div class="section">
+            <h2>连接配置</h2>
+            <div class="control-group">
+                <label for="baseUrl">服务端点URL</label>
+                <input type="url" id="baseUrl" value="http://localhost:8081/mcp" placeholder="http://localhost:8081/mcp">
+            </div>
+            <div class="control-group">
+                <label for="sessionId">会话ID (留空自动生成)</label>
+                <input type="text" id="sessionId" placeholder="自动生成">
+            </div>
+            <div class="control-group">
+                <button id="connectBtn" onclick="connect()">建立SSE连接</button>
+                <button id="disconnectBtn" onclick="disconnect()" disabled>断开连接</button>
+            </div>
+            <div id="connectionStatus" class="status disconnected">未连接</div>
+        </div>
+
+        <!-- 快速操作 -->
+        <div class="section">
+            <h2>快速操作</h2>
+            <div class="quick-actions">
+                <button onclick="quickInitialize()" id="quickInitBtn" disabled>初始化</button>
+                <button onclick="quickToolsList()" id="quickToolsBtn" disabled>获取工具列表</button>
+                <button onclick="quickShutdown()" id="quickShutdownBtn" disabled>关闭会话</button>
+            </div>
+        </div>
+
+        <!-- 工具调用 -->
+        <div class="section">
+            <h2>工具调用</h2>
+            <div class="control-group">
+                <label for="toolName">工具名称</label>
+                <select id="toolName" style="width: 100%; padding: 10px; border: 1px solid #e0e0e0; border-radius: 4px;">
+                    <option value="">选择工具...</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label for="toolArguments">工具参数 (JSON格式)</label>
+                <textarea id="toolArguments" placeholder='{"userMessage": "你好"}'></textarea>
+            </div>
+            <div class="control-group">
+                <button onclick="callTool()" id="callToolBtn" disabled>调用工具</button>
+            </div>
+        </div>
+
+        <!-- 自定义消息 -->
+        <div class="section">
+            <h2>自定义消息</h2>
+            <div class="control-group">
+                <label for="customMessage">自定义JSON-RPC消息</label>
+                <textarea id="customMessage" placeholder='{"jsonrpc": "2.0", "id": "1", "method": "initialize", "params": {...}}'></textarea>
+            </div>
+            <div class="control-group">
+                <button onclick="sendCustomMessage()" id="sendCustomBtn" disabled>发送消息</button>
+            </div>
+        </div>
+
+        <!-- 工具列表 -->
+        <div class="section">
+            <h2>可用工具</h2>
+            <div id="toolsList" class="tools-list">
+                <p style="color: #999;">暂无工具，请先初始化并获取工具列表</p>
+            </div>
+        </div>
+
+        <!-- 消息日志 -->
+        <div class="section">
+            <h2>消息日志</h2>
+            <div class="control-group">
+                <button onclick="clearLog()">清空日志</button>
+            </div>
+            <div id="logContainer" class="log-container">
+                <div class="log-entry">
+                    <span class="timestamp">--:--:--</span>
+                    <span class="type">INFO</span>
+                    <span class="message">日志已初始化</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let eventSource = null;
+        let sessionId = null;
+        let messageId = 1;
+        let tools = [];
+
+        function generateSessionId() {
+            return 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        }
+
+        function updateConnectionStatus(status) {
+            const statusEl = document.getElementById('connectionStatus');
+            statusEl.className = 'status ' + status;
+            
+            const connectBtn = document.getElementById('connectBtn');
+            const disconnectBtn = document.getElementById('disconnectBtn');
+            const quickInitBtn = document.getElementById('quickInitBtn');
+            const quickToolsBtn = document.getElementById('quickToolsBtn');
+            const quickShutdownBtn = document.getElementById('quickShutdownBtn');
+            const callToolBtn = document.getElementById('callToolBtn');
+            const sendCustomBtn = document.getElementById('sendCustomBtn');
+
+            if (status === 'connected') {
+                statusEl.textContent = '已连接';
+                connectBtn.disabled = true;
+                disconnectBtn.disabled = false;
+                quickInitBtn.disabled = false;
+                quickToolsBtn.disabled = false;
+                quickShutdownBtn.disabled = false;
+                callToolBtn.disabled = false;
+                sendCustomBtn.disabled = false;
+            } else {
+                statusEl.textContent = '未连接';
+                connectBtn.disabled = false;
+                disconnectBtn.disabled = true;
+                quickInitBtn.disabled = true;
+                quickToolsBtn.disabled = true;
+                quickShutdownBtn.disabled = true;
+                callToolBtn.disabled = true;
+                sendCustomBtn.disabled = true;
+            }
+        }
+
+        function addLog(type, message, data = null) {
+            const container = document.getElementById('logContainer');
+            const entry = document.createElement('div');
+            entry.className = 'log-entry ' + type.toLowerCase();
+            
+            const now = new Date();
+            const timestamp = now.toTimeString().split(' ')[0];
+            
+            let content = `<span class="timestamp">${timestamp}</span>`;
+            content += `<span class="type">${type}</span>`;
+            content += `<span class="message">${message}</span>`;
+            
+            if (data) {
+                content += `<pre style="margin-top: 5px; padding: 5px; background-color: #1a1a1a; border-radius: 3px; overflow-x: auto;">${JSON.stringify(data, null, 2)}</pre>`;
+            }
+            
+            entry.innerHTML = content;
+            container.appendChild(entry);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function clearLog() {
+            const container = document.getElementById('logContainer');
+            container.innerHTML = '';
+            addLog('INFO', '日志已清空');
+        }
+
+        function connect() {
+            const baseUrl = document.getElementById('baseUrl').value;
+            const inputSessionId = document.getElementById('sessionId').value;
+            
+            sessionId = inputSessionId || generateSessionId();
+            document.getElementById('sessionId').value = sessionId;
+
+            const sseUrl = `${baseUrl}/sse?sessionId=${sessionId}`;
+            addLog('INFO', `正在连接SSE: ${sseUrl}`, { sessionId });
+
+            eventSource = new EventSource(sseUrl);
+
+            eventSource.onopen = () => {
+                updateConnectionStatus('connected');
+                addLog('INFO', 'SSE连接已建立');
+            };
+
+            eventSource.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    addLog('RESPONSE', '收到SSE消息', data);
+                    
+                    // 处理工具列表响应
+                    if (data.result && data.result.tools) {
+                        tools = data.result.tools;
+                        updateToolsList(tools);
+                    }
+                } catch (e) {
+                    addLog('ERROR', '解析SSE消息失败: ' + e.message, event.data);
+                }
+            };
+
+            eventSource.onerror = (error) => {
+                updateConnectionStatus('disconnected');
+                addLog('ERROR', 'SSE连接错误', error);
+                disconnect();
+            };
+        }
+
+        function disconnect() {
+            if (eventSource) {
+                eventSource.close();
+                eventSource = null;
+                updateConnectionStatus('disconnected');
+                addLog('INFO', 'SSE连接已关闭');
+            }
+        }
+
+        async function sendMessage(message) {
+            const baseUrl = document.getElementById('baseUrl').value;
+            const messagesUrl = `${baseUrl}/messages`;
+
+            addLog('REQUEST', '发送消息', message);
+
+            try {
+                const response = await fetch(messagesUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Session-ID': sessionId
+                    },
+                    body: JSON.stringify(message)
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.text();
+                if (data) {
+                    addLog('RESPONSE', '收到响应', JSON.parse(data));
+                }
+            } catch (error) {
+                addLog('ERROR', '发送消息失败: ' + error.message);
+            }
+        }
+
+        function quickInitialize() {
+            const message = {
+                jsonrpc: "2.0",
+                id: String(messageId++),
+                method: "initialize",
+                params: {
+                    protocolVersion: "2024-11-05",
+                    capabilities: {},
+                    clientInfo: {
+                        name: "WebTestClient",
+                        version: "1.0.0"
+                    }
+                }
+            };
+            sendMessage(message);
+        }
+
+        function quickToolsList() {
+            const message = {
+                jsonrpc: "2.0",
+                id: String(messageId++),
+                method: "tools/list"
+            };
+            sendMessage(message);
+        }
+
+        function quickShutdown() {
+            const message = {
+                jsonrpc: "2.0",
+                id: String(messageId++),
+                method: "shutdown"
+            };
+            sendMessage(message);
+        }
+
+        function callTool() {
+            const toolName = document.getElementById('toolName').value;
+            const argumentsText = document.getElementById('toolArguments').value;
+
+            if (!toolName) {
+                addLog('ERROR', '请选择工具');
+                return;
+            }
+
+            let argumentsObj = {};
+            try {
+                if (argumentsText.trim()) {
+                    argumentsObj = JSON.parse(argumentsText);
+                }
+            } catch (e) {
+                addLog('ERROR', '参数JSON格式错误: ' + e.message);
+                return;
+            }
+
+            const message = {
+                jsonrpc: "2.0",
+                id: String(messageId++),
+                method: "tools/call",
+                params: {
+                    name: toolName,
+                    arguments: argumentsObj
+                }
+            };
+            sendMessage(message);
+        }
+
+        function sendCustomMessage() {
+            const messageText = document.getElementById('customMessage').value;
+            
+            try {
+                const message = JSON.parse(messageText);
+                if (!message.id) {
+                    message.id = String(messageId++);
+                }
+                sendMessage(message);
+            } catch (e) {
+                addLog('ERROR', '消息JSON格式错误: ' + e.message);
+            }
+        }
+
+        function updateToolsList(toolsData) {
+            const container = document.getElementById('toolsList');
+            const select = document.getElementById('toolName');
+            
+            // 更新下拉列表
+            select.innerHTML = '<option value="">选择工具...</option>';
+            toolsData.forEach(tool => {
+                const option = document.createElement('option');
+                option.value = tool.name;
+                option.textContent = tool.name;
+                select.appendChild(option);
+            });
+
+            // 更新工具卡片
+            container.innerHTML = '';
+            toolsData.forEach(tool => {
+                const card = document.createElement('div');
+                card.className = 'tool-card';
+                card.innerHTML = `
+                    <h3>${tool.name}</h3>
+                    <p>${tool.description || '暂无描述'}</p>
+                `;
+                container.appendChild(card);
+            });
+
+            addLog('INFO', `已更新工具列表，共 ${toolsData.length} 个工具`);
+        }
+
+        // 页面加载时初始化
+        window.onload = function() {
+            addLog('INFO', 'MCP SSE测试客户端已加载');
+        };
+    </script>
+</body>
+</html>
