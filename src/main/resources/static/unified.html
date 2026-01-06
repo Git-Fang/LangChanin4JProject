@@ -1413,6 +1413,11 @@
                     loadingDiv.remove();
                 }
                 
+                // 显示回复消息
+                if (replyText) {
+                    addMessage(replyText, false);
+                }
+                
                 // 仅在SSE模式下刷新历史会话列表
                 if (currentMode === 'sse') {
                     loadHistorySessions();
