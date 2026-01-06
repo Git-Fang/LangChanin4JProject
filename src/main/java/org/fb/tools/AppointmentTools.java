@@ -7,6 +7,8 @@ import org.fb.service.AppointmentService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
+
 @Component
 public class AppointmentTools {
 
@@ -80,5 +82,12 @@ public class AppointmentTools {
 
     }
 
+    @Tool(name = "query_doctor_appointments", value="查询医生的预约列表:根据医生姓名查询该医生的所有预约记录，并返回给用户")
+    public List<Appointment> queryDoctorAppointments(
+            @P(value = "医生姓名") String doctorName
+    ) {
+        System.out.println("查询医生预约列表，医生姓名：" + doctorName);
+        return appointmentService.getByDoctorName(doctorName);
+    }
 
 }

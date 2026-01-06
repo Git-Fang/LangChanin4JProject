@@ -8,19 +8,18 @@ import dev.langchain4j.service.spring.AiService;
 import dev.langchain4j.service.spring.AiServiceWiringMode;
 
 /**
- * 单次调用agent
- * chatModel = "ollamaChatModel",表示使用ollama模型
+ * 术语提取Agent - 无记忆模式，避免上下文干扰
+ * chatModel = "chatModel",表示使用chatModel模型
+ * 不使用chatMemoryProvider，确保每次提取都是独立的，不受之前对话影响
  * */
 @AiService(wiringMode = AiServiceWiringMode.EXPLICIT,
         chatModel = "chatModel",
-        tools = {"qdrantOperationTools", "commonTools"},
-        chatMemoryProvider = "chatMemoryProvider",
-        contentRetriever = "contentRetriever"
+        tools = {"qdrantOperationTools", "commonTools"}
 )
 public interface TermExtractionAgent {
 
     @SystemMessage(fromResource = "termExtractionAgent-prompt-template.txt")
-    public String chat( @MemoryId long memoryId, @UserMessage String userMessage);
+    public String chat(@UserMessage String userMessage);
 
 
     @Tool(name = "term_exact", value="提取术语词汇:从传入数据{{question}}中提取符合规范的术语词汇")

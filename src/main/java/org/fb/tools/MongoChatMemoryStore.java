@@ -52,4 +52,15 @@ public class MongoChatMemoryStore implements ChatMemoryStore {
 
         mongoTemplate.remove(query, ChatMessages.class);
     }
+
+    /**
+     * 获取所有历史会话的memoryId
+     * @return 所有历史会话的memoryId列表
+     */
+    public List<Long> getAllMemoryIds() {
+        return mongoTemplate.find(new Query(), ChatMessages.class)
+                .stream()
+                .map(ChatMessages::getMemoryId)
+                .collect(java.util.stream.Collectors.toList());
+    }
 }

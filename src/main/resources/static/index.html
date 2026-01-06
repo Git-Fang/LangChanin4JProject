@@ -90,6 +90,91 @@
             font-weight: 300;
         }
 
+        /* 历史会话列表 */
+        .history-container {
+            margin-top: 20px;
+            flex: 1;
+            overflow-y: auto;
+        }
+
+        .history-title {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 10px;
+            font-weight: 500;
+        }
+
+        .history-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .history-item {
+            padding: 8px 12px;
+            background-color: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            color: #333;
+            transition: all 0.2s;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .history-item:hover {
+            background-color: #f0f0f0;
+            border-color: #d0d0d0;
+        }
+
+        .history-item.active {
+            background-color: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        /* 删除会话按钮样式 */
+        .delete-session-btn {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background-color: #f5f5f5;
+            color: #999;
+            font-size: 14px;
+            font-weight: bold;
+            line-height: 18px;
+            text-align: center;
+            cursor: pointer;
+            margin-left: 8px;
+            transition: all 0.2s;
+            opacity: 0;
+        }
+
+        .history-item:hover .delete-session-btn {
+            opacity: 1;
+        }
+
+        .delete-session-btn:hover {
+            background-color: #ff4757;
+            color: white;
+        }
+
+        .history-item.active .delete-session-btn {
+            background-color: rgba(255, 255, 255, 0.3);
+            color: white;
+        }
+
+        .history-item.active:hover .delete-session-btn {
+            background-color: #ff4757;
+            color: white;
+        }
+
         /* 主聊天区域 */
         .chat-area {
             flex: 1;
@@ -120,7 +205,6 @@
             display: none;
             z-index: 1000;
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-            display: flex;
             align-items: center;
             gap: 8px;
         }
@@ -307,11 +391,19 @@
                 <div class="app-name">小智Agent</div>
             </div>
             <button class="new-chat-btn" onclick="newChat()">新会话</button>
+            
+            <!-- 历史会话列表 -->
+            <div class="history-container">
+                <h3 class="history-title">历史会话</h3>
+                <div class="history-list" id="historyList">
+                    <!-- 历史会话将通过JavaScript动态添加 -->
+                </div>
+            </div>
         </div>
 
         <!-- 主聊天区域 -->
         <div class="chat-area">
-<!--            <div class="error-message" id="errorMessage">请求失败,请重试</div>-->
+            <div class="error-message" id="errorMessage">请求失败,请重试</div>
             
             <div class="messages-container" id="messagesContainer">
                 <div class="empty-state">开始新的对话吧</div>
@@ -399,6 +491,10 @@
             loadingDiv.appendChild(loadingIndicator);
 
             try {
+                // 添加请求超时处理（180秒，与后端配置一致）
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 180000); // 180秒超时
+                
                 const response = await fetch(API_BASE_URL, {
                     method: 'POST',
                     headers: {
@@ -407,15 +503,20 @@
                     body: JSON.stringify({
                         memoryId: memoryId,
                         message: message
-                    })
+                    }),
+                    signal: controller.signal
                 });
+                
+                clearTimeout(timeoutId);
 
                 if (!response.ok) {
                     const errorText = await response.text();
+                    console.error('HTTP Error:', response.status, errorText);
                     throw new Error(errorText || `HTTP error! status: ${response.status}`);
                 }
 
                 const data = await response.text();
+                console.log('Response data:', data);
                 
                 // 移除加载消息，添加实际回复
                 const messages = document.querySelectorAll('.message');
@@ -430,8 +531,17 @@
                 
             } catch (error) {
                 console.error('Error:', error);
-                const errorMsg = error.message || '请求失败,请重试';
-                showError(errorMsg.length > 50 ? '请求失败,请重试' : errorMsg);
+                console.error('Error stack:', error.stack);
+                
+                // 处理不同类型的错误
+                let errorMsg = '请求失败,请重试';
+                if (error.name === 'AbortError') {
+                    errorMsg = '请求超时，请稍后重试';
+                } else if (error.message) {
+                    errorMsg = error.message.length > 50 ? '请求失败,请重试' : error.message;
+                }
+                
+                showError(errorMsg);
                 
                 // 移除加载消息
                 const messages = document.querySelectorAll('.message');
@@ -466,9 +576,147 @@
             container.innerHTML = '<div class="empty-state">开始新的对话吧</div>';
         }
 
-        // 页面加载完成后聚焦输入框
+        // 加载历史会话列表
+        async function loadHistorySessions() {
+            try {
+                const response = await fetch('http://localhost:8080/xiaozhi/history');
+                if (!response.ok) {
+                    throw new Error('Failed to load history sessions');
+                }
+                const historyIds = await response.json();
+                
+                const historyList = document.getElementById('historyList');
+                historyList.innerHTML = '';
+                
+                // 按时间倒序排列（最新的会话在前）
+                historyIds.sort((a, b) => b - a);
+                
+                historyIds.forEach(id => {
+                    const historyItem = document.createElement('div');
+                    historyItem.className = 'history-item';
+                    historyItem.dataset.memoryId = id;
+                    
+                    // 将时间戳转换为可读日期
+                    const date = new Date(id);
+                    const timeStr = `${date.getMonth() + 1}/${date.getDate()} ${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}`;
+                    
+                    // 创建会话时间文本
+                    const timeText = document.createElement('span');
+                    timeText.className = 'session-time';
+                    timeText.textContent = timeStr;
+                    
+                    // 创建删除按钮
+                    const deleteBtn = document.createElement('span');
+                    deleteBtn.className = 'delete-session-btn';
+                    deleteBtn.innerHTML = '×';
+                    deleteBtn.title = '删除会话';
+                    deleteBtn.addEventListener('click', (e) => {
+                        e.stopPropagation(); // 阻止事件冒泡
+                        deleteSession(id);
+                    });
+                    
+                    // 组装会话项
+                    historyItem.appendChild(timeText);
+                    historyItem.appendChild(deleteBtn);
+                    
+                    if (id === memoryId) {
+                        historyItem.classList.add('active');
+                    }
+                    
+                    historyItem.addEventListener('click', () => {
+                        switchSession(id);
+                    });
+                    
+                    historyList.appendChild(historyItem);
+                });
+            } catch (error) {
+                console.error('加载历史会话失败:', error);
+            }
+        }
+        
+        // 切换到指定会话
+        async function switchSession(sessionId) {
+            memoryId = sessionId;
+            
+            // 更新UI
+            const historyItems = document.querySelectorAll('.history-item');
+            historyItems.forEach(item => {
+                item.classList.remove('active');
+                if (Number(item.dataset.memoryId) === memoryId) {
+                    item.classList.add('active');
+                }
+            });
+            
+            // 清空当前聊天记录
+            const container = document.getElementById('messagesContainer');
+            container.innerHTML = '';
+            
+            try {
+                // 加载历史消息
+                const response = await fetch(`http://localhost:8080/xiaozhi/history/${sessionId}`);
+                if (!response.ok) {
+                    throw new Error('Failed to load history messages');
+                }
+                const messages = await response.json();
+                
+                // 如果没有历史消息，显示空状态
+                if (messages.length === 0) {
+                    container.innerHTML = '<div class="empty-state">开始新的对话吧</div>';
+                    return;
+                }
+                
+                // 添加历史消息到聊天窗口
+                messages.forEach(message => {
+                    // 检查消息类型，判断是用户消息还是助手消息
+                    if (message.type === 'USER_MESSAGE' || message.type === 'HUMAN_MESSAGE') {
+                        addMessage(message.text, true);
+                    } else if (message.type === 'ASSISTANT_MESSAGE' || message.type === 'AI_MESSAGE') {
+                        addMessage(message.text, false);
+                    }
+                });
+            } catch (error) {
+                console.error('加载历史消息失败:', error);
+                container.innerHTML = '<div class="empty-state">加载历史消息失败</div>';
+            }
+        }
+        
+        // 删除指定会话
+        async function deleteSession(sessionId) {
+            try {
+                // 发送删除请求到后端
+                const response = await fetch(`http://localhost:8080/xiaozhi/history/${sessionId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error('删除会话失败');
+                }
+                
+                const success = await response.json();
+                if (success) {
+                    // 如果删除的是当前会话，创建新会话
+                    if (sessionId === memoryId) {
+                        newChat();
+                    }
+                    
+                    // 重新加载历史会话列表
+                    loadHistorySessions();
+                } else {
+                    throw new Error('删除会话失败');
+                }
+            } catch (error) {
+                console.error('删除会话失败:', error);
+                alert('删除会话失败，请重试');
+            }
+        }
+        
+        // 页面加载完成后聚焦输入框并加载历史会话
         window.addEventListener('load', () => {
             document.getElementById('messageInput').focus();
+            loadHistorySessions();
         });
     </script>
 </body>

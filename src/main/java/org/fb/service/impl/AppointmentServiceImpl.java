@@ -7,6 +7,8 @@ import org.fb.bean.Appointment;
 import org.fb.service.AppointmentService;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
+
 /**
 * @author 123
 * @description 针对表【appointment】的数据库操作Service实现
@@ -36,6 +38,13 @@ public class AppointmentServiceImpl extends ServiceImpl<AppointmentMapper, Appoi
 
         Appointment appointmentDB = baseMapper.selectOne(queryWrapper);
         return appointmentDB;
+    }
+
+    @Override
+    public List<Appointment> getByDoctorName(String doctorName) {
+        LambdaQueryWrapper<Appointment> queryWrapper = new LambdaQueryWrapper<>();
+        queryWrapper.eq(Appointment::getDoctorName, doctorName);
+        return baseMapper.selectList(queryWrapper);
     }
 }
 

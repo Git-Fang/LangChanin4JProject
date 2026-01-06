@@ -8,11 +8,10 @@ import org.springframework.data.mongodb.core.mapping.Document;
 public class ChatMessages {
 
     //唯一标识，映射到 MongoDB 文档的 _id 字段
-    //唯一标识，映射到 MongoDB 文档的 _id 字段
     @Id
     private ObjectId id;
 
-    private int messageId;
+    private long memoryId;
 
     private String content;
 
@@ -21,9 +20,9 @@ public class ChatMessages {
     }
 
     // 全参构造函数
-    public ChatMessages(ObjectId id, int messageId, String content) {
+    public ChatMessages(ObjectId id, long memoryId, String content) {
         this.id = id;
-        this.messageId = messageId;
+        this.memoryId = memoryId;
         this.content = content;
     }
 
@@ -36,12 +35,12 @@ public class ChatMessages {
         this.id = id;
     }
 
-    public int getMessageId() {
-        return messageId;
+    public long getMemoryId() {
+        return memoryId;
     }
 
-    public void setMessageId(int messageId) {
-        this.messageId = messageId;
+    public void setMemoryId(long memoryId) {
+        this.memoryId = memoryId;
     }
 
     public String getContent() {
