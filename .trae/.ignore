@@ -1,0 +1,9 @@
+# 当前项目下的可忽略文件（以.开头的文件）
+.DS_Store
+.git
+.gitignore
+.env
+.vscode
+.idea
+*.log
+*.tmp
