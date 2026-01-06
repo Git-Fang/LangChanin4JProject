@@ -49,11 +49,20 @@ public class QdrantOperationTools {
     public void embeddingTermAndSave(@P(value = "传入数据") String text) {
 
         EmbeddingSearchResult<TextSegment> searchResult = commonTools.getMatchWords(text);
+        
+        if (searchResult.matches().isEmpty()) {
+            log.info("未找到相似内容，开始保存新数据");
+            saveTerms(text);
+            return;
+        }
+
         EmbeddingMatch<TextSegment> embeddingMatch = searchResult.matches().get(0);
         log.info("相似度得分：{}; 匹配结果：{}",embeddingMatch.score(),embeddingMatch.embedded().text());
 
         if(embeddingMatch.score() < 0.85){
             saveTerms(text);
+        } else {
+            log.info("相似度>=0.85，不保存重复数据");
         }
     }
 

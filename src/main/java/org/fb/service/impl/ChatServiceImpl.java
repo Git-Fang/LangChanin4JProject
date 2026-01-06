@@ -8,6 +8,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
+import java.util.Map;
+
 @Service
 public class ChatServiceImpl implements ChatService {
     private static final Logger log = LoggerFactory.getLogger(ChatServiceImpl.class);
@@ -70,10 +73,44 @@ public class ChatServiceImpl implements ChatService {
             return termExtractionAgent.chat(userMessage);
         } else if (isSql) {
             // 自然语言转为sql
-            return nl2SQLService.executeNaturalLanguageQuery(userMessage).toString();
+            try {
+                List<Map<String, Object>> result = nl2SQLService.executeNaturalLanguageQuery(userMessage);
+                if (result == null || result.isEmpty()) {
+                    return "查询结果为空，请检查查询条件或数据库中是否有相关数据";
+                }
+                return formatQueryResult(result);
+            } catch (Exception e) {
+                log.error("SQL查询执行失败", e);
+                return "抱歉，执行SQL查询时出错：" + e.getMessage() + "。请尝试使用其他方式查询，或检查数据库中是否存在相关表和数据。";
+            }
         } else {
             // 默认业务，使用普通聊天助手（个人助手），无论是否明确识别为general
             return chatAssistant.chat(memoryId, userMessage);
         }
+    }
+
+    /**
+     * 格式化查询结果
+     * @param result 查询结果列表
+     * @return 格式化后的字符串
+     */
+    private String formatQueryResult(List<Map<String, Object>> result) {
+        if (result == null || result.isEmpty()) {
+            return "查询结果为空";
+        }
+        
+        StringBuilder sb = new StringBuilder();
+        sb.append("查询成功，共找到").append(result.size()).append("条记录：\n\n");
+        
+        int count = 1;
+        for (Map<String, Object> row : result) {
+            sb.append("记录").append(count++).append(":\n");
+            for (Map.Entry<String, Object> entry : row.entrySet()) {
+                sb.append("  ").append(entry.getKey()).append(": ").append(entry.getValue()).append("\n");
+            }
+            sb.append("\n");
+        }
+        
+        return sb.toString();
     }
 }

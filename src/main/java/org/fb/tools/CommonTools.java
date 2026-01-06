@@ -41,17 +41,14 @@ public class CommonTools {
 
 
     public EmbeddingSearchResult<TextSegment> getMatchWords(String question) {
-        //1.1提问，并将问题转成向量数据
         Embedding queryEmbedding = embeddingModel.embed(question).content();
 
-        //1.2创建搜索请求对象
         EmbeddingSearchRequest searchRequest = EmbeddingSearchRequest.builder()
                 .queryEmbedding(queryEmbedding)
-                .maxResults(1) //匹配最相似的一条记录
-//                .minScore(0.8)
+                .maxResults(5)
+                .minScore(0.6)
                 .build();
 
-        //2.根据搜索请求 searchRequest 在向量存储中进行相似度搜索
         return embeddingStore.search(searchRequest);
     }
 

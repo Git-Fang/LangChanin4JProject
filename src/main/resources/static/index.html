@@ -380,6 +380,40 @@
             color: #999;
             font-size: 14px;
         }
+
+        /* 文件上传区域 */
+        .upload-section {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #e0e0e0;
+        }
+
+        .upload-title {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 10px;
+            font-weight: 500;
+        }
+
+        .upload-btn {
+            width: 100%;
+            padding: 10px 16px;
+            background-color: #667eea;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: background-color 0.2s;
+        }
+
+        .upload-btn:hover {
+            background-color: #5568d3;
+        }
+
+        .file-input {
+            display: none;
+        }
     </style>
 </head>
 <body>
@@ -398,6 +432,13 @@
                 <div class="history-list" id="historyList">
                     <!-- 历史会话将通过JavaScript动态添加 -->
                 </div>
+            </div>
+
+            <!-- 文件上传区域 -->
+            <div class="upload-section">
+                <h3 class="upload-title">个人数据管理</h3>
+                <button class="upload-btn" onclick="document.getElementById('fileInput').click()">上传简历文件</button>
+                <input type="file" id="fileInput" class="file-input" accept=".pdf,.txt,.doc,.docx" onchange="uploadFile(this)">
             </div>
         </div>
 
@@ -588,6 +629,16 @@
                 const historyList = document.getElementById('historyList');
                 historyList.innerHTML = '';
                 
+                // 如果没有历史会话，显示提示信息
+                if (historyIds.length === 0) {
+                    const emptyItem = document.createElement('div');
+                    emptyItem.className = 'history-item';
+                    emptyItem.style.cursor = 'default';
+                    emptyItem.textContent = '暂无历史会话';
+                    historyList.appendChild(emptyItem);
+                    return;
+                }
+                
                 // 按时间倒序排列（最新的会话在前）
                 historyIds.sort((a, b) => b - a);
                 
@@ -631,6 +682,15 @@
                 });
             } catch (error) {
                 console.error('加载历史会话失败:', error);
+                // 在界面上显示加载失败提示
+                const historyList = document.getElementById('historyList');
+                historyList.innerHTML = '';
+                const errorItem = document.createElement('div');
+                errorItem.className = 'history-item';
+                errorItem.style.cursor = 'default';
+                errorItem.style.color = '#999';
+                errorItem.textContent = '加载历史会话失败';
+                historyList.appendChild(errorItem);
             }
         }
         
@@ -677,6 +737,41 @@
             } catch (error) {
                 console.error('加载历史消息失败:', error);
                 container.innerHTML = '<div class="empty-state">加载历史消息失败</div>';
+            }
+        }
+        
+        // 上传文件
+        async function uploadFile(input) {
+            const file = input.files[0];
+            if (!file) {
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const response = await fetch('http://localhost:8080/xiaozhi/personal/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    throw new Error('上传文件失败');
+                }
+
+                const result = await response.json();
+                if (result.success) {
+                    alert('文件上传成功！已向量化存储到知识库，现在可以查询简历信息了。');
+                } else {
+                    throw new Error(result.message || '上传文件失败');
+                }
+            } catch (error) {
+                console.error('上传文件失败:', error);
+                alert('上传文件失败: ' + error.message);
+            } finally {
+                // 清空文件输入
+                input.value = '';
             }
         }
         

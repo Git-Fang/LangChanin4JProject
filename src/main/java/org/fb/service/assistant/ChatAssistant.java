@@ -12,7 +12,7 @@ import dev.langchain4j.service.spring.AiServiceWiringMode;
  * */
 @AiService(wiringMode = AiServiceWiringMode.EXPLICIT,
         chatModel = "chatModel",
-        tools = {"commonTools","mongoDBTools","naturalLanguageSQLAgent"},
+        tools = {"commonTools","mongoDBTools","naturalLanguageSQLAgent","personalDataTools"},
         chatMemoryProvider = "chatMemoryProvider",
         contentRetriever = "contentRetriever"
 )

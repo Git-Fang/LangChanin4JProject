@@ -26,6 +26,19 @@ public class NL2SQLService {
             String sql = naturalLanguageToSQL(naturalLanguage);
             log.info("生成的SQL: {}", sql);
 
+            // 验证SQL语句的合法性
+            if (sql == null || sql.trim().isEmpty()) {
+                throw new RuntimeException("生成的SQL语句为空");
+            }
+
+            // 检查SQL是否包含危险操作
+            String upperSql = sql.toUpperCase();
+            if (upperSql.contains("DROP") || upperSql.contains("DELETE") || 
+                upperSql.contains("UPDATE") || upperSql.contains("INSERT") ||
+                upperSql.contains("ALTER") || upperSql.contains("TRUNCATE")) {
+                throw new RuntimeException("不允许执行修改数据的SQL操作");
+            }
+
             // 执行SQL查询
             List<Map<String, Object>> result = jdbcTemplate.queryForList(sql);
             log.info("查询结果: {}", result);
@@ -44,8 +57,17 @@ public class NL2SQLService {
         
         // 构建提示词
         String prompt = String.format("""
-            你是一个MySQL专家。基于以下数据库结构，将自然语言转换为SQL语句。
+            你是一个MySQL专家。基于以下数据库结构，将自然语言转换为SQL查询语句。
             只返回SQL语句，不要任何解释。
+            
+            重要注意事项：
+            1. 只生成SELECT查询语句，不要生成INSERT、UPDATE、DELETE等修改数据的语句
+            2. 确保SQL语句中的所有字段和表名都存在于提供的数据库结构中
+            3. 如果用户查询的内容在数据库中不存在，返回一个简单的SELECT 1语句
+            4. 不要使用"default"、"null"等作为字面值，除非字段确实允许NULL
+            5. 对于字符串字段，使用单引号包裹值
+            6. 对于数值字段，不要使用引号
+            7. 如果不确定如何转换，返回SELECT 1语句
             
             数据库结构：
             %s

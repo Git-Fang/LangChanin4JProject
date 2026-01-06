@@ -28,6 +28,9 @@ spring:
     url: jdbc:mysql://192.168.179.130:3306/guiguxiaozhi?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
     username: root
     password: root
+  data:
+    mongodb:
+      uri: mongodb://localhost:27017/chat_db
 
 mybatis-plus:
   configuration:

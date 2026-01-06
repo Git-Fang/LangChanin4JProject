@@ -108,6 +108,11 @@ public class DocumentImpl implements DocumentService {
 
         for (MultipartFile file : files) {
             String path = saveFileToLocal(file);
+            
+            if (path == null || path.isEmpty()) {
+                log.warn("文件保存失败，跳过向量化: {}", file.getOriginalFilename());
+                continue;
+            }
 
             parseAndEmbedding(path);
             log.info("{}向量化完成",file.getOriginalFilename());

@@ -2,41 +2,23 @@ package org.fb.tools;
 
 import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
-import dev.langchain4j.data.message.ChatMessage;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.stereotype.Component;
-import org.springframework.util.CollectionUtils;
 
 import java.util.List;
 import java.util.Map;
 
 @Component
-public class MongoDBTools {
-
-    @Autowired
-    private MongoChatMemoryStore mongoChatMemoryStore;
+public class PersonalDataTools {
 
     @Autowired
     private MongoTemplate mongoTemplate;
 
-
-    @Tool(name = "mongo_search", value="查询mongoDB数据库信息:根据用户输入信息从mongoDB数据库中查询后，并返回给用户")
-    public String mongoDbSearch(@P(value="memoryId", required = true) Object memoryId) {
-        List<ChatMessage> messages = mongoChatMemoryStore.getMessages(memoryId);
-
-        if(CollectionUtils.isEmpty(messages)){
-            return "暂未找到相关信息";
-        } else {
-            ChatMessage chatMessage = messages.get(0);
-            return chatMessage.toString();
-        }
-    }
-
-    @Tool(name = "search_mongo_personal_data", value = "查询MongoDB个人数据:根据关键词{{keyword}}从MongoDB数据库的personal_data集合中查询个人相关信息并返回")
-    public String searchMongoPersonalData(@P(value = "关键词", required = true) String keyword) {
+    @Tool(name = "search_personal_resume", value = "查询个人简历信息:根据用户输入的关键词{{keyword}}从MongoDB数据库中查询个人简历相关数据并返回")
+    public String searchPersonalResume(@P(value = "关键词", required = true) String keyword) {
         try {
             Query query = new Query();
             query.addCriteria(Criteria.where("content").regex(keyword, "i"));
@@ -44,7 +26,7 @@ public class MongoDBTools {
             List<Map> results = mongoTemplate.find(query, Map.class, "personal_data");
             
             if (results.isEmpty()) {
-                return "未找到与关键词\"" + keyword + "\"相关的个人信息";
+                return "未找到与关键词\"" + keyword + "\"相关的个人简历信息";
             }
             
             StringBuilder sb = new StringBuilder();
@@ -55,12 +37,12 @@ public class MongoDBTools {
             
             return sb.toString();
         } catch (Exception e) {
-            return "查询个人信息时出错：" + e.getMessage();
+            return "查询个人简历信息时出错：" + e.getMessage();
         }
     }
 
-    @Tool(name = "get_all_mongo_personal_data", value = "获取所有MongoDB个人数据:从MongoDB数据库的personal_data集合中获取所有存储的个人信息并返回")
-    public String getAllMongoPersonalData() {
+    @Tool(name = "get_all_personal_info", value = "获取所有个人信息:从MongoDB数据库中获取所有存储的个人信息并返回")
+    public String getAllPersonalInfo() {
         try {
             List<Map> results = mongoTemplate.findAll(Map.class, "personal_data");
             
