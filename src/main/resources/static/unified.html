@@ -987,6 +987,21 @@
                     // 处理工具调用结果
                     if (data.result && data.result.content && Array.isArray(data.result.content)) {
                         displayToolResult(data.result);
+                        
+                        // 如果结果包含 chatResult，则添加到聊天区域
+                        const content = data.result.content;
+                        const textContent = content.find(item => item.type === 'text');
+                        if (textContent && textContent.text) {
+                            try {
+                                const resultData = JSON.parse(textContent.text);
+                                if (resultData.chatResult) {
+                                    addMessage(resultData.chatResult, false);
+                                }
+                            } catch (e) {
+                                // 如果不是 JSON，直接显示文本
+                                addMessage(textContent.text, false);
+                            }
+                        }
                     }
                 } catch (e) {
                     addLog('ERROR', '解析SSE消息失败: ' + e.message, event.data);
@@ -1026,8 +1041,6 @@
 
         async function sendSseMessage(message) {
             const messagesUrl = `${SSE_BASE_URL}/messages`;
-
-            addLog('REQUEST', '发送SSE消息', message);
 
             try {
                 const response = await fetch(messagesUrl, {
@@ -1288,7 +1301,7 @@
             // 滚动到底部
             container.scrollTop = container.scrollHeight;
             
-            return contentDiv;
+            return messageDiv;
         }
 
         // 发送消息
@@ -1310,11 +1323,12 @@
             addMessage(message, true);
             input.value = '';
 
-            // 添加加载中的助手消息
+            // 添加加载中的助手消息，并保存引用以便后续移除
             const loadingDiv = addMessage('正在思考...', false);
+            const contentDiv = loadingDiv.querySelector('.message-content');
             const loadingIndicator = document.createElement('span');
             loadingIndicator.className = 'loading';
-            loadingDiv.appendChild(loadingIndicator);
+            contentDiv.appendChild(loadingIndicator);
 
             try {
                 let replyText = '';
@@ -1377,18 +1391,16 @@
                         }
                     };
                     
+                    // 记录发送的消息到日志
+                    addLog('REQUEST', '发送SSE消息', sseMessage);
+                    
                     await sendSseMessage(sseMessage);
-                    replyText = '消息已发送，请等待SSE响应...';
                 }
                 
-                // 移除加载消息，添加实际回复
-                const messages = document.querySelectorAll('.message');
-                const lastMessage = messages[messages.length - 1];
-                if (lastMessage && lastMessage.classList.contains('assistant')) {
-                    lastMessage.remove();
+                // 移除加载消息
+                if (loadingDiv && loadingDiv.parentNode) {
+                    loadingDiv.remove();
                 }
-                
-                addMessage(replyText, false);
                 
                 // 刷新历史会话列表
                 loadHistorySessions();
@@ -1407,10 +1419,8 @@
                 showError(errorMsg);
                 
                 // 移除加载消息
-                const messages = document.querySelectorAll('.message');
-                const lastMessage = messages[messages.length - 1];
-                if (lastMessage && lastMessage.classList.contains('assistant')) {
-                    lastMessage.remove();
+                if (loadingDiv && loadingDiv.parentNode) {
+                    loadingDiv.remove();
                 }
                 
                 // 添加错误提示消息
