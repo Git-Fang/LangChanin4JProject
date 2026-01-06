@@ -1089,6 +1089,9 @@
             grid.innerHTML = '';
             select.innerHTML = '<option value="">选择工具...</option>';
             
+            // 更新全局工具列表
+            tools = toolsData;
+            
             // 添加工具卡片
             toolsData.forEach(tool => {
                 // 生成参数模板
@@ -1135,6 +1138,20 @@
                 option.textContent = tool.name;
                 select.appendChild(option);
             });
+            
+            // 添加工具选择变化事件
+            select.onchange = function() {
+                const selectedToolName = this.value;
+                if (selectedToolName) {
+                    const selectedTool = tools.find(t => t.name === selectedToolName);
+                    if (selectedTool && selectedTool.paramTemplate) {
+                        document.getElementById('toolArguments').value = selectedTool.paramTemplate;
+                        addLog('INFO', `已选择工具: ${selectedToolName}，参数模板已自动填充`);
+                    }
+                } else {
+                    document.getElementById('toolArguments').value = '';
+                }
+            };
             
             addLog('INFO', `已更新工具列表，共 ${toolsData.length} 个工具`);
         }
