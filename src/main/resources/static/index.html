@@ -437,7 +437,7 @@
             <!-- 文件上传区域 -->
             <div class="upload-section">
                 <h3 class="upload-title">个人数据管理</h3>
-                <button class="upload-btn" onclick="document.getElementById('fileInput').click()">上传简历文件</button>
+                <button class="upload-btn" onclick="document.getElementById('fileInput').click()">上传文件</button>
                 <input type="file" id="fileInput" class="file-input" accept=".pdf,.txt,.doc,.docx" onchange="uploadFile(this)">
             </div>
         </div>
@@ -762,7 +762,7 @@
 
                 const result = await response.json();
                 if (result.success) {
-                    alert('文件上传成功！已向量化存储到知识库，现在可以查询简历信息了。');
+                    alert('文件上传成功！已向量化存储到知识库，现在可以查询信息了。');
                 } else {
                     throw new Error(result.message || '上传文件失败');
                 }

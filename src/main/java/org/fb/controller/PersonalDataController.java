@@ -22,7 +22,7 @@ public class PersonalDataController {
     private DocumentService documentService;
 
     @PostMapping("/upload")
-    @Operation(summary = "上传个人简历文件")
+    @Operation(summary = "上传个人相关文件")
     public Map<String, Object> uploadResume(@RequestParam("file") MultipartFile file) {
         Map<String, Object> result = new HashMap<>();
         try {
@@ -42,7 +42,7 @@ public class PersonalDataController {
     }
 
     @PostMapping("/upload/batch")
-    @Operation(summary = "批量上传个人简历文件")
+    @Operation(summary = "批量上传个人相关文件")
     public Map<String, Object> uploadResumeBatch(@RequestParam("files") MultipartFile[] files) {
         Map<String, Object> result = new HashMap<>();
         try {
