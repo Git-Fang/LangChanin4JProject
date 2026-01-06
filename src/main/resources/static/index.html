@@ -622,7 +622,7 @@
 
     <script>
         let memoryId = Date.now(); // 使用时间戳作为memoryId
-        const API_BASE_URL = 'http://localhost:8080/xiaozhi/chat';
+        const API_BASE_URL = 'http://localhost:8000/mcp/exec';
 
         // 显示错误消息
         function showError(message) {
@@ -705,8 +705,13 @@
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
-                        memoryId: memoryId,
-                        message: message
+                        jsonrpc: '2.0',
+                        id: Date.now().toString(),
+                        method: 'composite_intelligent_agent',
+                        params: {
+                            memoryId: memoryId,
+                            userMessage: message
+                        }
                     }),
                     signal: controller.signal
                 });
@@ -719,7 +724,7 @@
                     throw new Error(errorText || `HTTP error! status: ${response.status}`);
                 }
 
-                const data = await response.text();
+                const data = await response.json();
                 console.log('Response data:', data);
                 
                 // 移除加载消息，添加实际回复
@@ -729,8 +734,16 @@
                     lastMessage.remove();
                 }
                 
-                // 如果返回的数据为空，显示默认消息
-                const replyText = data && data.trim() ? data.trim() : '抱歉，我没有理解您的问题。';
+                // 解析JSON-RPC响应
+                let replyText = '抱歉，我没有理解您的问题。';
+                if (data.result && data.result.chatResult) {
+                    replyText = data.result.chatResult;
+                } else if (data.result) {
+                    replyText = typeof data.result === 'string' ? data.result : JSON.stringify(data.result);
+                } else if (data.error) {
+                    replyText = `错误: ${data.error.message || data.error}`;
+                }
+                
                 addMessage(replyText, false);
                 
                 // 刷新历史会话列表，确保新消息的会话出现在历史列表中
@@ -786,7 +799,7 @@
         // 加载历史会话列表
         async function loadHistorySessions() {
             try {
-                const response = await fetch('http://localhost:8080/xiaozhi/history');
+                const response = await fetch('http://localhost:8000/xiaozhi/history');
                 if (!response.ok) {
                     throw new Error('Failed to load history sessions');
                 }
@@ -879,7 +892,7 @@
             
             try {
                 // 加载历史消息
-                const response = await fetch(`http://localhost:8080/xiaozhi/history/${sessionId}`);
+                const response = await fetch(`http://localhost:8000/xiaozhi/history/${sessionId}`);
                 if (!response.ok) {
                     throw new Error('Failed to load history messages');
                 }
@@ -917,7 +930,7 @@
             formData.append('file', file);
 
             try {
-                const response = await fetch('http://localhost:8080/xiaozhi/personal/upload', {
+                const response = await fetch('http://localhost:8000/xiaozhi/personal/upload', {
                     method: 'POST',
                     body: formData
                 });
@@ -945,7 +958,7 @@
         async function deleteSession(sessionId) {
             try {
                 // 发送删除请求到后端
-                const response = await fetch(`http://localhost:8080/xiaozhi/history/${sessionId}`, {
+                const response = await fetch(`http://localhost:8000/xiaozhi/history/${sessionId}`, {
                     method: 'DELETE',
                     headers: {
                         'Content-Type': 'application/json',
