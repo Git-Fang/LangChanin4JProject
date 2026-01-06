@@ -27,7 +27,8 @@ public class MongoChatMemoryStore implements ChatMemoryStore {
 
     @Override
     public List<ChatMessage> getMessages(Object memoryId) {
-        Criteria criteria = Criteria.where("memoryId").is(memoryId);
+        String memoryIdStr = convertMemoryIdToString(memoryId);
+        Criteria criteria = Criteria.where("memoryId").is(memoryIdStr);
         Query query = new Query(criteria);
         ChatMessages one = mongoTemplate.findOne(query, ChatMessages.class);
         if(one==null) return new LinkedList<>();
@@ -37,7 +38,8 @@ public class MongoChatMemoryStore implements ChatMemoryStore {
 
     @Override
     public void updateMessages(Object memoryId, List<ChatMessage> list) {
-        Criteria criteria = Criteria.where("memoryId").is(memoryId);
+        String memoryIdStr = convertMemoryIdToString(memoryId);
+        Criteria criteria = Criteria.where("memoryId").is(memoryIdStr);
         Query query = new Query(criteria);
 
         Update update = new Update();
@@ -47,17 +49,33 @@ public class MongoChatMemoryStore implements ChatMemoryStore {
 
     @Override
     public void deleteMessages(Object memoryId) {
-        Criteria criteria = Criteria.where("memoryId").is(memoryId);
+        String memoryIdStr = convertMemoryIdToString(memoryId);
+        Criteria criteria = Criteria.where("memoryId").is(memoryIdStr);
         Query query = new Query(criteria);
 
         mongoTemplate.remove(query, ChatMessages.class);
     }
 
     /**
+     * 将memoryId转换为String类型
+     * @param memoryId memoryId对象（可能是Long或String）
+     * @return String类型的memoryId
+     */
+    private String convertMemoryIdToString(Object memoryId) {
+        if (memoryId == null) {
+            return "default";
+        }
+        if (memoryId instanceof String) {
+            return (String) memoryId;
+        }
+        return String.valueOf(memoryId);
+    }
+
+    /**
      * 获取所有历史会话的memoryId
      * @return 所有历史会话的memoryId列表
      */
-    public List<Long> getAllMemoryIds() {
+    public List<String> getAllMemoryIds() {
         try {
             return mongoTemplate.find(new Query(), ChatMessages.class)
                     .stream()

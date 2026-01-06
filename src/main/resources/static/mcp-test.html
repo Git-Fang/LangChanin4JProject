@@ -190,6 +190,132 @@
             padding: 8px 16px;
             font-size: 13px;
         }
+
+        /* Markdown内容样式 */
+        .markdown-content {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+            line-height: 1.6;
+            color: #333;
+        }
+
+        .markdown-content h1,
+        .markdown-content h2,
+        .markdown-content h3,
+        .markdown-content h4,
+        .markdown-content h5,
+        .markdown-content h6 {
+            margin-top: 20px;
+            margin-bottom: 10px;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+
+        .markdown-content h1 {
+            font-size: 24px;
+            border-bottom: 2px solid #e0e0e0;
+            padding-bottom: 10px;
+        }
+
+        .markdown-content h2 {
+            font-size: 20px;
+            border-bottom: 1px solid #e0e0e0;
+            padding-bottom: 8px;
+        }
+
+        .markdown-content h3 {
+            font-size: 18px;
+        }
+
+        .markdown-content h4 {
+            font-size: 16px;
+        }
+
+        .markdown-content p {
+            margin-bottom: 15px;
+        }
+
+        .markdown-content ul,
+        .markdown-content ol {
+            margin-bottom: 15px;
+            padding-left: 30px;
+        }
+
+        .markdown-content li {
+            margin-bottom: 5px;
+        }
+
+        .markdown-content code {
+            background-color: #f4f4f4;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 13px;
+            color: #e83e8c;
+        }
+
+        .markdown-content pre {
+            background-color: #282c34;
+            color: #abb2bf;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            margin-bottom: 15px;
+        }
+
+        .markdown-content pre code {
+            background-color: transparent;
+            padding: 0;
+            color: inherit;
+            font-size: 13px;
+        }
+
+        .markdown-content blockquote {
+            border-left: 4px solid #667eea;
+            padding-left: 15px;
+            margin: 15px 0;
+            color: #666;
+            background-color: #f8f9fa;
+            padding: 10px 15px;
+        }
+
+        .markdown-content table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 15px;
+        }
+
+        .markdown-content th,
+        .markdown-content td {
+            border: 1px solid #e0e0e0;
+            padding: 8px 12px;
+            text-align: left;
+        }
+
+        .markdown-content th {
+            background-color: #f8f9fa;
+            font-weight: 600;
+        }
+
+        .markdown-content a {
+            color: #667eea;
+            text-decoration: none;
+        }
+
+        .markdown-content a:hover {
+            text-decoration: underline;
+        }
+
+        .markdown-content img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 4px;
+        }
+
+        .markdown-content hr {
+            border: none;
+            border-top: 2px solid #e0e0e0;
+            margin: 20px 0;
+        }
     </style>
 </head>
 <body>
@@ -201,7 +327,7 @@
             <h2>连接配置</h2>
             <div class="control-group">
                 <label for="baseUrl">服务端点URL</label>
-                <input type="url" id="baseUrl" value="http://localhost:8081/mcp" placeholder="http://localhost:8081/mcp">
+                <input type="url" id="baseUrl" value="http://localhost:8000/mcp" placeholder="http://localhost:8000/mcp">
             </div>
             <div class="control-group">
                 <label for="sessionId">会话ID (留空自动生成)</label>
@@ -235,10 +361,18 @@
             </div>
             <div class="control-group">
                 <label for="toolArguments">工具参数 (JSON格式)</label>
-                <textarea id="toolArguments" placeholder='{"userMessage": "你好"}'></textarea>
+                <textarea id="toolArguments"></textarea>
             </div>
             <div class="control-group">
                 <button onclick="callTool()" id="callToolBtn" disabled>调用工具</button>
+            </div>
+            
+            <!-- 工具调用结果 -->
+            <div class="control-group" id="toolResultGroup" style="display: none;">
+                <label>工具调用结果</label>
+                <div id="toolResult" style="background: #f8f9fa; padding: 15px; border: 1px solid #e0e0e0; border-radius: 4px; max-height: 400px; overflow-y: auto;">
+                    <div id="toolResultMarkdown" class="markdown-content"></div>
+                </div>
             </div>
         </div>
 
@@ -278,6 +412,8 @@
         </div>
     </div>
 
+    <!-- 引入Markdown渲染库 -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script>
         let eventSource = null;
         let sessionId = null;
@@ -374,6 +510,11 @@
                     if (data.result && data.result.tools) {
                         tools = data.result.tools;
                         updateToolsList(tools);
+                    }
+                    
+                    // 处理工具调用结果（通过检查result.content来判断）
+                    if (data.result && data.result.content && Array.isArray(data.result.content)) {
+                        displayToolResult(data.result);
                     }
                 } catch (e) {
                     addLog('ERROR', '解析SSE消息失败: ' + e.message, event.data);
@@ -523,9 +664,40 @@
             toolsData.forEach(tool => {
                 const card = document.createElement('div');
                 card.className = 'tool-card';
+                
+                // 生成参数模板
+                let paramTemplate = '{}';
+                if (tool.inputSchema && tool.inputSchema.properties) {
+                    const properties = tool.inputSchema.properties;
+                    const required = tool.inputSchema.required || [];
+                    const params = {};
+                    
+                    for (const [key, schema] of Object.entries(properties)) {
+                        if (schema.type === 'string') {
+                            params[key] = required.includes(key) ? '' : schema.description || '';
+                        } else if (schema.type === 'number' || schema.type === 'integer') {
+                            params[key] = required.includes(key) ? 0 : (schema.minimum || 0);
+                        } else if (schema.type === 'boolean') {
+                            params[key] = false;
+                        } else if (schema.type === 'array') {
+                            params[key] = [];
+                        } else {
+                            params[key] = null;
+                        }
+                    }
+                    paramTemplate = JSON.stringify(params, null, 2);
+                }
+                
+                // 存储参数模板到工具对象
+                tool.paramTemplate = paramTemplate;
+                
                 card.innerHTML = `
                     <h3>${tool.name}</h3>
                     <p>${tool.description || '暂无描述'}</p>
+                    <div style="margin-top: 10px; font-size: 12px; color: #666;">
+                        <strong>参数模板:</strong>
+                        <pre style="background: #f5f5f5; padding: 8px; border-radius: 4px; overflow-x: auto;">${paramTemplate}</pre>
+                    </div>
                 `;
                 container.appendChild(card);
             });
@@ -533,9 +705,49 @@
             addLog('INFO', `已更新工具列表，共 ${toolsData.length} 个工具`);
         }
 
+        function displayToolResult(result) {
+            const resultGroup = document.getElementById('toolResultGroup');
+            const resultContainer = document.getElementById('toolResultMarkdown');
+            
+            resultGroup.style.display = 'block';
+            
+            // 格式化显示结果
+            let resultText = '';
+            if (typeof result === 'string') {
+                resultText = result;
+            } else if (result.content && Array.isArray(result.content)) {
+                // 处理MCP标准响应格式
+                resultText = result.content.map(item => {
+                    if (item.type === 'text') {
+                        return item.text;
+                    } else if (item.type === 'image') {
+                        return `[图片: ${item.data.substring(0, 50)}...]`;
+                    }
+                    return JSON.stringify(item);
+                }).join('\n\n');
+            } else {
+                resultText = JSON.stringify(result, null, 2);
+            }
+            
+            // 使用marked库渲染Markdown
+            resultContainer.innerHTML = marked.parse(resultText);
+            addLog('INFO', '工具调用结果已显示');
+        }
+
         // 页面加载时初始化
         window.onload = function() {
             addLog('INFO', 'MCP SSE测试客户端已加载');
+            
+            // 监听工具选择变化，自动填充参数模板
+            document.getElementById('toolName').addEventListener('change', function() {
+                const selectedToolName = this.value;
+                const selectedTool = tools.find(t => t.name === selectedToolName);
+                
+                if (selectedTool && selectedTool.paramTemplate) {
+                    document.getElementById('toolArguments').value = selectedTool.paramTemplate;
+                    addLog('INFO', `已加载工具 ${selectedToolName} 的参数模板`);
+                }
+            });
         };
     </script>
 </body>

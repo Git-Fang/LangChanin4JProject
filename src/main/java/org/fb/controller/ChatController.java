@@ -60,7 +60,16 @@ public class ChatController {
     @Operation(summary = "获取历史会话列表")
     public List<Long> getHistorySessions() {
         try {
-            return mongoChatMemoryStore.getAllMemoryIds();
+            List<String> stringIds = mongoChatMemoryStore.getAllMemoryIds();
+            List<Long> longIds = new ArrayList<>();
+            for (String id : stringIds) {
+                try {
+                    longIds.add(Long.parseLong(id));
+                } catch (NumberFormatException e) {
+                    log.warn("无法转换memoryId: {}", id);
+                }
+            }
+            return longIds;
         } catch (Exception e) {
             log.error("获取历史会话列表异常, error={}", e.getMessage(), e);
             return new ArrayList<>();

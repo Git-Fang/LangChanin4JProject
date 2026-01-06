@@ -32,7 +32,7 @@ public class McpSseService {
     }
 
     public SseEmitter createEmitter(String sessionId) {
-        SseEmitter emitter = new SseEmitter(300000L);
+        SseEmitter emitter = new SseEmitter(0L);
 
         emitter.onCompletion(() -> {
             emitters.remove(sessionId);
@@ -56,7 +56,8 @@ public class McpSseService {
         logger.info("创建新的SSE会话: {}", sessionId);
 
         try {
-            emitter.send(SseEmitter.event().comment("SSE连接已建立"));
+            emitter.send(SseEmitter.event().comment("SSE连接已建立").reconnectTime(1000));
+            logger.info("SSE初始消息已发送: sessionId={}", sessionId);
         } catch (IOException e) {
             logger.error("发送SSE初始消息失败: sessionId={}", sessionId, e);
         }

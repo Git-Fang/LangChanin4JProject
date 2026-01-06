@@ -11,7 +11,7 @@ public class ChatMessages {
     @Id
     private ObjectId id;
 
-    private long memoryId;
+    private String memoryId;
 
     private String content;
 
@@ -20,7 +20,7 @@ public class ChatMessages {
     }
 
     // 全参构造函数
-    public ChatMessages(ObjectId id, long memoryId, String content) {
+    public ChatMessages(ObjectId id, String memoryId, String content) {
         this.id = id;
         this.memoryId = memoryId;
         this.content = content;
@@ -35,11 +35,11 @@ public class ChatMessages {
         this.id = id;
     }
 
-    public long getMemoryId() {
+    public String getMemoryId() {
         return memoryId;
     }
 
-    public void setMemoryId(long memoryId) {
+    public void setMemoryId(String memoryId) {
         this.memoryId = memoryId;
     }
 

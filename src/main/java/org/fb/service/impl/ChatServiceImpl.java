@@ -81,7 +81,26 @@ public class ChatServiceImpl implements ChatService {
                 return formatQueryResult(result);
             } catch (Exception e) {
                 log.error("SQL查询执行失败", e);
-                return "抱歉，执行SQL查询时出错：" + e.getMessage() + "。请尝试使用其他方式查询，或检查数据库中是否存在相关表和数据。";
+                
+                // 提供更友好的错误提示
+                String errorMsg = e.getMessage();
+                if (errorMsg != null && errorMsg.contains("Failed to convert from type")) {
+                    return "抱歉，SQL查询时出现类型转换错误。这可能是AI生成的SQL中字段类型不匹配导致的。\n\n" +
+                           "建议：\n" +
+                           "1. 请尝试更具体地描述您的查询需求\n" +
+                           "2. 如果查询涉及数值字段，请明确说明数值范围\n" +
+                           "3. 例如：不要说\"查询default用户\"，而要说\"查询ID为1的用户\"\n\n" +
+                           "错误详情：" + errorMsg;
+                } else if (errorMsg != null && errorMsg.contains("不合理的字符串字面量")) {
+                    return "抱歉，AI生成的SQL包含不合理的值。请尝试用不同的方式描述您的查询需求。\n\n" +
+                           "建议：\n" +
+                           "1. 避免使用\"default\"、\"null\"等关键字作为查询值\n" +
+                           "2. 使用具体的数值或文本进行查询\n" +
+                           "3. 例如：\"查询用户名为张三的记录\"而不是\"查询default用户\"";
+                } else {
+                    return "抱歉，执行SQL查询时出错：" + errorMsg + "。\n\n" +
+                           "建议：请尝试用更清晰、更具体的方式描述您的查询需求。";
+                }
             }
         } else {
             // 默认业务，使用普通聊天助手（个人助手），无论是否明确识别为general
