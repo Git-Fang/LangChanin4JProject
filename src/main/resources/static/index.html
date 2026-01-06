@@ -593,7 +593,7 @@
 
             <!-- 文件上传区域 -->
             <div class="upload-section">
-                <h3 class="upload-title">个人数据管理</h3>
+                <h3 class="upload-title">文件管理</h3>
                 <button class="upload-btn" onclick="document.getElementById('fileInput').click()">上传文件</button>
                 <input type="file" id="fileInput" class="file-input" accept=".pdf,.txt,.doc,.docx" onchange="uploadFile(this)">
             </div>
@@ -732,6 +732,9 @@
                 // 如果返回的数据为空，显示默认消息
                 const replyText = data && data.trim() ? data.trim() : '抱歉，我没有理解您的问题。';
                 addMessage(replyText, false);
+                
+                // 刷新历史会话列表，确保新消息的会话出现在历史列表中
+                loadHistorySessions();
                 
             } catch (error) {
                 console.error('Error:', error);
