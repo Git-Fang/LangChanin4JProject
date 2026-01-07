@@ -27,9 +27,8 @@ then
 fi
 
 echo "开始构建Docker镜像..."
-# 启用BuildKit加速构建，添加详细日志输出
-export DOCKER_BUILDKIT=1
-docker-compose build --progress=plain
+# 强制拉取最新镜像，确保不使用缓存的旧配置
+docker-compose build --no-cache --pull
 
 if [ $? -ne 0 ]
 then
