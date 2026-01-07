@@ -27,7 +27,9 @@ then
 fi
 
 echo "开始构建Docker镜像..."
-docker-compose build
+# 启用BuildKit加速构建，添加详细日志输出
+export DOCKER_BUILDKIT=1
+docker-compose build --progress=plain
 
 if [ $? -ne 0 ]
 then
