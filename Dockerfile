@@ -32,28 +32,26 @@ COPY src ./src
 # 执行Maven构建，跳过测试
 RUN mvn clean package -DskipTests
 
-# 第二阶段：运行阶段 - 使用Debian Slim JRE镜像（原生支持glibc，兼容ONNX Runtime）
-FROM eclipse-temurin:17-jre-jammy
+# 第二阶段：运行阶段 - 使用Alpine Linux JRE镜像（避免网络和DNS问题）
+FROM eclipse-temurin:17-jre-alpine
 
 WORKDIR /app
 
-# 安装curl用于健康检查和Node.js用于MCP服务，以及netcat用于端口检查
-# 同时设置npm淘宝镜像加速包下载，并预先安装MCP服务包
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends curl ca-certificates netcat && \
-    curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
-    apt-get install -y nodejs && \
+# 安装必要的包：curl、nodejs、npm和netcat-openbsd
+# 使用Alpine的apk包管理器，不需要额外的网络下载脚本
+RUN apk update && \
+    apk add --no-cache curl ca-certificates netcat-openbsd nodejs npm && \
     npm config set registry https://registry.npmmirror.com && \
     npm install -g @baidumap/mcp-server-baidu-map && \
-    rm -rf /var/lib/apt/lists/*
+    rm -rf /var/cache/apk/*
 
 # 复制构建好的jar文件
 COPY --from=builder /app/target/RAGTranslation4-1.0-SNAPSHOT.jar app.jar
 
 # 创建启动脚本
-RUN echo '#!/bin/bash\n\
+RUN echo '#!/bin/sh\n\
 echo "等待MongoDB启动..."\n\
-for i in {1..30}; do\n\
+for i in $(seq 1 30); do\n\
   if nc -z mongo 27017 >/dev/null 2>&1; then\n\
     echo "MongoDB已就绪"\n\
     sleep 3\n\
