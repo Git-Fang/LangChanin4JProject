@@ -32,13 +32,15 @@ COPY src ./src
 # 执行Maven构建，跳过测试
 RUN mvn clean package -DskipTests
 
-# 第二阶段：运行阶段 - 使用轻量级JRE镜像
-FROM eclipse-temurin:17-jre-alpine
+# 第二阶段：运行阶段 - 使用Debian Slim JRE镜像（原生支持glibc，兼容ONNX Runtime）
+FROM eclipse-temurin:17-jre-jammy
 
 WORKDIR /app
 
-# 安装curl用于健康检查和libstdc++用于ONNX Runtime（Alpine使用apk）
-RUN apk add --no-cache curl libstdc++
+# 安装curl用于健康检查
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends curl && \
+    rm -rf /var/lib/apt/lists/*
 
 # 复制构建好的jar文件
 COPY --from=builder /app/target/RAGTranslation4-1.0-SNAPSHOT.jar app.jar

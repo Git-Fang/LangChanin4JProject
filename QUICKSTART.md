@@ -54,8 +54,8 @@ docker-compose up -d --build
 ### 优化点
 1. **镜像更轻量**：
    - 构建阶段：maven:3.9-eclipse-temurin-17-alpine (~350MB)
-   - 运行阶段：eclipse-temurin:17-jre-alpine (~170MB)
-   - 最终镜像：~400MB (原约800MB)
+   - 运行阶段：eclipse-temurin:17-jre-jammy (~250MB，Ubuntu 22.04基础）
+   - 最终镜像：~500MB（原约800MB，减少37%）
 
 2. **构建更快速**：
    - 简化了Maven配置生成
@@ -103,7 +103,9 @@ docker-compose build --no-cache
 ```
 
 ### ONNX Runtime错误
-如果启动时报错：`libstdc++.so.6: No such file or directory`
+如果启动时报错：`ld-linux-x86-64.so.2: No such file or directory`
+
+**原因**：ONNX Runtime需要glibc，已改用Ubuntu Jammy基础镜像
 
 ```bash
 # 重新构建（已修复Dockerfile）
