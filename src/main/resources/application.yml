@@ -30,7 +30,7 @@ spring:
     password: root
   data:
     mongodb:
-      uri: mongodb://localhost:27017/chat_db
+      uri: mongodb://192.168.179.130:27017/chat_db
 
 mybatis-plus:
   configuration:
@@ -58,7 +58,7 @@ ai:
       port: 6334
 
   ollama:
-    base-url: http://172.21.192.1:11434
+    base-url: http://192.168.179.130:11434
     model: deepseek-r1:8b
     options:
       temperature: 0.7
@@ -71,5 +71,3 @@ ai:
   mcp:
     baiduMap:
       apiKey: ${BAIDU_MAP_API_KEY}
-
-

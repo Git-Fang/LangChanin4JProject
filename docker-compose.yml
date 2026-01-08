@@ -10,9 +10,17 @@ services:
       - KIMI_API_KEY=${KIMI_API_KEY}
       - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY}
       - BAIDU_MAP_API_KEY=${BAIDU_MAP_API_KEY}
+      - SERVER_PORT=8000
+      - SERVER_ADDRESS=0.0.0.0
     restart: unless-stopped
+    networks:
+      - app-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/actuator/health"]
       interval: 30s
       timeout: 10s
       retries: 3
+
+networks:
+  app-network:
+    driver: bridge
