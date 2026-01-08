@@ -44,7 +44,6 @@ RUN apt-get update && \
     curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
     apt-get install -y nodejs && \
     npm config set registry https://registry.npmmirror.com && \
-    npm config set disturl https://npmmirror.com/dist && \
     npm install -g @baidumap/mcp-server-baidu-map && \
     rm -rf /var/lib/apt/lists/*
 
