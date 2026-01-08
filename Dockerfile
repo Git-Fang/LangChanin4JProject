@@ -1,10 +1,17 @@
-# 使用国内阿里云官方openjdk镜像，避免仓库访问权限问题
-FROM registry.cn-hangzhou.aliyuncs.com/aliyun_openjdk/openjdk17:17.0.9-ubuntu AS builder
+# 使用Ubuntu官方镜像，手动安装OpenJDK 17，避免依赖特定JDK镜像源
+FROM ubuntu:22.04 AS builder
 
 WORKDIR /app
 
-# 安装Maven和必要的依赖库
-RUN apt-get update && apt-get install -y maven && rm -rf /var/lib/apt/lists/*
+# 配置国内阿里云Ubuntu软件源
+RUN sed -i 's/archive.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list && \ \
+    sed -i 's/security.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list
+
+# 安装OpenJDK 17和Maven
+RUN apt-get update && apt-get install -y \ \
+    openjdk-17-jdk \ \
+    maven \ \
+    && rm -rf /var/lib/apt/lists/*
 
 # 配置Maven使用阿里云仓库
 RUN mkdir -p /root/.m2 \
@@ -46,13 +53,20 @@ COPY src ./src
 # 执行Maven构建，跳过测试
 RUN mvn clean package -DskipTests
 
-# 使用国内阿里云官方openjdk JRE镜像
-FROM registry.cn-hangzhou.aliyuncs.com/aliyun_openjdk/openjdk17:17.0.9-ubuntu-jre
+# 使用Ubuntu官方镜像，手动安装JRE 17
+FROM ubuntu:22.04
 
 WORKDIR /app
 
-# 安装curl用于健康检查
-RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+# 配置国内阿里云Ubuntu软件源
+RUN sed -i 's/archive.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list && \ \
+    sed -i 's/security.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list
+
+# 安装OpenJDK 17 JRE和curl
+RUN apt-get update && apt-get install -y \ \
+    openjdk-17-jre \ \
+    curl \ \
+    && rm -rf /var/lib/apt/lists/*
 
 # 复制构建好的jar文件
 COPY --from=builder /app/target/RAGTranslation4-1.0-SNAPSHOT.jar app.jar
