@@ -159,3 +159,20 @@ export HTTP_PROXY=http://proxy:port
 export HTTPS_PROXY=http://proxy:port
 docker-compose build
 ```
+
+### 问题4：ONNX Runtime错误（libstdc++.so.6缺失）
+
+如果遇到类似以下错误：
+```
+java.lang.UnsatisfiedLinkError: /tmp/onnxruntime-java.../libonnxruntime.so: 
+Error loading shared library libstdc++.so.6: No such file or directory
+```
+
+**原因**：Alpine Linux默认不包含完整的C++标准库，而ONNX Runtime需要它。
+
+**解决方案**：已在Dockerfile中添加`libstdc++`依赖，重新构建即可：
+```bash
+docker-compose down
+docker-compose build --no-cache
+docker-compose up -d
+```

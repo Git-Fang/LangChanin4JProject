@@ -101,3 +101,13 @@ docker-compose down
 docker system prune -f
 docker-compose build --no-cache
 ```
+
+### ONNX Runtime错误
+如果启动时报错：`libstdc++.so.6: No such file or directory`
+
+```bash
+# 重新构建（已修复Dockerfile）
+docker-compose down
+docker-compose build --no-cache
+docker-compose up -d
+```

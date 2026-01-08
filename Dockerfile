@@ -37,8 +37,8 @@ FROM eclipse-temurin:17-jre-alpine
 
 WORKDIR /app
 
-# 安装curl用于健康检查（Alpine使用apk）
-RUN apk add --no-cache curl
+# 安装curl用于健康检查和libstdc++用于ONNX Runtime（Alpine使用apk）
+RUN apk add --no-cache curl libstdc++
 
 # 复制构建好的jar文件
 COPY --from=builder /app/target/RAGTranslation4-1.0-SNAPSHOT.jar app.jar
