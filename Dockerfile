@@ -37,9 +37,9 @@ FROM eclipse-temurin:17-jre-jammy
 
 WORKDIR /app
 
-# 安装curl用于健康检查和Node.js用于MCP服务
+# 安装curl用于健康检查和Node.js用于MCP服务，以及netcat用于端口检查
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends curl ca-certificates && \
+    apt-get install -y --no-install-recommends curl ca-certificates netcat && \
     curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
     apt-get install -y nodejs && \
     npm config set registry https://registry.npmmirror.com && \
@@ -48,7 +48,23 @@ RUN apt-get update && \
 # 复制构建好的jar文件
 COPY --from=builder /app/target/RAGTranslation4-1.0-SNAPSHOT.jar app.jar
 
+# 创建启动脚本
+RUN echo '#!/bin/bash\n\
+echo "等待MongoDB启动..."\n\
+for i in {1..30}; do\n\
+  if nc -z mongo 27017 >/dev/null 2>&1; then\n\
+    echo "MongoDB已就绪"\n\
+    sleep 3\n\
+    break\n\
+  fi\n\
+  echo "等待MongoDB... ($i/30)"\n\
+  sleep 2\n\
+done\n\
+echo "启动应用..."\n\
+exec java -jar -Dserver.address=0.0.0.0 -Dserver.port=8000 app.jar' > /app/start.sh && \
+    chmod +x /app/start.sh
+
 EXPOSE 8000
 
-# 明确绑定到所有网卡
-ENTRYPOINT ["java", "-jar", "-Dserver.address=0.0.0.0", "-Dserver.port=8000", "app.jar"]
+# 使用启动脚本
+ENTRYPOINT ["/app/start.sh"]
