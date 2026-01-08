@@ -1,5 +1,5 @@
-# 使用基于Ubuntu的镜像，避免musl libc与glibc兼容性问题
-FROM eclipse-temurin:17-jdk-ubuntu AS builder
+# 使用国内阿里云镜像源，避免Docker Hub网络超时问题
+FROM registry.cn-hangzhou.aliyuncs.com/adoptopenjdk/openjdk17:jdk-17.0.2_8-ubuntu AS builder
 
 WORKDIR /app
 
@@ -46,12 +46,12 @@ COPY src ./src
 # 执行Maven构建，跳过测试
 RUN mvn clean package -DskipTests
 
-# 使用基于Ubuntu的JRE镜像
-FROM eclipse-temurin:17-jre-ubuntu
+# 使用国内阿里云镜像源的JRE镜像
+FROM registry.cn-hangzhou.aliyuncs.com/adoptopenjdk/openjdk17:jre-17.0.2_8-ubuntu
 
 WORKDIR /app
 
-# 安装curl用于健康检查和onnxruntime可能需要的依赖
+# 安装curl用于健康检查
 RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
 
 # 复制构建好的jar文件
