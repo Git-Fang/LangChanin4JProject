@@ -36,8 +36,7 @@ services:
       - SPRING_DATA_MONGODB_URI=mongodb://mongo:27017/chat_db
     restart: unless-stopped
     depends_on:
-      mongo:
-        condition: service_healthy
+      - mongo
     networks:
       - app-network
     healthcheck:
@@ -45,7 +44,6 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 60s
 
 volumes:
   mongo-data:
