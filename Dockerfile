@@ -1,13 +1,10 @@
-# 使用官方eclipse-temurin镜像，避免国内镜像源访问权限问题
-FROM eclipse-temurin:17-jdk-alpine AS builder
+# 使用基于Ubuntu的镜像，避免musl libc与glibc兼容性问题
+FROM eclipse-temurin:17-jdk-ubuntu AS builder
 
 WORKDIR /app
 
-# 替换Alpine软件源为国内阿里云源，加速软件包下载
-RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
-
 # 安装Maven和必要的依赖库
-RUN apk add --no-cache maven libstdc++ libgcc libgomp libc6-compat
+RUN apt-get update && apt-get install -y maven && rm -rf /var/lib/apt/lists/*
 
 # 配置Maven使用阿里云仓库
 RUN mkdir -p /root/.m2 \
@@ -49,20 +46,13 @@ COPY src ./src
 # 执行Maven构建，跳过测试
 RUN mvn clean package -DskipTests
 
-# 使用官方JRE镜像
-FROM eclipse-temurin:17-jre-alpine
+# 使用基于Ubuntu的JRE镜像
+FROM eclipse-temurin:17-jre-ubuntu
 
 WORKDIR /app
 
-# 安装onnxruntime所需的所有依赖库
-RUN apk add --no-cache \
-    curl \
-    libstdc++ \
-    libgcc \
-    libgomp \
-    libc6-compat \
-    libgfortran \
-    gcompat
+# 安装curl用于健康检查和onnxruntime可能需要的依赖
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
 
 # 复制构建好的jar文件
 COPY --from=builder /app/target/RAGTranslation4-1.0-SNAPSHOT.jar app.jar
