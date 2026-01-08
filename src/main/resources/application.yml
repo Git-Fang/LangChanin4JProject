@@ -71,3 +71,18 @@ ai:
   mcp:
     baiduMap:
       apiKey: ${BAIDU_MAP_API_KEY}
+
+# 日志配置
+logging:
+  level:
+    root: INFO
+    org.fb: DEBUG                                    # 业务代码详细日志
+    dev.langchain4j: DEBUG                          # LangChain4j框架详细日志（包含AI请求/响应）
+    dev.langchain4j.mcp: DEBUG                      # MCP协议详细日志
+    dev.langchain4j.model.chat: DEBUG               # 聊天模型请求/响应
+    dev.langchain4j.model.openai: DEBUG             # OpenAI API详细日志
+    org.springframework.web: INFO                    # Spring Web基本日志
+    org.springframework.ai: DEBUG                    # Spring AI详细日志
+  pattern:
+    console: '%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n'
+    file: '%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n'
