@@ -1,8 +1,29 @@
 version: '3.3'
 
 services:
+  # MongoDB 数据库服务
+  mongo:
+    image: mongo:7.0
+    container_name: rag-mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_DATABASE=chat_db
+    volumes:
+      - mongo-data:/data/db
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # 应用服务
   rag-translation:
     build: .
+    container_name: rag-translation
     ports:
       - "8000:8000"
     environment:
@@ -12,7 +33,11 @@ services:
       - BAIDU_MAP_API_KEY=${BAIDU_MAP_API_KEY}
       - SERVER_PORT=8000
       - SERVER_ADDRESS=0.0.0.0
+      - SPRING_DATA_MONGODB_URI=mongodb://mongo:27017/chat_db
     restart: unless-stopped
+    depends_on:
+      mongo:
+        condition: service_healthy
     networks:
       - app-network
     healthcheck:
@@ -20,6 +45,11 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 60s
+
+volumes:
+  mongo-data:
+    driver: local
 
 networks:
   app-network:
