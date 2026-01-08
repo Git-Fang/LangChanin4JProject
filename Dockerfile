@@ -1,5 +1,5 @@
-# 使用国内阿里云镜像源，避免Docker Hub网络超时问题
-FROM registry.cn-hangzhou.aliyuncs.com/adoptopenjdk/openjdk17:jdk-17.0.2_8-ubuntu AS builder
+# 使用国内阿里云官方openjdk镜像，避免仓库访问权限问题
+FROM registry.cn-hangzhou.aliyuncs.com/aliyun_openjdk/openjdk17:17.0.9-ubuntu AS builder
 
 WORKDIR /app
 
@@ -46,8 +46,8 @@ COPY src ./src
 # 执行Maven构建，跳过测试
 RUN mvn clean package -DskipTests
 
-# 使用国内阿里云镜像源的JRE镜像
-FROM registry.cn-hangzhou.aliyuncs.com/adoptopenjdk/openjdk17:jre-17.0.2_8-ubuntu
+# 使用国内阿里云官方openjdk JRE镜像
+FROM registry.cn-hangzhou.aliyuncs.com/aliyun_openjdk/openjdk17:17.0.9-ubuntu-jre
 
 WORKDIR /app
 
