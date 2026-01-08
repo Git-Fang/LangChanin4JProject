@@ -4,6 +4,10 @@
 
 echo "=== RAG翻译系统 Docker部署脚本 ==="
 
+# 设置更长的超时时间，防止容器停止超时
+export COMPOSE_HTTP_TIMEOUT=300
+export DOCKER_CLIENT_TIMEOUT=300
+
 # 检查Docker是否安装
 if ! command -v docker &> /dev/null; then
     echo "错误：Docker未安装"
