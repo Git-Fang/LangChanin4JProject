@@ -98,13 +98,14 @@ public class AiConf {
      */
     private <T> T buildGenericMcpAssistant(Class<T> assistantClass, Object model) {
         // 1.启动百度地图MCP服务
-        // 根据操作系统选择命令：Windows使用cmd，Linux/Mac使用sh
+        // 根据操作系统选择命令：Windows使用cmd，Linux/Mac使用bash
         String osName = System.getProperty("os.name").toLowerCase();
         List<String> command;
         if (osName.contains("win")) {
             command = List.of("cmd", "/c", "npx", "-y", BusinessConstant.BAIDU_MAP_MCP_SERVER);
         } else {
-            command = List.of("sh", "-c", "npx -y " + BusinessConstant.BAIDU_MAP_MCP_SERVER);
+            // Docker环境使用bash，设置更长的超时时间
+            command = List.of("/bin/bash", "-c", "npx -y " + BusinessConstant.BAIDU_MAP_MCP_SERVER);
         }
         
         McpTransport transport = new StdioMcpTransport.Builder()
@@ -114,8 +115,10 @@ public class AiConf {
                 .build();
 
         // 2.初始化MCP client、实例MCP工具提供者对象
+        // 增加初始化超时时间到120秒，适应Docker环境中Node.js MCP服务的启动
         McpClient mcpClient = new DefaultMcpClient.Builder()
                 .transport(transport)
+                .pingTimeout(java.time.Duration.ofSeconds(120))
                 .build();
         McpToolProvider toolProvider = McpToolProvider.builder()
                 .mcpClients(mcpClient)

@@ -38,11 +38,14 @@ FROM eclipse-temurin:17-jre-jammy
 WORKDIR /app
 
 # 安装curl用于健康检查和Node.js用于MCP服务，以及netcat用于端口检查
+# 同时设置npm淘宝镜像加速包下载，并预先安装MCP服务包
 RUN apt-get update && \
     apt-get install -y --no-install-recommends curl ca-certificates netcat && \
     curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
     apt-get install -y nodejs && \
     npm config set registry https://registry.npmmirror.com && \
+    npm config set disturl https://npmmirror.com/dist && \
+    npm install -g @baidumap/mcp-server-baidu-map && \
     rm -rf /var/lib/apt/lists/*
 
 # 复制构建好的jar文件
