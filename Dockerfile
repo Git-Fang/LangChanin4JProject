@@ -6,8 +6,8 @@ WORKDIR /app
 # 替换Alpine软件源为国内阿里云源，加速软件包下载
 RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
 
-# 安装Maven
-RUN apk add --no-cache maven
+# 安装Maven和必要的依赖库
+RUN apk add --no-cache maven libstdc++ libgcc libgomp libc6-compat
 
 # 配置Maven使用阿里云仓库
 RUN mkdir -p /root/.m2 \
@@ -54,9 +54,20 @@ FROM eclipse-temurin:17-jre-alpine
 
 WORKDIR /app
 
+# 安装onnxruntime所需的所有依赖库
+RUN apk add --no-cache \
+    curl \
+    libstdc++ \
+    libgcc \
+    libgomp \
+    libc6-compat \
+    libgfortran \
+    gcompat
+
 # 复制构建好的jar文件
 COPY --from=builder /app/target/RAGTranslation4-1.0-SNAPSHOT.jar app.jar
 
 EXPOSE 8000
 
-ENTRYPOINT ["java", "-jar", "app.jar"]
+# 明确绑定到所有网卡
+ENTRYPOINT ["java", "-jar", "-Dserver.address=0.0.0.0", "-Dserver.port=8000", "app.jar"]
