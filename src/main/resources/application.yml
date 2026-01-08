@@ -86,3 +86,18 @@ logging:
   pattern:
     console: '%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n'
     file: '%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n'
+
+# Spring Boot Actuator 配置
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics  # 暴露健康检查、信息和指标端点
+  endpoint:
+    health:
+      show-details: always            # 始终显示健康检查详情
+  health:
+    defaults:
+      enabled: true
+    mongo:
+      enabled: true                   # 启用MongoDB健康检查
