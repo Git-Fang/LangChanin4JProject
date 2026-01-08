@@ -1,6 +1,26 @@
 version: '3.3'
 
 services:
+  # MongoDB 数据库服务
+  mongo:
+    image: mongo:7.0
+    container_name: rag-mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_DATABASE=chat_db
+    volumes:
+      - mongo-data:/data/db
+    networks:
+      - app-network
+    healthcheck:
+      test: [ "CMD", "mongosh", "--eval", "db.adminCommand('ping')" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+
   # 应用服务
   rag-translation:
     build: .
