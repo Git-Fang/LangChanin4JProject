@@ -98,8 +98,17 @@ public class AiConf {
      */
     private <T> T buildGenericMcpAssistant(Class<T> assistantClass, Object model) {
         // 1.启动百度地图MCP服务
+        // 根据操作系统选择命令：Windows使用cmd，Linux/Mac使用sh
+        String osName = System.getProperty("os.name").toLowerCase();
+        List<String> command;
+        if (osName.contains("win")) {
+            command = List.of("cmd", "/c", "npx", "-y", BusinessConstant.BAIDU_MAP_MCP_SERVER);
+        } else {
+            command = List.of("sh", "-c", "npx -y " + BusinessConstant.BAIDU_MAP_MCP_SERVER);
+        }
+        
         McpTransport transport = new StdioMcpTransport.Builder()
-                .command(List.of("cmd", "/c", "npx", "-y", BusinessConstant.BAIDU_MAP_MCP_SERVER))
+                .command(command)
                 .environment(Map.of("BAIDU_MAP_API_KEY", envConf.baiduMapApiKey))
                 .logEvents(true) // only if you want to see the traffic in the log
                 .build();

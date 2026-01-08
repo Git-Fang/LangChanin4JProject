@@ -37,9 +37,12 @@ FROM eclipse-temurin:17-jre-jammy
 
 WORKDIR /app
 
-# 安装curl用于健康检查
+# 安装curl用于健康检查和Node.js用于MCP服务
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends curl && \
+    apt-get install -y --no-install-recommends curl ca-certificates && \
+    curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+    apt-get install -y nodejs && \
+    npm config set registry https://registry.npmmirror.com && \
     rm -rf /var/lib/apt/lists/*
 
 # 复制构建好的jar文件
