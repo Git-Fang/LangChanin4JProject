@@ -30,7 +30,7 @@ spring:
     password: root
   data:
     mongodb:
-      uri: mongodb://192.168.179.130:27017/chat_db
+      uri: mongodb://localhost:27017/chat_db
 
 mybatis-plus:
   configuration:
