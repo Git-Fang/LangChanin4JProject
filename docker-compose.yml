@@ -14,12 +14,6 @@ services:
       - mongo-data:/data/db
     networks:
       - app-network
-    healthcheck:
-      test: [ "CMD", "mongosh", "--eval", "db.adminCommand('ping')" ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
 
   # 应用服务
   rag-translation:
@@ -40,11 +34,6 @@ services:
       - mongo
     networks:
       - app-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/actuator/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
 
 volumes:
   mongo-data:
