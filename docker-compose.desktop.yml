@@ -5,7 +5,7 @@ services:
     container_name: rag-mysql
     restart: unless-stopped
     ports:
-      - "3306:3306"
+      - "3307:3306"
     environment:
       - MYSQL_ROOT_PASSWORD=root
       - MYSQL_DATABASE=rag_translation
@@ -44,11 +44,11 @@ services:
 
   # Redis 缓存服务
   redis:
-    image: redis:7-alpine
+    image: redis/redis-stack:latest
     container_name: rag-redis
     restart: unless-stopped
     ports:
-      - "6379:6379"
+      - "6380:6379"
     volumes:
       - redis-data:/data
     networks:
@@ -76,23 +76,6 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-
-  # Ollama AI服务（可选，如果需要本地AI模型）
-  ollama:
-    image: ollama/ollama:latest
-    container_name: rag-ollama
-    restart: unless-stopped
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama-data:/root/.ollama
-    networks:
-      - app-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
 
   # 应用服务
   rag-translation:
@@ -145,8 +128,6 @@ services:
       redis:
         condition: service_healthy
       qdrant:
-        condition: service_healthy
-      ollama:
         condition: service_healthy
     networks:
       - app-network

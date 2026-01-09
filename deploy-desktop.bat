@@ -28,12 +28,12 @@ if not exist ".env" (
 
 REM 清理旧容器
 echo 正在清理旧容器...
-docker-compose -f docker-compose.desktop.yml down
+docker-compose -f docker-compose.desktop.yml -f docker-compose.override.yml down
 echo.
 
 REM 构建镜像
 echo 正在构建Docker镜像...
-docker-compose -f docker-compose.desktop.yml build
+docker-compose -f docker-compose.desktop.yml -f docker-compose.override.yml build --no-cache
 if errorlevel 1 (
     echo 错误：Docker镜像构建失败！
     pause
@@ -43,7 +43,7 @@ echo.
 
 REM 启动服务
 echo 正在启动服务...
-docker-compose -f docker-compose.desktop.yml up -d
+docker-compose -f docker-compose.desktop.yml -f docker-compose.override.yml up -d
 if errorlevel 1 (
     echo 错误：服务启动失败！
     pause
@@ -70,9 +70,9 @@ echo   - Qdrant：    localhost:6333
 echo   - Ollama：    localhost:11434
 echo.
 echo 常用命令：
-echo   - 查看日志：   docker-compose -f docker-compose.desktop.yml logs -f
-echo   - 停止服务：   docker-compose -f docker-compose.desktop.yml down
-echo   - 查看状态：   docker-compose -f docker-compose.desktop.yml ps
+echo   - 查看日志：   docker-compose -f docker-compose.desktop.yml -f docker-compose.override.yml logs -f
+echo   - 停止服务：   docker-compose -f docker-compose.desktop.yml -f docker-compose.override.yml down
+echo   - 查看状态：   docker-compose -f docker-compose.desktop.yml -f docker-compose.override.yml ps
 echo.
 echo.
 pause

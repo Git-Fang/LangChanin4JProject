@@ -1,0 +1,59 @@
+# 忽略构建产物
+target/
+*.jar
+*.class
+
+# 忽略日志和临时文件
+logs/
+*.log
+*.tmp
+Thumbs.db
+
+# 忽略版本控制
+.git/
+.gitignore
+
+# 忽略IDE和编辑器文件
+.idea/
+*.iml
+.vscode/
+*.swp
+*.swo
+*~
+
+# 忽略Docker相关文件
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# 忽略脚本和文档
+deploy*.bat
+deploy*.sh
+diagnose.sh
+check-logs.sh
+fix-*.sh
+*.md
+*.txt
+
+# 忽略备份文件
+backups/
+*.bak
+*.backup
+
+# 忽略测试文件
+tests/
+test-results/
+
+# 忽略Maven缓存
+.m2/
+.settings/
+
+# 忽略操作系统文件
+.DS_Store
+Thumbs.db
+
+# 忽略部署脚本
+start.sh
+stop.sh
+restart.sh
+status.sh
