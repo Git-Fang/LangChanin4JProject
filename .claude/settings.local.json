@@ -3,7 +3,8 @@
     "allow": [
       "Bash(chmod:*)",
       "Bash(docker-compose build:*)",
-      "Bash(docker pull:*)"
+      "Bash(docker pull:*)",
+      "Bash(cd D:个人资料AI实战--RAG增强型翻译RAGTranslation-- mcp--docker)"
     ]
   }
 }
