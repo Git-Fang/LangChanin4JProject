@@ -1,0 +1,148 @@
+# 第一阶段：构建阶段 - 使用Maven官方镜像
+FROM maven:3.9-eclipse-temurin-17 AS builder
+
+WORKDIR /app
+
+# 设置Maven使用更快的仓库（可以根据需要选择）
+RUN mkdir -p /root/.m2 && \
+    echo '<?xml version="1.0" encoding="UTF-8"?>\n\
+<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"\n\
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"\n\
+          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0\n\
+          http://maven.apache.org/xsd/settings-1.0.0.xsd">\n\
+    <mirrors>\n\
+        <mirror>\n\
+            <id>central-proxy</id>\n\
+            <name>Central Proxy</name>\n\
+            <url>https://repo.maven.apache.org/maven2/</url>\n\
+            <mirrorOf>*</mirrorOf>\n\
+        </mirror>\n\
+    </mirrors>\n\
+</settings>' > /root/.m2/settings.xml
+
+# 复制pom.xml预下载依赖（优化构建缓存）
+COPY pom.xml .
+
+# 下载依赖（使用多线程下载加快）
+RUN mvn dependency:go-offline -T 1C -DskipTests || true
+
+# 复制源代码
+COPY src ./src
+
+# 复制适配Desktop的配置文件
+COPY application-desktop.yml ./src/main/resources/application.yml
+
+# 执行构建
+RUN mvn clean package -DskipTests -q
+
+# 第二阶段：运行阶段 - 使用更小的JRE镜像
+FROM eclipse-temurin:17-jre-alpine
+
+# 安装必要的系统工具
+RUN apk update && \
+    apk add --no-cache \
+        curl \
+        netcat-openbsd \
+        busybox-extras \
+        bash \
+        su-exec && \
+    rm -rf /var/cache/apk/*
+
+WORKDIR /app
+
+# 创建非root用户（安全考虑）
+RUN addgroup -g 1000 appgroup && \
+    adduser -u 1000 -G appgroup -s /bin/bash -D appuser
+
+# 复制构建好的jar文件
+COPY --from=builder /app/target/*.jar app.jar
+
+# 复制启动脚本（等待依赖服务就绪）
+RUN echo '#!/bin/bash\n\
+set -e\n\
+\n\
+echo "=== RAG Translation System ==="\n\
+echo "等待依赖服务就绪..."\n\
+\n\
+# 等待MySQL\n\
+echo "等待MySQL..."\n\
+timeout=60\n\
+while [ $timeout -gt 0 ]; do\n\
+    if nc -z mysql 3306; then\n\
+        echo "MySQL已就绪"\n\
+        break\n\
+    fi\n\
+    sleep 1\n\
+    timeout=$((timeout - 1))\n\
+done\n\
+\n\
+# 等待MongoDB\n\
+echo "等待MongoDB..."\n\
+timeout=60\n\
+while [ $timeout -gt 0 ]; do\n\
+    if nc -z mongo 27017; then\n\
+        echo "MongoDB已就绪"\n\
+        break\n\
+    fi\n\
+    sleep 1\n\
+    timeout=$((timeout - 1))\n\
+done\n\
+\n\
+# 等待Redis\n\
+echo "等待Redis..."\n\
+timeout=60\n\
+while [ $timeout -gt 0 ]; do\n\
+    if nc -z redis 6379; then\n\
+        echo "Redis已就绪"\n\
+        break\n\
+    fi\n\
+    sleep 1\n\
+    timeout=$((timeout - 1))\n\
+done\n\
+\n\
+# 等待Qdrant\n\
+echo "等待Qdrant..."\n\
+timeout=60\n\
+while [ $timeout -gt 0 ]; do\n\
+    if nc -z qdrant 6333; then\n\
+        echo "Qdrant已就绪"\n\
+        break\n\
+    fi\n\
+    sleep 1\n\
+    timeout=$((timeout - 1))\n\
+done\n\
+\n\
+echo "所有依赖服务就绪，启动应用..."\n\
+\n\
+# 设置JVM参数和启动应用\n\
+exec java -Djava.security.egd=file:/dev/./urandom \n\
+          -Dspring.profiles.active=desktop \n\
+          -XX:+UseG1GC \n\
+          -XX:+UseStringDeduplication \n\
+          -Xms512m \n\
+          -Xmx1024m \n\
+          -Dserver.address=0.0.0.0 \n\
+          -Dserver.port=8000 \n\
+          -jar app.jar' > /app/start.sh && \
+    chmod +x /app/start.sh
+
+# 创建必要的目录
+RUN mkdir -p /app/logs /app/uploads && \
+    chown -R appuser:appgroup /app
+
+# 切换到非root用户
+USER appuser
+
+# 设置环境变量
+ENV JAVA_HOME=/opt/java/openjdk
+ENV PATH="${JAVA_HOME}/bin:${PATH}"
+
+# 暴露端口
+EXPOSE 8000
+
+# 健康检查
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:8000/actuator/health || exit 1
+
+# 启动应用
+ENTRYPOINT ["/app/start.sh"]
