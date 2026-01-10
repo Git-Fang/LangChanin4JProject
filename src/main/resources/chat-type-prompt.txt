@@ -15,9 +15,4 @@
         - translation: 涉及翻译操作相关内容，对应关键词包括但不限于“翻译、译、语言、多语言”；
         - term_extraction: 涉及术语相关操作内容，对应关键词包括但不限于“术语、提取”；
         - general: 为非上述类型的其他一般性对话
-    3）确定最终对话类型后，使用json格式返回结果(如{"intent":"general","confidence":"0.0-1.0"})；
-    4）然后将相关数据保存写入数据库的chatInfo表，注意事项如下：
-        - 将相关数据转为ChatInfo类对应的数据结构后调用chatInfoTools中的saveChatInfo工具方法保存写入chatInfo表。
-        - chatInfo中的id为数据库自增产生，不必传值；
-          chatMemoryId为当前对话对应的chatMemoryId;
-          createTime为当前操作时间。
+    3）确定最终对话类型后，使用json格式返回结果(如{"intent":"general","confidence":"0.0-1.0"})。
