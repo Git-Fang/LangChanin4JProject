@@ -5,7 +5,21 @@
       "Bash(docker-compose build:*)",
       "Bash(docker pull:*)",
       "Bash(cd D:个人资料AI实战--RAG增强型翻译RAGTranslation-- mcp--docker)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(./mvnw:*)",
+      "Bash(\"D:/Program Files/apache-maven-3.9.12-bin/apache-maven-3.9.12/bin/mvn\" clean package:*)",
+      "Bash(cmd.exe:*)",
+      "Bash(./deploy-desktop.bat:*)",
+      "Bash(docker build:*)",
+      "Bash(./deploy-local.bat:*)",
+      "Bash(./run-local:*)",
+      "Bash(./start-local.bat)",
+      "Bash(taskkill:*)",
+      "Bash(:)",
+      "Bash(tasklist:*)",
+      "Bash(findstr:*)",
+      "Bash(netstat:*)",
+      "Bash(wmic:*)"
     ]
   }
 }

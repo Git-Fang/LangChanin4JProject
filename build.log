@@ -1,0 +1,25 @@
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 2.58kB done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/eclipse-temurin:17-jre-alpine
+#2 ERROR: unable to fetch descriptor (sha256:f57e47e7a78ae1ff5019681d95a4964153b0d1078bdff2a2f288e4a5ee329c14) which reports content size of zero: invalid argument
+
+#3 [internal] load metadata for docker.io/library/maven:3.9-eclipse-temurin-17-alpine
+#3 CANCELED
+------
+ > [internal] load metadata for docker.io/library/eclipse-temurin:17-jre-alpine:
+------
+Dockerfile:23
+--------------------
+  21 |     
+  22 |     # 第二阶段：运行阶段
+  23 | >>> FROM eclipse-temurin:17-jre-alpine
+  24 |     
+  25 |     WORKDIR /app
+--------------------
+ERROR: failed to build: failed to solve: eclipse-temurin:17-jre-alpine: failed to resolve source metadata for docker.io/library/eclipse-temurin:17-jre-alpine: unable to fetch descriptor (sha256:f57e47e7a78ae1ff5019681d95a4964153b0d1078bdff2a2f288e4a5ee329c14) which reports content size of zero: invalid argument
+
+View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/iffwpj58zphutxztmpm93kbnm

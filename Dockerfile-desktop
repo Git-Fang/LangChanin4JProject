@@ -1,0 +1,80 @@
+# RAG Translation System - Docker Desktop 部署镜像（简化版）
+# 使用本地构建好的JAR文件，跳过Maven构建步骤
+
+FROM openjdk:17-jre-slim
+
+WORKDIR /app
+
+# 安装必要的工具
+RUN apt-get update && \
+    apt-get install -y curl netcat-traditional bash && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/* && \
+    rm -rf /usr/share/doc && \
+    rm -rf /usr/share/man
+
+# 复制构建好的JAR文件
+COPY target/*.jar app.jar
+
+# 创建必要的目录
+RUN mkdir -p /app/logs /app/uploads
+
+# 创建启动脚本
+RUN echo '#!/bin/bash\n\
+set -e\n\
+echo "=== RAG Translation System ==="\n\
+echo "等待依赖服务就绪..."\n\
+\n\
+wait_for_service() {\n\
+    local host=$1\n\
+    local port=$2\n\
+    local name=$3\n\
+    local timeout=60\n\
+    echo "等待 $name ($host:$port)..."\n\
+    while [ $timeout -gt 0 ]; do\n\
+        if nc -z $host $port 2>/dev/null; then\n\
+            echo "$name 已就绪"\n\
+            return 0\n\
+        fi\n\
+        sleep 1\n\
+        timeout=$((timeout - 1))\n\
+    done\n\
+    echo "警告: $name 等待超时"\n\
+    return 1\n\
+}\n\
+\n\
+sleep 5\n\
+wait_for_service mysql 3306 "MySQL"\n\
+wait_for_service mongo 27017 "MongoDB"\n\
+wait_for_service redis 6379 "Redis"\n\
+wait_for_service qdrant 6333 "Qdrant"\n\
+wait_for_service rabbitmq 5672 "RabbitMQ"\n\
+\n\
+echo "所有依赖服务就绪，启动应用..."\n\
+sleep 3\n\
+\n\
+exec java -Djava.security.egd=file:/dev/./urandom \\
+\
+          -XX:+UseG1GC \\
+\
+          -XX:+UseStringDeduplication \\
+\
+          -Xms256m \\
+\
+          -Xmx512m \\
+\
+          -Dserver.address=0.0.0.0 \\
+\
+          -Dserver.port=8000 \\
+\
+          -jar app.jar' > /app/start.sh && chmod +x /app/start.sh
+
+# 暴露端口
+EXPOSE 8000
+
+# 健康检查
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:8000/actuator/health || exit 1
+
+# 启动应用
+ENTRYPOINT ["/app/start.sh"]

@@ -1,0 +1,74 @@
+# Local development configuration
+server:
+  port: 8000
+  servlet:
+    encoding:
+      charset: utf-8
+      force: true
+      enabled: true
+
+spring:
+  application:
+    name: RAGTranslationApplication
+  web:
+    timeout: 180s
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 100MB
+  # Updated to local MySQL from VM
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/rag_translation?useUnicode=true&characterEncoding=utf-8&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
+    username: root
+    password: root
+  data:
+    mongodb:
+      uri: mongodb://localhost:27017/chat_db
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+
+mybatis-plus:
+  configuration:
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+    map-underscore-to-camel-case: true
+
+debug: false
+logging:
+  level:
+    root: INFO
+    org.fb: DEBUG
+    dev.langchain4j: INFO
+    org.springframework: INFO
+
+# Enable local mode
+app:
+  local-mode: true
+
+# AI configuration (can be left empty or with placeholders)
+ai:
+  deepSeek:
+    base-url: https://api.deepseek.com/v1
+    model: deepseek-chat
+    apiKey: ${DeepSeek_API_KEY:}
+  kimi:
+    base-url: https://api.moonshot.cn/v1
+    model: moonshot-v1-8k
+    apiKey: ${KIMI_API_KEY:}
+  dashscope:
+    apiKey: ${DASHSCOPE_API_KEY:}
+    model: qwen-turbo
+    base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
+  embeddingStore:
+    qdrant:
+      collectionName: ragTranslation-local
+      host: localhost
+      port: 6333
+  mcp:
+    enabled: false
+
+# Disable ollama for local mode
+  ollama:
+    enabled: false

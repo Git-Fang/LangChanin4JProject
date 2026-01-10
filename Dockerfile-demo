@@ -1,0 +1,29 @@
+# RAG Translation System - Docker Deployment（演示版）
+# 使用更简单的基础镜像
+
+FROM openjdk:17-jdk
+
+WORKDIR /app
+
+# 安装必要的工具
+RUN apt-get update && \
+    apt-get install -y curl netcat-traditional && \
+    rm -rf /var/lib/apt/lists/*
+
+# 复制构建好的JAR文件
+COPY target/*.jar app.jar
+
+# 创建必要的目录
+RUN mkdir -p /app/logs /app/uploads /app/backups
+
+# 创建简化执行脚本
+RUN echo '#!/bin/bash\n\
+sleep 2\n\
+echo "Starting RAG Translation System..."\n\
+exec java -Xms256m -Xmx512m -Dserver.address=0.0.0.0 -Dserver.port=8000 -jar app.jar' > /app/start.sh && chmod +x /app/start.sh
+
+# 暴露端口
+EXPOSE 8000
+
+# 启动应用直接（不等待依赖）
+ENTRYPOINT ["/app/start.sh"]

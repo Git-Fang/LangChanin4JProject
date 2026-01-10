@@ -1,0 +1,60 @@
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile-desktop
+#1 transferring dockerfile: 2.07kB done
+#1 DONE 0.0s
+Dockerfile-desktop:9
+--------------------
+   7 |     
+   8 |     # 安装必要的工具
+   9 | >>> copy init.sh
+  10 |     RUN apt-get update && \
+  11 |         apt-get install -y curl netcat-traditional bash && \
+--------------------
+ERROR: failed to build: failed to solve: dockerfile parse error on line 9: COPY requires at least two arguments, but only one was provided. Destination could not be determined
+
+View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/alv8wdkf0vgc18oocsz30l12q
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile-desktop
+#1 transferring dockerfile: 2.06kB done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/openjdk:17-jdk-slim
+#2 ERROR: unexpected status from HEAD request to https://fvmsjmop.mirror.aliyuncs.com/v2/library/openjdk/manifests/17-jdk-slim?ns=docker.io: 403 Forbidden
+------
+ > [internal] load metadata for docker.io/library/openjdk:17-jdk-slim:
+------
+Dockerfile-desktop:4
+--------------------
+   2 |     # 使用本地构建好的JAR文件，跳过Maven构建步骤
+   3 |     
+   4 | >>> FROM openjdk:17-jdk-slim
+   5 |     
+   6 |     WORKDIR /app
+--------------------
+ERROR: failed to build: failed to solve: openjdk:17-jdk-slim: failed to resolve source metadata for docker.io/library/openjdk:17-jdk-slim: unexpected status from HEAD request to https://fvmsjmop.mirror.aliyuncs.com/v2/library/openjdk/manifests/17-jdk-slim?ns=docker.io: 403 Forbidden
+
+View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/mkv85jgniewzftupbj8zeq62l
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile-demo
+#1 transferring dockerfile: 800B done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/openjdk:17-jdk
+#2 ERROR: unexpected status from HEAD request to https://fvmsjmop.mirror.aliyuncs.com/v2/library/openjdk/manifests/17-jdk?ns=docker.io: 403 Forbidden
+------
+ > [internal] load metadata for docker.io/library/openjdk:17-jdk:
+------
+Dockerfile-demo:4
+--------------------
+   2 |     # 使用更简单的基础镜像
+   3 |     
+   4 | >>> FROM openjdk:17-jdk
+   5 |     
+   6 |     WORKDIR /app
+--------------------
+ERROR: failed to build: failed to solve: openjdk:17-jdk: failed to resolve source metadata for docker.io/library/openjdk:17-jdk: unexpected status from HEAD request to https://fvmsjmop.mirror.aliyuncs.com/v2/library/openjdk/manifests/17-jdk?ns=docker.io: 403 Forbidden
+
+View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/xqbpxoyxjkgvxbmsapy9tr54k

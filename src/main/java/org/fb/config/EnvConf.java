@@ -6,13 +6,13 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class EnvConf {
 
-    @Value("${ai.embeddingStore.qdrant.host}")
+    @Value("${ai.embeddingStore.qdrant.host:192.168.179.130}")
     public String qdrantHost;
 
-    @Value("${ai.embeddingStore.qdrant.port}")
+    @Value("${ai.embeddingStore.qdrant.port:6334}")
     public Integer qdrantPort;
 
-    @Value("${ai.embeddingStore.qdrant.collectionName}")
+    @Value("${ai.embeddingStore.qdrant.collectionName:ragTranslation-1226}")
     public String collectionName;
 
     @Value("${ai.ollama.base-url}")

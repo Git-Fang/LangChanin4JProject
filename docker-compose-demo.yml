@@ -4,7 +4,7 @@ services:
   # MySQL 数据库服务
   mysql:
     image: mysql:8.0
-    container_name: rag-mysql-desktop
+    container_name: rag-mysql-demo
     restart: unless-stopped
     ports:
       - "3306:3306"
@@ -15,19 +15,18 @@ services:
       - MYSQL_PASSWORD=rag_password
     volumes:
       - mysql-data:/var/lib/mysql
-      - ./sql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     networks:
       - app-network
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot"]
       interval: 10s
-      timeout: 5s
+      timeout: 10s
       retries: 5
 
   # MongoDB 数据库服务
   mongo:
     image: mongo:7.0
-    container_name: rag-mongo-desktop
+    container_name: rag-mongo-demo
     restart: unless-stopped
     ports:
       - "27017:27017"
@@ -40,18 +39,16 @@ services:
     healthcheck:
       test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
       interval: 10s
-      timeout: 5s
+      timeout: 10s
       retries: 5
 
   # Redis 缓存服务
   redis:
-    image: redis/redis-stack:latest
-    container_name: rag-redis-desktop
+    image: redis:7-alpine
+    container_name: rag-redis-demo
     restart: unless-stopped
     ports:
       - "6379:6379"
-    volumes:
-      - redis-data:/data
     networks:
       - app-network
     healthcheck:
@@ -63,7 +60,7 @@ services:
   # RabbitMQ 消息队列服务
   rabbitmq:
     image: rabbitmq:3-management
-    container_name: rag-rabbitmq-desktop
+    container_name: rag-rabbitmq-demo
     restart: unless-stopped
     ports:
       - "5672:5672"    # AMQP端口
@@ -84,7 +81,7 @@ services:
   # Qdrant 向量数据库
   qdrant:
     image: qdrant/qdrant:latest
-    container_name: rag-qdrant-desktop
+    container_name: rag-qdrant-demo
     restart: unless-stopped
     ports:
       - "6333:6333"  # HTTP端口
@@ -93,18 +90,13 @@ services:
       - qdrant-data:/qdrant/storage
     networks:
       - app-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:6333/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
 
-  # RAG Translation 应用服务
+  # Application with dependencies
   rag-translation:
     build:
       context: .
-      dockerfile: Dockerfile-desktop
-    container_name: rag-translation-desktop
+      dockerfile: Dockerfile-demo
+    container_name: rag-translation-demo
     restart: unless-stopped
     ports:
       - "8000:8000"
@@ -119,57 +111,37 @@ services:
       - SERVER_PORT=8000
       - SERVER_ADDRESS=0.0.0.0
 
-      # 数据库配置
-      - SPRING_DATA_MONGODB_URI=mongodb://mongo:27017/chat_db
-      - DB_URL=jdbc:mysql://mysql:3306/rag_translation?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai
-      - DB_USERNAME=rag_user
-      - DB_PASSWORD=rag_password
+      # 数据库配置（简化版，使用本地连接）
+      - SPRING_DATA_MONGODB_URI=mongodb://localhost:27017/chat_db
+      - DB_URL=jdbc:mysql://localhost:3306/rag_translation?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai
+      - DB_USERNAME=root
+      - DB_PASSWORD=root
 
       # Redis配置
-      - REDIS_HOST=redis
+      - REDIS_HOST=localhost
       - REDIS_PORT=6379
 
       # Qdrant配置
-      - QDRANT_HOST=qdrant
+      - QDRANT_HOST=localhost
       - QDRANT_PORT=6333
 
       # RabbitMQ配置
-      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_HOST=localhost
       - RABBITMQ_PORT=5672
       - RABBITMQ_USERNAME=admin
       - RABBITMQ_PASSWORD=admin123
 
-      # JVM配置（桌面优化）
-      - JAVA_OPTS=-Xms256m -Xmx512m -XX:+UseG1GC -XX:+UseStringDeduplication
     volumes:
       - ./logs:/app/logs
       - ./uploads:/app/uploads
       - ./backups:/app/backups
-    depends_on:
-      mysql:
-        condition: service_healthy
-      mongo:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      qdrant:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
     networks:
       - app-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/actuator/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
 
 volumes:
   mysql-data:
     driver: local
   mongo-data:
-    driver: local
-  redis-data:
     driver: local
   rabbitmq-data:
     driver: local

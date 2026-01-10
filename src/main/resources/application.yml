@@ -58,6 +58,7 @@ ai:
       port: 6334
 
   ollama:
+    enabled: false  # Disable for now
     base-url: http://192.168.179.130:11434
     model: deepseek-r1:8b
     options:

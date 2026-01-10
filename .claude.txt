@@ -1,0 +1,6 @@
+{
+"language_preferences":{
+"documentation":"zh-CN",
+"code_comments":"zh-CN",
+}
+}
