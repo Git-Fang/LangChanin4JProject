@@ -92,6 +92,14 @@ timeout /t 3 /nobreak >nul
 :: 启动新容器
 echo.
 echo [6/6] 启动应用容器...
+
+:: 读取.env文件中的API密钥
+for /f "usebackq tokens=1,* delims==" %%a in (".env") do (
+    if not "%%a"=="" if not "%%a:~0,1%"=="#" (
+        set "%%a=%%b"
+    )
+)
+
 docker run -d ^
     --name %CONTAINER_NAME% ^
     -p %APP_PORT%:%APP_PORT% ^
@@ -101,6 +109,10 @@ docker run -d ^
     -e SPRING_DATA_MONGODB_URI=mongodb://host.docker.internal:27017/chat_db ^
     -e AI_EMBEDDINGSTORE_QDRANT_HOST=host.docker.internal ^
     -e AI_EMBEDDINGSTORE_QDRANT_PORT=6334 ^
+    -e DeepSeek_API_KEY=%DeepSeek_API_KEY% ^
+    -e KIMI_API_KEY=%KIMI_API_KEY% ^
+    -e DASHSCOPE_API_KEY=%DASHSCOPE_API_KEY% ^
+    -e BAIDU_MAP_API_KEY=%BAIDU_MAP_API_KEY% ^
     -e TZ=Asia/Shanghai ^
     %IMAGE_NAME%:latest
 
