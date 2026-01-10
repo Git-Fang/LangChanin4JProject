@@ -3,7 +3,23 @@
     "allow": [
       "Bash(netstat:*)",
       "Bash(findstr:*)",
-      "Bash(taskkill:*)"
+      "Bash(taskkill:*)",
+      "Bash(docker build:*)",
+      "Bash(docker pull:*)",
+      "Bash(docker-compose build:*)",
+      "Bash(docker-compose ps:*)",
+      "Bash(docker-compose:*)",
+      "Bash(docker info:*)",
+      "Bash(docker images:*)",
+      "Bash(./deploy-desktop-quick.bat:*)",
+      "Bash(docker run:*)",
+      "Bash(docker logs:*)",
+      "Bash(docker rm:*)",
+      "Bash(curl:*)",
+      "Bash(mvn clean:*)",
+      "Bash(pkill:*)",
+      "Bash(chmod:*)",
+      "Bash(./run-docker.bat:*)"
     ]
   }
 }

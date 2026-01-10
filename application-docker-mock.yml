@@ -1,0 +1,112 @@
+# Mock版Docker环境配置
+# 该配置允许应用启动时忽略AI功能，仅用于测试静态页面访问
+
+server:
+  port: 8000
+  servlet:
+#    设置响应的字符编码
+    encoding:
+      charset: utf-8
+      force: true
+      enabled: true
+    async-supported: true
+  tomcat:
+    connection-timeout: 180000    # 60秒连接超时
+
+spring:
+  application:
+    name: RAGTranslationApplication
+  web:
+    timeout: 240s                 # Web请求超时
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 100MB
+  database:
+    # 使用内存H2数据库用于测试
+    #driver-class-name: org.h2.Driver
+    #url: jdbc:h2:mem:testdb
+    #username: sa
+    #password:
+    # 使用SQLite作为轻量级测试数据库
+    driver-class-name: org.sqlite.JDBC
+    url: jdbc:sqlite:test.db
+    username: sa
+    password:
+  data:
+    # 默认使用本地数据库，如果连接失败将优雅降级
+    mongodb:
+      uri: ${SPRING_DATA_MONGODB_URI:mongodb://localhost:27017/chat_db}
+    redis:
+      host: ${SPRING_REDIS_HOST:localhost}
+      port: ${SPRING_REDIS_PORT:6379}
+  rabbitmq:
+    host: ${SPRING_RABBITMQ_HOST:localhost}
+    port: ${SPRING_RABBITMQ_PORT:5672}
+    username: ${SPRING_RABBITMQ_USERNAME:admin}
+    password: ${SPRING_RABBITMQ_PASSWORD:admin}
+
+# 测试用数据库
+database:
+  # H2内存数据库
+  url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+  driver: org.h2.Driver
+  username: sa
+  password:
+
+# 提供所有API密钥的默认值，避免启动失败
+ai:
+  deepSeek:
+    base-url: https://api.deepseek.com/v1
+    model: deepseek-chat
+    apiKey: ${DeepSeek_API_KEY:test-key}
+
+  kimi:
+    base-url: https://api.moonshot.cn/v1
+    model: kimi-k2-turbo-preview
+    apiKey: ${KIMI_API_KEY:test-key}
+
+  # PG得简易使用maven配置
+  embeddingStore:
+    qdrant:
+      # collectionName: ragTranslation-1226
+      collectionName: ${AI_EMBEDDINGSTORE_QDRANT_COLLECTIONNAME:ragTranslation-1226}
+      host: ${AI_EMBEDDINGSTORE_QDRANT_HOST:localhost}
+      port: ${AI_EMBEDDINGSTORE_QDRANT_PORT:6334}
+
+  dashscope:
+    apiKey: ${DASHSCOPE_API_KEY:test-key}
+    model: qwen3-235b-a22b
+    base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
+
+  mcp:
+    baiduMap:
+      apiKey: ${BAIDU_MAP_API_KEY:test-key}
+
+# Mock配置，启用简单模式
+mock:
+  enabled: true
+  database-h2: true
+  skip-embedding: true
+  skip-ai-models: true
+
+# 输出配置
+logging:
+  level:
+    root: INFO
+    org.fb: INFO
+    dev.langchain4j: WARN
+    org.springframework.dao: WARN
+
+# Actuator健康检查
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
+  server:
+    port: 8001
+    base-path: /management
