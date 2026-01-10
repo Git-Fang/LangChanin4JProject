@@ -31,13 +31,15 @@ import java.io.IOException;
 public class McpChatController {
     private static final Logger log = LoggerFactory.getLogger(McpChatController.class);
 
-    @Autowired
+    @Autowired(required = false)
     private BaiduMapMcpStreamAssistant baiduMapMcpStreamAssistant;
 
     @GetMapping(value = "/chat0")
     @Operation(summary = "MCP助手0--默认百度地图")
     public Flux<String> defaultChat(String prompt) throws IOException {
-
+        if (baiduMapMcpStreamAssistant == null) {
+            return Flux.just("MCP服务未启用（Docker环境不支持）");
+        }
         return baiduMapMcpStreamAssistant.chat(prompt);
     }
 

@@ -1,0 +1,123 @@
+# Docker化时的Mass启动配置 + AI功能绕过
+# 该配置允许项目在没有AI服务的情况下启动
+
+server:
+  port: 8000
+  servlet:
+    # 设置响应的字符编码
+    encoding:
+      charset: utf-8
+      force: true
+      enabled: true
+    async-supported: true
+  tomcat:
+    connection-timeout: 180000
+
+spring:
+  application:
+    name: RAGTranslationApplication
+  web:
+    timeout: 240s
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 100MB
+
+    # 静态资源页
+  resources:
+    static-locations: classpath:/static/
+    cache-control: false
+
+  # 数据源配置（异常时自动使用H2测试数据库）
+  datasource:
+    driver-class-name: org.sqlite.JDBC
+    name: defaultDataSource
+    url: ${SPRING_DATASOURCE_URL:jdbc:sqlite:data/testdb.sqlite}
+    username: sa
+    password:
+    fail-fast: false
+
+  # 数据缓存配置 - 可选
+  data:
+    mongodb:
+      # 如果MongoDB不存在，将自动跳过缓存
+      uri: ${SPRING_DATA_MONGODB_URI:mongodb://localhost:27017/chat_db}
+    redis:
+      host: ${SPRING_REDIS_HOST:localhost}
+      port: ${SPRING_REDIS_PORT:6379}
+
+  rabbitmq:
+    host: ${SPRING_RABBITMQ_HOST:localhost}
+    port: ${SPRING_RABBITMQ_PORT:5672}
+    username: ${SPRING_RABBITMQ_USERNAME:admin}
+    password: ${SPRING_RABBITMQ_PASSWORD:admin}
+
+# MyBatis配置
+mybatis-plus:
+  configuration:
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+    map-underscore-to-camel-case: true
+  global-config:
+    db-config:
+      table-underline: true
+
+# AI配置 - 提供默认密钥值，避免启动失败
+ai:
+  deepSeek:
+    base-url: https://api.deepseek.com/v1
+    model: deepseek-chat
+    apiKey: ${DeepSeek_API_KEY:test-key}
+
+  kimi:
+    base-url: https://api.moonshot.cn/v1
+    model: kimi-k2-turbo-preview
+    apiKey: ${KIMI_API_KEY:test-key}
+
+  embeddingStore:
+    qdrant:
+      collectionName: ragTranslation-1226
+      host: ${AI_EMBEDDINGSTORE_QDRANT_HOST:localhost}
+      port: ${AI_EMBEDDINGSTORE_QDRANT_PORT:6334}
+
+  dashscope:
+    apiKey: ${DASHSCOPE_API_KEY:test-key}
+    model: qwen3-235b-a22b
+    base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
+
+  mcp:
+    baiduMap:
+      apiKey: ${BAIDU_MAP_API_KEY:test-key}
+
+# 启用测试模式，跳过AI模型的强制依赖
+feature:
+  mock:
+    disable-all-ai-services: true
+    allow-missing-database: true
+    skip-embedding-models: true
+    bypass-model-loading: true
+
+# 日志配置
+logging:
+  level:
+    root: INFO
+    org.fb: DEBUG
+    dev.langchain4j: WARN
+    ai.onnxruntime: WARN
+    org.springframework.beans: WARN
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} | [%thread] %-5level %logger{36} - %msg%n"
+
+# Actuator健康检查
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: always
+      enable-all: true
+  server:
+    port: 8001
+    base-path: /management

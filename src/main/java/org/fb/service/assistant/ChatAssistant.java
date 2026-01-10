@@ -20,6 +20,6 @@ public interface ChatAssistant {
     String chat(String userMessage);
 
     @SystemMessage(fromResource = "default-prompt.txt")
-    @UserMessage("{{question}}")
+    @UserMessage("结合知识库相关知识回答：{{question}}")
     public String chat(@MemoryId long memoryId,  @V("question") String question);
 }
