@@ -21,6 +21,7 @@ import org.fb.service.assistant.BaiduMapMcpAssistant;
 import org.fb.service.assistant.BaiduMapMcpStreamAssistant;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -76,8 +77,10 @@ public class AiConf {
 
     /**
      * 创建百度地图MCP服务实例（流式）
+     * 仅在非Docker环境下启用（需要Windows cmd命令）
      * */
     @Bean
+    @ConditionalOnProperty(name = "mcp.enabled", havingValue = "true", matchIfMissing = false)
     BaiduMapMcpStreamAssistant baiduMapMcpStreamAssistant() {
 
         return buildGenericMcpAssistant(BaiduMapMcpStreamAssistant.class, streamingChatModel);
@@ -85,11 +88,22 @@ public class AiConf {
 
     /**
      * 创建百度地图MCP服务实例（非流式）
+     * 仅在非Docker环境下启用（需要Windows cmd命令）
      * */
     @Bean
+    @ConditionalOnProperty(name = "mcp.enabled", havingValue = "true", matchIfMissing = false)
     BaiduMapMcpAssistant baiduMapMcpAssistant() {
 
         return  buildGenericMcpAssistant(BaiduMapMcpAssistant.class, chatModel);
+    }
+
+    /**
+     * Docker环境下的占位符Bean
+     * */
+    @Bean("baiduMapMcpAssistant")
+    @ConditionalOnProperty(name = "mcp.enabled", havingValue = "false", matchIfMissing = true)
+    BaiduMapMcpAssistant baiduMapMcpAssistantPlaceholder() {
+        return userMessage -> "MCP服务在Docker环境中不可用";
     }
 
 
