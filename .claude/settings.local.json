@@ -19,7 +19,15 @@
       "Bash(mvn clean:*)",
       "Bash(pkill:*)",
       "Bash(chmod:*)",
-      "Bash(./run-docker.bat:*)"
+      "Bash(./run-docker.bat:*)",
+      "Bash(tree:*)",
+      "Bash(ls:*)",
+      "Bash(powershell -Command \"Set-Location ''D:\\\\个人资料\\\\AI实战--RAG增强型翻译\\\\RAGTranslation--docker''; Remove-Item -Path ''application-docker.yml'',''application-docker-mock.yml'',''docker-compose.yml'',''Dockerfile.optimize'',''health-check.bat'',''run-docker.bat'',''run-simple.sh'',''run-test.sh'',''start.sh'',''stop-desktop.bat'' -Force -ErrorAction SilentlyContinue; Write-Host ''Files cleaned''\")",
+      "Bash(powershell -Command \"Test-Path ''D:\\\\个人资料\\\\AI实战--RAG增强型翻译\\\\RAGTranslation--docker\\\\src\\\\main\\\\resources\\\\static\\\\unified.html''\")",
+      "Bash(powershell -Command \"Get-ChildItem -Path ''D:\\\\个人资料\\\\AI实战--RAG增强型翻译\\\\RAGTranslation--docker'' -File | Where-Object { $_Name -match ''\\\\.\\(bat|sh|yml|yaml\\)$|^Dockerfile'' } | Select-Object Name, Length | Format-Table -AutoSize\")",
+      "Bash(dir /b \"D:\\\\个人资料\\\\AI实战--RAG增强型翻译\\\\RAGTranslation--docker\")",
+      "Bash(powershell -Command \"Remove-Item -Path ''D:\\\\个人资料\\\\AI实战--RAG增强型翻译\\\\RAGTranslation--docker\\\\DockerFinal.md'',''D:\\\\个人资料\\\\AI实战--RAG增强型翻译\\\\RAGTranslation--docker\\\\README-FINAL.md'',''D:\\\\个人资料\\\\AI实战--RAG增强型翻译\\\\RAGTranslation--docker\\\\test.log'',''D:\\\\个人资料\\\\AI实战--RAG增强型翻译\\\\RAGTranslation--docker\\\\DEPLOYMENT_TEST_RESULT.md'',''D:\\\\个人资料\\\\AI实战--RAG增强型翻译\\\\RAGTranslation--docker\\\\result.html'',''D:\\\\个人资料\\\\AI实战--RAG增强型翻译\\\\RAGTranslation--docker\\\\README-DOCKER.md'',''D:\\\\个人资料\\\\AI实战--RAG增强型翻译\\\\RAGTranslation--docker\\\\nul'' -Force -ErrorAction SilentlyContinue; Write-Host ''Done''\")",
+      "Bash(powershell -Command \"Remove-Item -Path ''D:\\\\个人资料\\\\AI实战--RAG增强型翻译\\\\RAGTranslation--docker\\\\1'' -Force -ErrorAction SilentlyContinue; Write-Host ''Done''\")"
     ]
   }
 }
