@@ -1,17 +1,13 @@
 # 优化版Dockerfile
-FROM openjdk:17-slim AS build
+FROM maven:3-eclipse-temurin-17 AS build
 
 WORKDIR /app
-
-# 安装Maven
-RUN apt-get update && apt-get install -y maven curl wget \
-  && rm -rf /var/lib/apt/lists/*
 
 # 复制POM文件
 COPY pom.xml .
 
 # 下载依赖（使用国内镜像）
-RUN echo '<settings><mirrors><mirror><id>aliyunmaven</id><mirrorOf>* </mirrorOf><name>Aliyun Maven</name><url>https://maven.aliyun.com/repository/public</url></mirror></mirrors></settings>' > ~/.m2/settings.xml
+RUN mkdir -p ~/.m2 && echo '<settings><mirrors><mirror><id>aliyunmaven</id><mirrorOf>* </mirrorOf><name>Aliyun Maven</name><url>https://maven.aliyun.com/repository/public</url></mirror></mirrors></settings>' > ~/.m2/settings.xml
 
 # 下载依赖
 RUN mvn dependency:go-offline -B || echo "Dependencies download may have issues, continuing..."
@@ -23,11 +19,12 @@ COPY src ./src
 RUN mvn clean package -DskipTests || (echo "Build failed, retrying..." && mvn package -DskipTests)
 
 # 运行时镜像
-FROM openjdk:17-jre-slim
+FROM eclipse-temurin:17-jre
 
 # 设置时区
 ENV TZ=Asia/Shanghai
-RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && \
+    echo $TZ > /etc/timezone
 
 # 创建用户
 RUN groupadd -g 1001 rag && \

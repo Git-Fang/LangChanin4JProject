@@ -1,7 +1,7 @@
 @echo off
+chcp 65001 >nul
 setlocal enabledelayedexpansion
 echo 正在启动 RAGTranslation Docker 部署...
-echo **如果需要快速启动，请使用 deploy-desktop-quick.bat **
 echo.
 
 :: 检查Docker Desktop是否运行
@@ -107,7 +107,7 @@ echo 等待几秒，检查所有服务状态...
 ping -n 10 127.0.0.1 >nul
 
 echo.
-echo.=================== 部署状态检查 ===================
+echo =================== 部署状态检查 ===================
 echo.
 echo 【访问地址】
 echo 统一访问页面: http://localhost:8000/unified.html
@@ -132,7 +132,7 @@ echo  docker start ragtranslation-rabbitmq
 echo  docker start ragtranslation-qdrant
 echo.
 echo 如需调试某个服务，请使用：docker logs [容器名]
-echo.=================== 部署检查结束 ===================
+echo =================== 部署检查结束 ===================
 
 pause
 endlocal

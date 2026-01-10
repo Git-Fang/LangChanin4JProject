@@ -98,33 +98,31 @@ services:
 
   # 应用服务
   app:
-    build:
-      context: .
-      dockerfile: Dockerfile.optimize
+    image: ragtranslation--docker-app:latest
     container_name: ragtranslation-app
     ports:
       - "8000:8000"
     environment:
       # 数据库配置
-      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/guiguxiaozhi?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql--0110:3306/guiguxiaozhi?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
       SPRING_DATASOURCE_USERNAME: root
       SPRING_DATASOURCE_PASSWORD: root
 
       # MongoDB配置
-      SPRING_DATA_MONGODB_URI: mongodb://mongo:27017/chat_db
+      SPRING_DATA_MONGODB_URI: mongodb://elegant_newton:27017/chat_db
 
       # Redis配置
-      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_HOST: redis--0110
       SPRING_REDIS_PORT: 6379
 
       # RabbitMQ配置
-      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_HOST: rabbitMQ--0110
       SPRING_RABBITMQ_PORT: 5672
       SPRING_RABBITMQ_USERNAME: admin
       SPRING_RABBITMQ_PASSWORD: admin
 
       # Qdrant配置
-      AI_EMBEDDINGSTORE_QDRANT_HOST: qdrant
+      AI_EMBEDDINGSTORE_QDRANT_HOST: qdrant--0110
       AI_EMBEDDINGSTORE_QDRANT_PORT: 6334
       AI_EMBEDDINGSTORE_QDRANT_COLLECTIONNAME: ragTranslation-1226
 
@@ -135,17 +133,6 @@ services:
       BAIDU_MAP_API_KEY: ${BAIDU_MAP_API_KEY:-}
 
       TZ: Asia/Shanghai
-    depends_on:
-      mysql:
-        condition: service_healthy
-      mongo:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-      qdrant:
-        condition: service_healthy
     networks:
       - rag-network
     restart: unless-stopped
