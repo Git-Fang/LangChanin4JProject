@@ -1,9 +1,13 @@
 package org.fb.controller;
 
 import dev.langchain4j.data.message.ChatMessage;
+import dev.langchain4j.data.message.AiMessage;
+import dev.langchain4j.data.message.UserMessage;
+import dev.langchain4j.data.message.SystemMessage;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.fb.bean.ChatForm;
+import org.fb.bean.MessageDTO;
 import org.fb.service.ChatService;
 import org.fb.tools.MongoChatMemoryStore;
 import org.slf4j.Logger;
@@ -14,6 +18,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
+import java.util.stream.Collectors;
 
 @Tag(name = "智能对话")
 @RestController
@@ -85,13 +90,40 @@ public class ChatController {
 
     @GetMapping("/history/{memoryId}")
     @Operation(summary = "获取指定会话的历史消息")
-    public List<ChatMessage> getHistoryMessages(@PathVariable Long memoryId) {
+    public List<MessageDTO> getHistoryMessages(@PathVariable Long memoryId) {
         try {
-            return mongoChatMemoryStore.getMessages(memoryId);
+            List<ChatMessage> messages = mongoChatMemoryStore.getMessages(memoryId);
+            return messages.stream()
+                    .map(this::convertToDTO)
+                    .collect(Collectors.toList());
         } catch (Exception e) {
             log.error("获取历史消息异常, memoryId={}, error={}", memoryId, e.getMessage(), e);
             return new ArrayList<>();
         }
+    }
+
+    /**
+     * 将ChatMessage转换为MessageDTO
+     */
+    private MessageDTO convertToDTO(ChatMessage message) {
+        String type;
+        String text;
+
+        if (message instanceof UserMessage) {
+            type = "USER_MESSAGE";
+            text = ((UserMessage) message).singleText();
+        } else if (message instanceof AiMessage) {
+            type = "AI_MESSAGE";
+            text = ((AiMessage) message).text();
+        } else if (message instanceof SystemMessage) {
+            type = "SYSTEM_MESSAGE";
+            text = ((SystemMessage) message).text();
+        } else {
+            type = "UNKNOWN";
+            text = message.toString();
+        }
+
+        return new MessageDTO(type, text);
     }
 
     @DeleteMapping("/history/{memoryId}")

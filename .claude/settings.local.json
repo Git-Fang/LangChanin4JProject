@@ -38,7 +38,9 @@
       "Bash(docker exec:*)",
       "Bash(ping:*)",
       "Bash(docker port:*)",
-      "Bash(docker inspect:*)"
+      "Bash(docker inspect:*)",
+      "Bash(dir /s /b *.log)",
+      "Bash(docker network:*)"
     ]
   }
 }
