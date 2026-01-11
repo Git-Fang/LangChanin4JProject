@@ -36,7 +36,9 @@
       "Bash(docker start:*)",
       "Bash(docker network connect:*)",
       "Bash(docker exec:*)",
-      "Bash(ping:*)"
+      "Bash(ping:*)",
+      "Bash(docker port:*)",
+      "Bash(docker inspect:*)"
     ]
   }
 }
