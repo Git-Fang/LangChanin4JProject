@@ -941,15 +941,7 @@
             // 显示/隐藏 SSE 面板
             const ssePanel = document.getElementById('ssePanel');
             ssePanel.classList.toggle('active', mode === 'sse');
-            
-            // 显示/隐藏 历史会话区域
-            const historyContainer = document.querySelector('.history-container');
-            if (mode === 'http') {
-                historyContainer.classList.add('hidden');
-            } else {
-                historyContainer.classList.remove('hidden');
-            }
-            
+
             // 如果切换到 SSE 模式，自动建立连接
             if (mode === 'sse' && !eventSource) {
                 connectSse();
@@ -1346,26 +1338,22 @@
                 let replyText = '';
 
                 if (currentMode === 'http') {
-                    // HTTP 模式 - 不使用历史会话
+                    // HTTP 模式 - 使用 /xiaozhi/chat 接口，支持 memoryId
                     const controller = new AbortController();
                     const timeoutId = setTimeout(() => controller.abort(), 180000);
-                    
-                    const response = await fetch(HTTP_API_BASE_URL, {
+
+                    const response = await fetch('http://localhost:8000/xiaozhi/chat', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
                         },
                         body: JSON.stringify({
-                            jsonrpc: '2.0',
-                            id: Date.now().toString(),
-                            method: 'composite_intelligent_agent',
-                            params: {
-                                userMessage: message
-                            }
+                            memoryId: memoryId,
+                            message: message
                         }),
                         signal: controller.signal
                     });
-                    
+
                     clearTimeout(timeoutId);
 
                     if (!response.ok) {
@@ -1374,19 +1362,7 @@
                         throw new Error(errorText || `HTTP error! status: ${response.status}`);
                     }
 
-                    const data = await response.json();
-                    console.log('Response data:', data);
-                    
-                    // 解析JSON-RPC响应
-                    if (data.result && data.result.chatResult) {
-                        replyText = data.result.chatResult;
-                    } else if (data.result) {
-                        replyText = typeof data.result === 'string' ? data.result : JSON.stringify(data.result);
-                    } else if (data.error) {
-                        replyText = `错误: ${data.error.message || data.error}`;
-                    } else {
-                        replyText = '抱歉，我没有理解您的问题。';
-                    }
+                    replyText = await response.text();
                 } else {
                     // SSE 模式
                     const sseMessage = {
@@ -1417,11 +1393,9 @@
                 if (replyText) {
                     addMessage(replyText, false);
                 }
-                
-                // 仅在SSE模式下刷新历史会话列表
-                if (currentMode === 'sse') {
-                    loadHistorySessions();
-                }
+
+                // 刷新历史会话列表
+                loadHistorySessions();
                 
             } catch (error) {
                 console.error('Error:', error);
