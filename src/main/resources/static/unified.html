@@ -1465,6 +1465,8 @@
             memoryId = Date.now();
             const container = document.getElementById('messagesContainer');
             container.innerHTML = '<div class="empty-state">开始新的对话吧</div>';
+            // 刷新历史会话列表
+            loadHistorySessions();
         }
 
         // 加载历史会话列表
@@ -1644,10 +1646,8 @@
         // 页面加载完成后初始化
         window.addEventListener('load', () => {
             document.getElementById('messageInput').focus();
-            // 仅在SSE模式下加载历史会话
-            if (currentMode === 'sse') {
-                loadHistorySessions();
-            }
+            // 加载历史会话列表
+            loadHistorySessions();
         });
     </script>
 </body>

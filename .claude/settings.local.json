@@ -33,7 +33,10 @@
       "Bash(cmd //c deploy-desktop.bat)",
       "Bash(cmd //c \"cd /d \"\"D:\\\\个人资料\\\\AI实战--RAG增强型翻译\\\\RAGTranslation--docker\"\" && deploy-desktop.bat\")",
       "Bash(powershell -Command \"Set-Location ''D:\\\\个人资料\\\\AI实战--RAG增强型翻译\\\\RAGTranslation--docker''; & .\\\\deploy-desktop.bat\")",
-      "Bash(docker start:*)"
+      "Bash(docker start:*)",
+      "Bash(docker network connect:*)",
+      "Bash(docker exec:*)",
+      "Bash(ping:*)"
     ]
   }
 }
