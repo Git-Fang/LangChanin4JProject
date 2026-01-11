@@ -103,7 +103,7 @@ for /f "usebackq tokens=1,* delims==" %%a in (".env") do (
 docker run -d ^
     --name %CONTAINER_NAME% ^
     -p %APP_PORT%:%APP_PORT% ^
-    -e SPRING_DATASOURCE_URL=jdbc:mysql://host.docker.internal:3306/guiguxiaozhi?useUnicode=true^&characterEncoding=UTF-8^&serverTimezone=Asia/Shanghai^&useSSL=false^&allowPublicKeyRetrieval=true ^
+    -e SPRING_DATASOURCE_URL=jdbc:mysql://host.docker.internal:3306/mydocker?useUnicode=true^&characterEncoding=UTF-8^&serverTimezone=Asia/Shanghai^&useSSL=false^&allowPublicKeyRetrieval=true ^
     -e SPRING_DATASOURCE_USERNAME=root ^
     -e SPRING_DATASOURCE_PASSWORD=root ^
     -e SPRING_DATA_MONGODB_URI=mongodb://host.docker.internal:27017/chat_db ^
