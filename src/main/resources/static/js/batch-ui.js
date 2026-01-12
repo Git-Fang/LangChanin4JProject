@@ -1,8 +1,12 @@
 (function(){
   function ensureBatchUI(){
     if (document.getElementById('batchUploadBtn')) return;
-    const up = document.querySelector('.upload-section');
+    const up = document.querySelector('#fileUploadSection');
     if (up){
+      const existingBtn = up.querySelector('.upload-btn');
+      if (existingBtn) {
+        existingBtn.remove();
+      }
       const btn = document.createElement('button');
       btn.id = 'batchUploadBtn';
       btn.className = 'upload-btn';
@@ -313,7 +317,7 @@
   }
 
   function updateUploadSection() {
-    const uploadSection = document.querySelector('.upload-section');
+    const uploadSection = document.querySelector('#fileUploadSection');
     if (!uploadSection) return;
 
     const originalBtn = uploadSection.querySelector('.upload-btn:not(#batchUploadBtn)');
@@ -344,13 +348,13 @@
   function initObserver() {
     const observer = new MutationObserver((mutations) => {
       mutations.forEach((mutation) => {
-        if (mutation.target.classList.contains('upload-section')) {
+        if (mutation.target.id === 'fileUploadSection') {
           updateUploadSection();
         }
       });
     });
 
-    const uploadSection = document.querySelector('.upload-section');
+    const uploadSection = document.querySelector('#fileUploadSection');
     if (uploadSection) {
       observer.observe(uploadSection, { childList: true, subtree: true });
     }
