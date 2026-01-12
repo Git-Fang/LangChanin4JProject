@@ -71,11 +71,24 @@ public class PersonalDataController {
             return result;
         }
         Map<String, Object> result = new HashMap<>();
+        java.util.Map<String, Object> fileResults = new LinkedHashMap<>();
         try {
             if (operation != null && "VECTORIZE".equalsIgnoreCase(operation)) {
-                Integer count = documentService.saveAndEmbedding(files);
+                Integer count = 0;
+                for (MultipartFile file : files) {
+                    try {
+                        MultipartFile[] singleFile = new MultipartFile[]{file};
+                        documentService.saveAndEmbedding(singleFile);
+                        count++;
+                        fileResults.put(file.getOriginalFilename(), java.util.Map.of("success", true, "message", "文件已向量化存储"));
+                    } catch (Exception e) {
+                        log.error("文件向量化失败: {}", file.getOriginalFilename(), e);
+                        fileResults.put(file.getOriginalFilename(), java.util.Map.of("success", false, "message", "处理失败: " + e.getMessage()));
+                    }
+                }
                 result.put("success", true);
                 result.put("message", "批量上传成功，已向量化存储到qdrant数据库");
+                result.put("results", fileResults);
                 result.put("count", count);
                 log.info("批量上传个人简历文件成功，共{}个文件", count);
             } else if (operation != null && "TERMS".equalsIgnoreCase(operation)) {
@@ -83,31 +96,48 @@ public class PersonalDataController {
                 java.util.Map<String, String> termsMap = new LinkedHashMap<>();
                 for (String path : paths) {
                     try {
-                        List<TextSegment> segments = documentService.parseAndEmbedding(path);
+                        List<TextSegment> segments = documentImpl.parseAndEmbedding(path);
                         String fileText = segments.stream().map(TextSegment::text).collect(Collectors.joining("\n"));
                         if (fileText != null && !fileText.isEmpty() && !fileText.contains("未检测到文字")) {
                             String terms = termExtractionAgent.chatWithTermTool(fileText);
                             File f = new File(path);
                             termsMap.put(f.getName(), terms);
+                            fileResults.put(f.getName(), java.util.Map.of("success", true, "terms", terms, "message", "术语解析成功"));
                         } else {
                             File f = new File(path);
-                            termsMap.put(f.getName(), "[图片OCR] 图片中未检测到文字内容，无需提取术语");
+                            String message = "[图片OCR] 图片中未检测到文字内容，无需提取术语";
+                            termsMap.put(f.getName(), message);
+                            fileResults.put(f.getName(), java.util.Map.of("success", true, "terms", message, "message", "图片中未检测到文字内容"));
                         }
                         deleteTempFile(path);
                     } catch (Exception e) {
                         log.error("处理文件失败: {}", path, e);
                         File f = new File(path);
                         termsMap.put(f.getName(), "处理失败: " + e.getMessage());
+                        fileResults.put(f.getName(), java.util.Map.of("success", false, "message", "处理失败: " + e.getMessage()));
                     }
                 }
                 result.put("success", true);
                 result.put("message", "批量术语解析完成");
-                result.put("results", termsMap);
+                result.put("results", fileResults);
+                result.put("terms", termsMap);
                 result.put("count", termsMap.size());
             } else {
-                Integer count = documentService.saveAndEmbedding(files);
+                Integer count = 0;
+                for (MultipartFile file : files) {
+                    try {
+                        MultipartFile[] singleFile = new MultipartFile[]{file};
+                        documentService.saveAndEmbedding(singleFile);
+                        count++;
+                        fileResults.put(file.getOriginalFilename(), java.util.Map.of("success", true, "message", "文件已向量化存储"));
+                    } catch (Exception e) {
+                        log.error("文件向量化失败: {}", file.getOriginalFilename(), e);
+                        fileResults.put(file.getOriginalFilename(), java.util.Map.of("success", false, "message", "处理失败: " + e.getMessage()));
+                    }
+                }
                 result.put("success", true);
                 result.put("message", "批量上传成功，已向量化存储到qdrant数据库");
+                result.put("results", fileResults);
                 result.put("count", count);
                 log.info("批量上传批次（未知 operation）处理完成，共{}个文件", count);
             }

@@ -205,7 +205,7 @@
           return;
         }
 
-        const validFiles = Array.from(files).filter(file => {
+        const validFiles = Array.from(files).slice(0, 5).filter(file => {
           const ext = file.name.split('.').pop().toLowerCase();
           const validExts = ['doc','docx','ppt','pptx','pdf','jpg','jpeg','png'];
           return validExts.includes(ext);
@@ -218,9 +218,11 @@
 
         const fileItems = fileList.querySelectorAll('div[data-file-index]');
         const selectedFiles = [];
+        const selectedIndices = [];
         fileItems.forEach((item, idx) => {
           if (item.dataset.cancelled !== 'true') {
             selectedFiles.push(validFiles[idx]);
+            selectedIndices.push(idx);
           }
         });
 
@@ -237,54 +239,71 @@
         const operation = actionSelect.value;
         const total = selectedFiles.length;
         const results = [];
-        let completed = 0;
 
-        for (let i = 0; i < selectedFiles.length; i++) {
-          const file = selectedFiles[i];
-          if (fileList.querySelector(`div[data-file-index="${i}"]`)?.dataset.cancelled === 'true') {
-            continue;
-          }
+        progressText.textContent = `正在上传和处理文件 (0/${total})...`;
+        progressBar.style.width = '0%';
 
-          progressText.textContent = `正在处理 (${i + 1}/${total}): ${file.name}`;
-          progressBar.style.width = ((i + 1) / total * 100) + '%';
-
-          try {
+        try {
             const formData = new FormData();
-            formData.append('files', file);
+            selectedFiles.forEach((file) => {
+                formData.append('files', file);
+            });
             formData.append('operation', operation);
 
             const response = await fetch('/xiaozhi/personal/upload/batch', {
-              method: 'POST',
-              body: formData
+                method: 'POST',
+                body: formData
             });
 
             const data = await response.json();
-            results.push({
-              file: file.name,
-              success: data.success,
-              message: data.message || data.results?.[file.name] || '处理完成'
-            });
-          } catch (err) {
-            results.push({
-              file: file.name,
-              success: false,
-              message: '处理失败: ' + err.message
-            });
-          }
+            progressBar.style.width = '100%';
+            progressText.textContent = '处理完成!';
 
-          completed++;
+            if (data.success && data.results) {
+                for (const [fileName, fileResult] of Object.entries(data.results)) {
+                    if (typeof fileResult === 'object') {
+                        results.push({
+                            file: fileName,
+                            success: fileResult.success,
+                            message: fileResult.message || (fileResult.success ? '处理完成' : '处理失败'),
+                            terms: fileResult.terms
+                        });
+                    } else {
+                        results.push({
+                            file: fileName,
+                            success: true,
+                            message: fileResult || '处理完成'
+                        });
+                    }
+                }
+            } else {
+                selectedFiles.forEach((file) => {
+                    results.push({
+                        file: file.name,
+                        success: false,
+                        message: data.message || '处理失败'
+                    });
+                });
+            }
+        } catch (err) {
+            progressBar.style.width = '100%';
+            progressText.textContent = '处理完成!';
+            selectedFiles.forEach((file) => {
+                results.push({
+                    file: file.name,
+                    success: false,
+                    message: '处理失败: ' + err.message
+                });
+            });
         }
-
-        progressBar.style.width = '100%';
-        progressText.textContent = '处理完成!';
 
         resultDiv.style.display = 'block';
         resultContent.textContent = JSON.stringify({
-          operation: operation === 'TERMS' ? '术语解析' : '向量化存储',
-          total: total,
-          success: results.filter(r => r.success).length,
-          failed: results.filter(r => !r.success).length,
-          details: results
+            operation: operation === 'TERMS' ? '术语解析' : '向量化存储',
+            total: total,
+            success: results.filter(r => r.success).length,
+            failed: results.filter(r => !r.success).length,
+            details: results
         }, null, 2);
 
         submitBtn.disabled = false;
