@@ -2009,29 +2009,33 @@
                     
                     const resultText = await response.text();
                     
-                    let imageUrl = resultText;
-                    try {
-                        const parsed = JSON.parse(resultText);
-                        if (parsed.url) {
-                            imageUrl = parsed.url;
-                        } else if (parsed.imageUri) {
-                            imageUrl = parsed.imageUri;
-                        }
-                    } catch (e) {
-                    }
+                    let imageUrl = resultText.trim();
                     
-                    if (imageUrl) {
-                        if (imageUrl.startsWith('{') || imageUrl.startsWith('[')) {
-                            const parsed = JSON.parse(imageUrl);
+                    // 尝试解析JSON格式
+                    if (resultText.startsWith('{') || resultText.startsWith('[')) {
+                        try {
+                            const parsed = JSON.parse(resultText);
                             if (parsed.url) {
                                 imageUrl = parsed.url;
+                            } else if (parsed.imageUri) {
+                                imageUrl = parsed.imageUri;
                             } else if (parsed.output) {
                                 imageUrl = parsed.output;
                             }
+                        } catch (e) {
                         }
-                        resultContent.innerHTML = `<img src="${imageUrl}" alt="生成图片">`;
+                    }
+                    
+                    // 显示图片链接
+                    if (imageUrl && imageUrl.startsWith('http')) {
+                        resultContent.innerHTML = `
+                            <div style="word-break: break-all; color: #333; font-size: 13px;">
+                                <div style="margin-bottom: 8px; color: #666;">生成图片链接:</div>
+                                <a href="${imageUrl}" target="_blank" style="color: #667eea; text-decoration: none; word-break: break-all;">${imageUrl}</a>
+                            </div>
+                        `;
                     } else {
-                        resultContent.innerHTML = '生成失败: 未获取到图片地址';
+                        resultContent.innerHTML = '生成失败: 无效的图片地址';
                     }
                 } catch (error) {
                     console.error('文生图失败:', error);

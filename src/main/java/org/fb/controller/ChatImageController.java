@@ -59,10 +59,11 @@ public class ChatImageController {
     @PostMapping("/wanxImage")
     @Operation(summary = "阿里万相文生图简单测试1")
     public String wanxImage(String prompt) throws IOException {
+        log.info("prompt:{}", prompt);
         Response<Image> imageResponse = wanxImageModel.generate(prompt);
         URI imageUri = imageResponse.content().url();
         log.info("imageUri: {}", imageUri);
-        return imageResponse.content().toString();
+        return imageUri.toString();
     }
 
     @PostMapping("/wanxImage2")
