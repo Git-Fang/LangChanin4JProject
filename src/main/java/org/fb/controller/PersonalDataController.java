@@ -1,11 +1,21 @@
 package org.fb.controller;
 
+import dev.langchain4j.data.segment.TextSegment;
+import org.fb.util.BatchPathProvider;
+import org.fb.service.impl.DocumentImpl;
+import org.fb.service.assistant.TermExtractionAgent;
+import java.io.File;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.stream.Collectors;
+
+import org.springframework.beans.factory.annotation.Autowired;
+
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.fb.service.DocumentService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -20,6 +30,15 @@ public class PersonalDataController {
 
     @Autowired
     private DocumentService documentService;
+
+    @Autowired
+    private BatchPathProvider batchPathProvider;
+
+    @Autowired
+    private DocumentImpl documentImpl;
+
+    @Autowired
+    private TermExtractionAgent termExtractionAgent;
 
     @PostMapping("/upload")
     @Operation(summary = "上传个人相关文件")
@@ -43,19 +62,49 @@ public class PersonalDataController {
 
     @PostMapping("/upload/batch")
     @Operation(summary = "批量上传个人相关文件")
-    public Map<String, Object> uploadResumeBatch(@RequestParam("files") MultipartFile[] files) {
+    public Map<String, Object> uploadResumeBatch(@RequestParam("files") MultipartFile[] files,
+                                               @RequestParam(value = "operation", defaultValue = "VECTORIZE") String operation) {
+        // Enforce maximum 5 files per batch upload
+        if (files != null && files.length > 5) {
+            Map<String, Object> result = new HashMap<>();
+            result.put("success", false);
+            result.put("message", "最多支持上传 5 个文件");
+            return result;
+        }
         Map<String, Object> result = new HashMap<>();
         try {
-            Integer count = documentService.saveAndEmbedding(files);
-            
-            result.put("success", true);
-            result.put("message", "批量上传成功，已向量化存储到qdrant数据库");
-            result.put("count", count);
-            log.info("批量上传个人简历文件成功，共{}个文件", count);
+            if (operation != null && "VECTORIZE".equalsIgnoreCase(operation)) {
+                Integer count = documentService.saveAndEmbedding(files);
+                result.put("success", true);
+                result.put("message", "批量上传成功，已向量化存储到qdrant数据库");
+                result.put("count", count);
+                log.info("批量上传个人简历文件成功，共{}个文件", count);
+            } else if (operation != null && "TERMS".equalsIgnoreCase(operation)) {
+                List<String> paths = batchPathProvider.saveFilesToLocalAndReturnPaths(files);
+                java.util.Map<String, String> termsMap = new LinkedHashMap<>();
+                for (String path : paths) {
+                    List<TextSegment> segments = documentImpl.parseAndEmbedding(path);
+                    String fileText = segments.stream().map(TextSegment::text).collect(Collectors.joining("\n"));
+                    String terms = termExtractionAgent.chatWithTermTool(fileText);
+                    File f = new File(path);
+                    termsMap.put(f.getName(), terms);
+                }
+                result.put("success", true);
+                result.put("message", "批量术语解析完成");
+                result.put("results", termsMap);
+                result.put("count", termsMap.size());
+            } else {
+                // Fallback: treat as vectorize
+                Integer count = documentService.saveAndEmbedding(files);
+                result.put("success", true);
+                result.put("message", "批量上传成功，已向量化存储到qdrant数据库");
+                result.put("count", count);
+                log.info("批量上传批次（未知 operation）处理完成，共{}个文件", count);
+            }
         } catch (Exception e) {
-            log.error("批量上传个人简历文件失败", e);
+            log.error("Batch batch upload failed", e);
             result.put("success", false);
-            result.put("message", "批量上传失败: " + e.getMessage());
+            result.put("message", "Batch upload failed: " + e.getMessage());
         }
         return result;
     }
