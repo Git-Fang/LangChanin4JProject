@@ -1547,3 +1547,6 @@ index)。
 2026-01-12 19:36:23.117 [http-nio-8000-exec-2] INFO  org.fb.service.impl.DocumentImpl - 术语增强DS翻译系统实现.txt向量化完成
 2026-01-12 19:36:23.118 [http-nio-8000-exec-2] INFO  org.fb.service.impl.DocumentImpl - 临时文件删除成功: D:\个人资料\uploaded_documents\术语增强DS翻译系统实现.txt_4ee252e0-2a18-4333-89f8-c7246bf9a0ed.txt
 2026-01-12 19:36:23.118 [http-nio-8000-exec-2] INFO  o.f.c.PersonalDataController - 个人简历文件上传成功: 术语增强DS翻译系统实现.txt
+2026-01-12 19:39:05.143 [http-nio-8000-exec-3] DEBUG org.fb.controller.ChatController - 跳过非数字memoryId: default
+2026-01-12 19:39:09.323 [http-nio-8000-exec-4] DEBUG org.fb.controller.ChatController - 跳过非数字memoryId: default
+2026-01-12 19:46:26.504 [http-nio-8000-exec-8] DEBUG org.fb.controller.ChatController - 跳过非数字memoryId: default
