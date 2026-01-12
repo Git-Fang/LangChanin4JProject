@@ -44,14 +44,10 @@ public class ChatImageController {
 
     @GetMapping("/chatImage")
     @Operation(summary = "图生文接口测试")
-    public String chatImage(String imagePath, String prompt) throws IOException {
-
-        // 读取图片文件并转换为base64
-        byte[] imageBytes = java.nio.file.Files.readAllBytes(java.nio.file.Paths.get(imagePath));
-        String base64Data = java.util.Base64.getEncoder().encodeToString(imageBytes);
+    public String chatImage(String base64Data, String imageType, String prompt) throws IOException {
 
         // 获取图片的MIME类型
-        String mimeType = getMimeType(imagePath);
+        String mimeType = "image/" + imageType;
 
         UserMessage userMessage = UserMessage.from(TextContent.from(prompt), ImageContent.from(base64Data, mimeType));
         ChatResponse chatResponse = chatModel.chat(userMessage);
@@ -63,7 +59,7 @@ public class ChatImageController {
 
     @GetMapping("/wanxImage")
     @Operation(summary = "阿里万相文生图简单测试1")
-    public String chatImage(String prompt) throws IOException {
+    public String wanxImage(String prompt) throws IOException {
         Response<Image> imageResponse = wanxImageModel.generate(prompt);
         URI imageUri = imageResponse.content().url();
         log.info("imageUri: {}", imageUri);
