@@ -1,6 +1,9 @@
 package org.fb.config;
 
 
+import com.alibaba.dashscope.aigc.imagesynthesis.ImageSynthesis;
+import com.alibaba.dashscope.aigc.imagesynthesis.ImageSynthesisParam;
+import dev.langchain4j.community.model.dashscope.WanxImageModel;
 import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.memory.chat.ChatMemoryProvider;
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
@@ -38,6 +41,31 @@ public class LLMConfig {
     @Autowired
     private MongoChatMemoryStore mongoChatMemoryStore;
 
+    /**
+     * 万象模型
+     * */
+    @Bean
+    public WanxImageModel imageModel() {
+        WanxImageModel build = WanxImageModel.builder()
+                .apiKey(envConf.dashscopeApiKey)
+                .modelName("wanx2.0-t2i-turbo")
+                .watermark(true)
+                .build();
+        return build;
+    }
+
+    /**
+     * 千问大模型*/
+    @Bean(name = "qwen")
+    public ChatModel qwenChatModel() {
+        return OpenAiChatModel.builder()
+                .apiKey(envConf.dashscopeApiKey)
+                .modelName(envConf.dashscopeModel)
+                .baseUrl(envConf.dashscopeUrl)
+                .logRequests(true)
+                .logResponses(true)
+                .build();
+    }
 
     @Bean
     public ChatModel ollamaChatModel() {
@@ -74,19 +102,6 @@ public class LLMConfig {
                 .logRequests(true)
                 .logResponses(true)
                 .baseUrl(envConf.kimiUrl)
-                .build();
-    }
-
-    /**
-     * 千问大模型*/
-    @Bean
-    public ChatModel chatModel3() {
-        return OpenAiChatModel.builder()
-                .apiKey(envConf.dashscopeApiKey)
-                .modelName(envConf.dashscopeModel)
-                .logRequests(true)
-                .logResponses(true)
-                .baseUrl(envConf.dashscopeUrl)
                 .build();
     }
 
