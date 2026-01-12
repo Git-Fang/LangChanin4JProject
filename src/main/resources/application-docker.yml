@@ -10,6 +10,8 @@ server:
         async-supported: true
   tomcat:
     connection-timeout: 180000
+    max-http-header-size: 65536
+    max-http-form-post-size: 100MB
 
 spring:
   application:
@@ -18,7 +20,7 @@ spring:
     timeout: 240s
   servlet:
     multipart:
-      max-file-size: 20MB
+      max-file-size: 50MB
       max-request-size: 100MB
 
   # MySQL数据库配置 - 支持环境变量覆盖

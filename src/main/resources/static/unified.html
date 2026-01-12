@@ -1960,10 +1960,14 @@
                 resultContent.innerHTML = '<span class="loading"></span> 正在理解图片...';
                 
                 try {
-                    const url = `http://localhost:8000/xiaozhi/chatImage?base64Data=${encodeURIComponent(selectedImageBase64)}&imageType=${selectedImageType}&prompt=${encodeURIComponent(prompt)}`;
+                    const formData = new FormData();
+                    formData.append('base64Data', selectedImageBase64);
+                    formData.append('imageType', selectedImageType);
+                    formData.append('prompt', prompt);
                     
-                    const response = await fetch(url, {
-                        method: 'GET'
+                    const response = await fetch('/xiaozhi/chatImage', {
+                        method: 'POST',
+                        body: formData
                     });
                     
                     if (!response.ok) {
@@ -1991,10 +1995,12 @@
                 resultContent.innerHTML = '<span class="loading"></span> 正在生成图片...';
                 
                 try {
-                    const url = `http://localhost:8000/xiaozhi/wanxImage?prompt=${encodeURIComponent(prompt)}`;
+                    const formData = new FormData();
+                    formData.append('prompt', prompt);
                     
-                    const response = await fetch(url, {
-                        method: 'GET'
+                    const response = await fetch('/xiaozhi/wanxImage', {
+                        method: 'POST',
+                        body: formData
                     });
                     
                     if (!response.ok) {

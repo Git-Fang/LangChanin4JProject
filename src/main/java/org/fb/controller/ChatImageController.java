@@ -19,7 +19,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.extern.slf4j.Slf4j;
 import org.fb.config.EnvConf;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -39,10 +39,9 @@ public class ChatImageController {
     private EnvConf envConf;
 
     @Autowired
-    private ChatModel chatModel;
+    private ChatModel qwenChatModel;
 
-
-    @GetMapping("/chatImage")
+    @PostMapping("/chatImage")
     @Operation(summary = "图生文接口测试")
     public String chatImage(String base64Data, String imageType, String prompt) throws IOException {
 
@@ -50,14 +49,14 @@ public class ChatImageController {
         String mimeType = "image/" + imageType;
 
         UserMessage userMessage = UserMessage.from(TextContent.from(prompt), ImageContent.from(base64Data, mimeType));
-        ChatResponse chatResponse = chatModel.chat(userMessage);
+        ChatResponse chatResponse = qwenChatModel.chat(userMessage);
         String text = chatResponse.aiMessage().text();
         log.info("text:{}", text);
         return text;
     }
 
 
-    @GetMapping("/wanxImage")
+    @PostMapping("/wanxImage")
     @Operation(summary = "阿里万相文生图简单测试1")
     public String wanxImage(String prompt) throws IOException {
         Response<Image> imageResponse = wanxImageModel.generate(prompt);
@@ -66,8 +65,7 @@ public class ChatImageController {
         return imageResponse.content().toString();
     }
 
-
-    @GetMapping("/wanxImage2")
+    @PostMapping("/wanxImage2")
     @Operation(summary = "阿里万相文基于prompt生图测试2")
     public String wanxImage2(String prompt) throws IOException {
         ImageSynthesisParam param =
@@ -92,8 +90,6 @@ public class ChatImageController {
         return JsonUtils.toJson(result);
     }
 
-
-
     private String getMimeType(String imagePath) {
         try {
             java.nio.file.Path path = java.nio.file.Paths.get(imagePath);
@@ -102,7 +98,6 @@ public class ChatImageController {
                 return contentType;
             }
 
-            // 如果无法自动检测，则根据扩展名判断
             String extension = imagePath.toLowerCase();
             if (extension.endsWith(".png")) {
                 return "image/png";
@@ -113,11 +108,11 @@ public class ChatImageController {
             } else if (extension.endsWith(".bmp")) {
                 return "image/bmp";
             } else {
-                return "image/png"; // 默认返回png类型
+                return "image/png";
             }
         } catch (IOException e) {
             log.error("获取图片MIME类型失败", e);
-            return "image/png"; // 出错时默认返回png类型
+            return "image/png";
         }
     }
 }
