@@ -39,7 +39,7 @@ public class ChatImageController {
     private EnvConf envConf;
 
     @Autowired
-    private ChatModel qwenChatModel;
+    private ChatModel qwen;
 
     @PostMapping("/chatImage")
     @Operation(summary = "图生文接口测试")
@@ -49,7 +49,7 @@ public class ChatImageController {
         String mimeType = "image/" + imageType;
 
         UserMessage userMessage = UserMessage.from(TextContent.from(prompt), ImageContent.from(base64Data, mimeType));
-        ChatResponse chatResponse = qwenChatModel.chat(userMessage);
+        ChatResponse chatResponse = qwen.chat(userMessage);
         String text = chatResponse.aiMessage().text();
         log.info("text:{}", text);
         return text;
