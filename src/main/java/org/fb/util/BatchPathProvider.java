@@ -48,7 +48,7 @@ public class BatchPathProvider {
 
     private boolean isValidDocumentType(String fileName) {
         String ext = getFileExtension(fileName).toLowerCase();
-        return ext.equals("pdf") || ext.equals("txt") || ext.equals("md") || ext.equals("doc") || ext.equals("docx") || ext.equals("pptx") || ext.equals("jpg") || ext.equals("jpeg") || ext.equals("png");
+        return ext.equals("pdf") || ext.equals("txt") || ext.equals("md") || ext.equals("doc") || ext.equals("docx") || ext.equals("ppt") || ext.equals("pptx") || ext.equals("jpg") || ext.equals("jpeg") || ext.equals("png");
     }
 
     private String getFileExtension(String fileName) {

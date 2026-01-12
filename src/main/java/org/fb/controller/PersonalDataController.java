@@ -63,8 +63,7 @@ public class PersonalDataController {
     @PostMapping("/upload/batch")
     @Operation(summary = "批量上传个人相关文件")
     public Map<String, Object> uploadResumeBatch(@RequestParam("files") MultipartFile[] files,
-                                               @RequestParam(value = "operation", defaultValue = "VECTORIZE") String operation) {
-        // Enforce maximum 5 files per batch upload
+                                                @RequestParam(value = "operation", defaultValue = "VECTORIZE") String operation) {
         if (files != null && files.length > 5) {
             Map<String, Object> result = new HashMap<>();
             result.put("success", false);
@@ -83,18 +82,29 @@ public class PersonalDataController {
                 List<String> paths = batchPathProvider.saveFilesToLocalAndReturnPaths(files);
                 java.util.Map<String, String> termsMap = new LinkedHashMap<>();
                 for (String path : paths) {
-                    List<TextSegment> segments = documentImpl.parseAndEmbedding(path);
-                    String fileText = segments.stream().map(TextSegment::text).collect(Collectors.joining("\n"));
-                    String terms = termExtractionAgent.chatWithTermTool(fileText);
-                    File f = new File(path);
-                    termsMap.put(f.getName(), terms);
+                    try {
+                        List<TextSegment> segments = documentService.parseAndEmbedding(path);
+                        String fileText = segments.stream().map(TextSegment::text).collect(Collectors.joining("\n"));
+                        if (fileText != null && !fileText.isEmpty() && !fileText.contains("未检测到文字")) {
+                            String terms = termExtractionAgent.chatWithTermTool(fileText);
+                            File f = new File(path);
+                            termsMap.put(f.getName(), terms);
+                        } else {
+                            File f = new File(path);
+                            termsMap.put(f.getName(), "[图片OCR] 图片中未检测到文字内容，无需提取术语");
+                        }
+                        deleteTempFile(path);
+                    } catch (Exception e) {
+                        log.error("处理文件失败: {}", path, e);
+                        File f = new File(path);
+                        termsMap.put(f.getName(), "处理失败: " + e.getMessage());
+                    }
                 }
                 result.put("success", true);
                 result.put("message", "批量术语解析完成");
                 result.put("results", termsMap);
                 result.put("count", termsMap.size());
             } else {
-                // Fallback: treat as vectorize
                 Integer count = documentService.saveAndEmbedding(files);
                 result.put("success", true);
                 result.put("message", "批量上传成功，已向量化存储到qdrant数据库");
@@ -107,6 +117,14 @@ public class PersonalDataController {
             result.put("message", "Batch upload failed: " + e.getMessage());
         }
         return result;
+    }
+
+    private void deleteTempFile(String path) {
+        try {
+            java.nio.file.Files.deleteIfExists(java.nio.file.Paths.get(path));
+        } catch (Exception e) {
+            log.warn("删除临时文件失败: {}", path);
+        }
     }
 
     @PostMapping("/text")

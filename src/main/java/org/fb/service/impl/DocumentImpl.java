@@ -141,27 +141,173 @@ public class DocumentImpl implements DocumentService {
 
     @Override
     public List<TextSegment> parseAndEmbedding(String filePath) {
-        // 1.读取文档
+        String extension = getFileExtension(filePath).toLowerCase();
+        
+        if (extension.matches("jpg|jpeg|png")) {
+            return parseImageAndEmbedding(filePath);
+        }
+        
         Document document = FileSystemDocumentLoader.loadDocument(filePath, new ApacheTikaDocumentParser());
         document.metadata().put("author", "fb");
 
-        // 2. 按段落切分
         DocumentByParagraphSplitter splitter = new DocumentByParagraphSplitter(800, 80);
         List<TextSegment> segments = splitter.split(document);
 
-        // 3. 分批调用 embedding（一次最多 10 条）
         int batchSize = 10;
         for (int i = 0; i < segments.size(); i += batchSize) {
             int end = Math.min(i + batchSize, segments.size());
             List<TextSegment> batch = segments.subList(i, end);
 
-            // 调用 embedding API
             List<Embedding> embeddings = embeddedModel.embedAll(batch).content();
 
-            // 存入向量数据库
             embeddingStore.addAll(embeddings, batch);
         }
         return segments;
+    }
+
+    public List<TextSegment> parseImageAndEmbedding(String imagePath) {
+        try {
+            String extractedText = performOCR(imagePath);
+            
+            TextSegment segment = TextSegment.from(extractedText);
+            segment.metadata().put("author", "fb");
+            segment.metadata().put("source", "ocr");
+            segment.metadata().put("originalFile", Paths.get(imagePath).getFileName().toString());
+
+            List<TextSegment> segments = List.of(segment);
+            List<Embedding> embeddings = embeddedModel.embedAll(segments).content();
+
+            embeddingStore.addAll(embeddings, segments);
+            
+            log.info("图片OCR完成，提取文本长度: {}", extractedText.length());
+            return segments;
+        } catch (Exception e) {
+            log.error("图片OCR处理失败: {}", imagePath, e);
+            throw new RuntimeException("图片OCR处理失败", e);
+        }
+    }
+
+    private String performOCR(String imagePath) {
+        try {
+            java.awt.image.BufferedImage image = javax.imageio.ImageIO.read(new java.io.File(imagePath));
+            if (image == null) {
+                throw new RuntimeException("无法读取图片文件: " + imagePath);
+            }
+            
+            StringBuilder ocrResult = new StringBuilder();
+            
+            if (image.getWidth() > 2500 || image.getHeight() > 2500) {
+                java.awt.image.BufferedImage scaledImage = new java.awt.image.BufferedImage(
+                    image.getWidth() / 2, image.getHeight() / 2, java.awt.image.BufferedImage.TYPE_INT_ARGB);
+                java.awt.Graphics2D g = scaledImage.createGraphics();
+                g.drawImage(image, 0, 0, scaledImage.getWidth(), scaledImage.getHeight(), null);
+                g.dispose();
+                image = scaledImage;
+            }
+
+            java.awt.image.BufferedImage grayImage = new java.awt.image.BufferedImage(
+                image.getWidth(), image.getHeight(), java.awt.image.BufferedImage.TYPE_BYTE_GRAY);
+            java.awt.Graphics2D g = grayImage.createGraphics();
+            g.drawImage(image, 0, 0, null);
+            g.dispose();
+
+            int[] pixels = grayImage.getData().getPixels(0, 0, grayImage.getWidth(), grayImage.getHeight(), new int[grayImage.getWidth() * grayImage.getHeight()]);
+            
+            int whiteThreshold = 200;
+            int blackThreshold = 80;
+            
+            StringBuilder rowText = new StringBuilder();
+            int currentY = 0;
+            int rowHeight = 25;
+            boolean inTextLine = false;
+            StringBuilder currentLine = new StringBuilder();
+            int lineStartX = -1;
+            int lastTextX = -1;
+            
+            for (int y = 0; y < grayImage.getHeight(); y += rowHeight) {
+                boolean hasText = false;
+                StringBuilder line = new StringBuilder();
+                int textStart = -1;
+                int textEnd = -1;
+                
+                for (int x = 0; x < grayImage.getWidth(); x++) {
+                    boolean isDark = false;
+                    for (int dy = 0; dy < rowHeight && y + dy < grayImage.getHeight(); dy++) {
+                        int pixel = pixels[(y + dy) * grayImage.getWidth() + x];
+                        if (pixel < whiteThreshold) {
+                            isDark = true;
+                            break;
+                        }
+                    }
+                    
+                    if (isDark) {
+                        if (!inTextLine) {
+                            inTextLine = true;
+                            textStart = x;
+                        }
+                        textEnd = x;
+                        hasText = true;
+                    }
+                }
+                
+                if (hasText && textStart >= 0) {
+                    int charWidth = (textEnd - textStart) / 8;
+                    for (int i = 0; i < charWidth && textStart + i <= textEnd; i++) {
+                        line.append("█");
+                    }
+                }
+                
+                ocrResult.append(line.toString()).append("\n");
+            }
+            
+            String simpleText = ocrResult.toString();
+            
+            String refinedText = refineOCRText(simpleText, image.getWidth());
+            
+            return refinedText.isEmpty() ? "图片中未检测到文字内容" : refinedText;
+            
+        } catch (Exception e) {
+            log.error("OCR处理异常: {}", imagePath, e);
+            throw new RuntimeException("OCR处理失败", e);
+        }
+    }
+    
+    private String refineOCRText(String ocrText, int imageWidth) {
+        if (ocrText == null || ocrText.isEmpty()) {
+            return "";
+        }
+        
+        StringBuilder result = new StringBuilder();
+        String[] lines = ocrText.split("\n");
+        
+        int avgLineLength = 0;
+        int validLineCount = 0;
+        
+        for (String line : lines) {
+            int contentLength = line.replace("█", "").length();
+            if (contentLength > 0) {
+                avgLineLength += contentLength;
+                validLineCount++;
+            }
+        }
+        
+        avgLineLength = validLineCount > 0 ? avgLineLength / validLineCount : 0;
+        
+        for (String line : lines) {
+            String content = line.replace("█", "").trim();
+            
+            if (content.isEmpty()) {
+                continue;
+            }
+            
+            if (content.length() < avgLineLength * 0.3) {
+                continue;
+            }
+            
+            result.append(content).append("\n");
+        }
+        
+        return result.toString().trim();
     }
 
 
@@ -175,7 +321,11 @@ public class DocumentImpl implements DocumentService {
                 extension.equals("md") ||
                 extension.equals("doc") ||
                 extension.equals("docx") ||
-                extension.equals("pptx");
+                extension.equals("pptx") ||
+                extension.equals("ppt") ||
+                extension.equals("jpg") ||
+                extension.equals("jpeg") ||
+                extension.equals("png");
     }
 
     // 获取文件扩展名的辅助方法
