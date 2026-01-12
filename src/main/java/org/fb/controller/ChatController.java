@@ -78,7 +78,8 @@ public class ChatController {
                 try {
                     longIds.add(Long.parseLong(id));
                 } catch (NumberFormatException e) {
-                    log.warn("无法转换memoryId: {}", id);
+                    // 忽略非数字的memoryId（如"default"等系统内部使用的值）
+                    log.debug("跳过非数字memoryId: {}", id);
                 }
             }
             return longIds;
