@@ -153,6 +153,16 @@ public class DocumentImpl implements DocumentService {
         DocumentByParagraphSplitter splitter = new DocumentByParagraphSplitter(800, 80);
         List<TextSegment> segments = splitter.split(document);
 
+        // 对分割后的文档数据进行向量化和存储
+//        embeddingAndSave(segments);
+
+        return segments;
+    }
+
+    /**
+     * 向量化存储
+     * */
+    private void embeddingAndSave(List<TextSegment> segments) {
         int batchSize = 10;
         for (int i = 0; i < segments.size(); i += batchSize) {
             int end = Math.min(i + batchSize, segments.size());
@@ -162,7 +172,6 @@ public class DocumentImpl implements DocumentService {
 
             embeddingStore.addAll(embeddings, batch);
         }
-        return segments;
     }
 
     public List<TextSegment> parseImageAndEmbedding(String imagePath) {
