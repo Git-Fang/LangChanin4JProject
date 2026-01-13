@@ -13,6 +13,8 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Service
 public class ChatServiceImpl implements ChatService {
@@ -71,25 +73,22 @@ public class ChatServiceImpl implements ChatService {
         log.info("aiResponse：" + aiResponse + "; lowerResponse：" + lowerResponse);
         log.info("memoryId：{}；用户意图：{}", memoryId, lowerResponse);
 
-        // 明确识别意图类型，确保只有在明确为医疗意图时才使用医生助手
-        boolean isMedical = lowerResponse.contains(BusinessConstant.MEDICAL_TYPE) ||  lowerResponse.contains("医疗");
-        boolean isTranslation = lowerResponse.contains(BusinessConstant.TRANSLATION_TYPE) || lowerResponse.contains("翻译");
-        boolean isTermExtraction = lowerResponse.contains(BusinessConstant.TERM_EXTRACTION_TYPE) || lowerResponse.contains("术语");
-        boolean isSql = lowerResponse.contains(BusinessConstant.SQL_OPERATION_TYPE) || lowerResponse.contains("sql");
-        boolean isGeneral = lowerResponse.contains(BusinessConstant.DEFAULT_TYPE) || lowerResponse.contains("通用") || lowerResponse.contains("普通");
+        // 解析AI返回的JSON结果，提取intent字段
+        String intent = extractIntent(aiResponse);
+        log.info("提取的意图类型：" + intent);
 
-        // 确定聊天类型
+        // 根据解析出的intent确定聊天类型
         log.info("开始确定聊天类型");
         String chatType = BusinessConstant.DEFAULT_TYPE;
-        if (isMedical) {
+        if (BusinessConstant.MEDICAL_TYPE.equals(intent)) {
             chatType = BusinessConstant.MEDICAL_TYPE;
-        } else if (isTranslation) {
+        } else if (BusinessConstant.TRANSLATION_TYPE.equals(intent)) {
             chatType = BusinessConstant.TRANSLATION_TYPE;
-        } else if (isTermExtraction) {
+        } else if (BusinessConstant.TERM_EXTRACTION_TYPE.equals(intent)) {
             chatType = BusinessConstant.TERM_EXTRACTION_TYPE;
-        } else if (isSql) {
+        } else if (BusinessConstant.SQL_OPERATION_TYPE.equals(intent)) {
             chatType = BusinessConstant.SQL_OPERATION_TYPE;
-        } else if (isGeneral) {
+        } else if (BusinessConstant.DEFAULT_TYPE.equals(intent)) {
             chatType = BusinessConstant.DEFAULT_TYPE;
         }
         log.info("聊天类型确定完成：" + chatType);
@@ -102,19 +101,19 @@ public class ChatServiceImpl implements ChatService {
         // 根据解析后的意图，选择不同的业务处理服务
         log.info("开始根据意图选择业务处理服务");
         String result;
-        if (isMedical) {
+        if (BusinessConstant.MEDICAL_TYPE.equals(intent)) {
             // 医疗相关业务，使用医生助手
             log.info("选择业务处理服务：DoctorAgent");
             result = doctorAgent.chat(memoryId, userMessage);
-        } else if (isTranslation) {
+        } else if (BusinessConstant.TRANSLATION_TYPE.equals(intent)) {
             // 翻译相关业务，使用翻译服务
             log.info("选择业务处理服务：TranslaterService");
             result = translaterService.translate(memoryId, userMessage);
-        } else if (isTermExtraction) {
+        } else if (BusinessConstant.TERM_EXTRACTION_TYPE.equals(intent)) {
             // 术语提取相关业务，使用术语提取助手（不传递memoryId，避免上下文干扰）
             log.info("选择业务处理服务：TermExtractionAgent");
             result = termExtractionAgent.chat(userMessage);
-        } else if (isSql) {
+        } else if (BusinessConstant.SQL_OPERATION_TYPE.equals(intent)) {
             // 自然语言转为sql
             log.info("选择业务处理服务：NL2SQLService");
             try {
@@ -155,6 +154,48 @@ public class ChatServiceImpl implements ChatService {
         log.info("业务处理服务返回结果：" + result);
         log.info("=== processByUserMeanings 方法完成 ===\n");
         return result;
+    }
+
+    /**
+     * 从AI返回的JSON结果中提取intent字段的值
+     * @param aiResponse AI返回的响应
+     * @return intent类型
+     */
+    private String extractIntent(String aiResponse) {
+        if (aiResponse == null || aiResponse.isEmpty()) {
+            return BusinessConstant.DEFAULT_TYPE;
+        }
+
+        // 尝试解析JSON格式的响应
+        try {
+            // 匹配 "intent": "xxx" 格式
+            Pattern pattern = Pattern.compile("\"intent\"\\s*:\\s*\"([^\"]+)\"");
+            Matcher matcher = pattern.matcher(aiResponse);
+            if (matcher.find()) {
+                String intent = matcher.group(1).trim().toLowerCase();
+                log.info("从JSON中提取的intent：" + intent);
+                return intent;
+            }
+        } catch (Exception e) {
+            log.warn("解析JSON intent失败，返回原始响应", e);
+        }
+
+        // 如果JSON解析失败，使用旧的方式进行兼容（兜底策略）
+        String lowerResponse = aiResponse.toLowerCase();
+        if (lowerResponse.contains(BusinessConstant.MEDICAL_TYPE)) {
+            return BusinessConstant.MEDICAL_TYPE;
+        } else if (lowerResponse.contains(BusinessConstant.TRANSLATION_TYPE)) {
+            return BusinessConstant.TRANSLATION_TYPE;
+        } else if (lowerResponse.contains(BusinessConstant.TERM_EXTRACTION_TYPE)) {
+            return BusinessConstant.TERM_EXTRACTION_TYPE;
+        } else if (lowerResponse.contains(BusinessConstant.SQL_OPERATION_TYPE)) {
+            return BusinessConstant.SQL_OPERATION_TYPE;
+        } else if (lowerResponse.contains(BusinessConstant.DEFAULT_TYPE)) {
+            return BusinessConstant.DEFAULT_TYPE;
+        }
+
+        // 默认返回general
+        return BusinessConstant.DEFAULT_TYPE;
     }
 
     /**
