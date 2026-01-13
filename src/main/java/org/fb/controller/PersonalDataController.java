@@ -73,7 +73,7 @@ public class PersonalDataController {
         Map<String, Object> result = new HashMap<>();
         java.util.Map<String, Object> fileResults = new LinkedHashMap<>();
         try {
-            if (operation != null && "VECTORIZE".equalsIgnoreCase(operation)) {
+            if (operation == null || "VECTORIZE".equalsIgnoreCase(operation)) {
                 Integer count = 0;
                 for (MultipartFile file : files) {
                     try {
@@ -91,7 +91,7 @@ public class PersonalDataController {
                 result.put("results", fileResults);
                 result.put("count", count);
                 log.info("批量上传个人简历文件成功，共{}个文件", count);
-            } else if (operation != null && "TERMS".equalsIgnoreCase(operation)) {
+            } else if ("TERMS".equalsIgnoreCase(operation)) {
                 List<String> paths = batchPathProvider.saveFilesToLocalAndReturnPaths(files);
                 java.util.Map<String, String> termsMap = new LinkedHashMap<>();
                 for (String path : paths) {
@@ -122,24 +122,6 @@ public class PersonalDataController {
                 result.put("results", fileResults);
                 result.put("terms", termsMap);
                 result.put("count", termsMap.size());
-            } else {
-                Integer count = 0;
-                for (MultipartFile file : files) {
-                    try {
-                        MultipartFile[] singleFile = new MultipartFile[]{file};
-                        documentService.saveAndEmbedding(singleFile);
-                        count++;
-                        fileResults.put(file.getOriginalFilename(), java.util.Map.of("success", true, "message", "文件已向量化存储"));
-                    } catch (Exception e) {
-                        log.error("文件向量化失败: {}", file.getOriginalFilename(), e);
-                        fileResults.put(file.getOriginalFilename(), java.util.Map.of("success", false, "message", "处理失败: " + e.getMessage()));
-                    }
-                }
-                result.put("success", true);
-                result.put("message", "批量上传成功，已向量化存储到qdrant数据库");
-                result.put("results", fileResults);
-                result.put("count", count);
-                log.info("批量上传批次（未知 operation）处理完成，共{}个文件", count);
             }
         } catch (Exception e) {
             log.error("Batch batch upload failed", e);
