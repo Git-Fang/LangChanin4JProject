@@ -17,10 +17,12 @@ import dev.langchain4j.model.output.Response;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import org.fb.config.EnvConf;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.io.IOException;
@@ -43,7 +45,12 @@ public class ChatImageController {
 
     @PostMapping("/chatImage")
     @Operation(summary = "图生文接口测试")
-    public String chatImage(String base64Data, String imageType, String prompt) throws IOException {
+    public String chatImage(String base64Data, String imageType,
+                            @RequestParam(value = "prompt", defaultValue = "该图片讲述了什么内容？") String prompt) throws IOException {
+
+        if(StringUtils.isAnyBlank(base64Data, imageType)){
+            return "请上传图片";
+        }
 
         // 获取图片的MIME类型
         String mimeType = "image/" + imageType;
