@@ -169,8 +169,8 @@ public class LLMConfig {
         EmbeddingStoreContentRetriever contentRetriever = EmbeddingStoreContentRetriever.builder()
                 .embeddingStore(embeddingStore)
                 .embeddingModel(embeddingModel)
-                .maxResults(10)
-                .minScore(0.4)
+                .maxResults(30)
+                .minScore(0.1)
                 .build();
         return AiServices
                 .builder(ChatAssistantStream.class)
