@@ -41,9 +41,9 @@
           </div>
           <div style="padding:20px;">
             <div style="border:2px dashed #667eea; border-radius:6px; padding:30px; text-align:center; cursor:pointer; transition:all 0.2s;" id="batchDropZone">
-              <input id="batchFileInput" type="file" multiple accept=".doc,.docx,.ppt,.pptx,.pdf,.jpg,.jpeg,.png" style="display:none;" />
+              <input id="batchFileInput" type="file" multiple accept=".doc,.docx,.ppt,.pptx,.pdf,.txt,.jpg,.jpeg,.png" style="display:none;" />
               <p style="margin:0 0 10px; color:#667eea; font-size:14px;">点击选择文件或将文件拖拽到此处</p>
-              <p style="margin:0; color:#999; font-size:12px;">支持 doc/docx/ppt/pptx/pdf/jpg/jpeg/png (最多5个)</p>
+              <p style="margin:0; color:#999; font-size:12px;">支持 doc/docx/ppt/pptx/pdf/txt/jpg/jpeg/png (最多5个)</p>
             </div>
             <div id="batchFileList" style="max-height:200px; overflow:auto; border:1px solid #e0e0e0; border-radius:4px; padding:10px; margin:10px 0; display:none;"></div>
             <div style="margin-top:15px;">
@@ -131,7 +131,7 @@
 
         const validFiles = Array.from(files).slice(0, 5).filter(file => {
           const ext = file.name.split('.').pop().toLowerCase();
-          const validExts = ['doc','docx','ppt','pptx','pdf','jpg','jpeg','png'];
+          const validExts = ['doc','docx','ppt','pptx','pdf','txt','jpg','jpeg','png'];
           return validExts.includes(ext);
         });
 
@@ -211,7 +211,7 @@
 
         const validFiles = Array.from(files).slice(0, 5).filter(file => {
           const ext = file.name.split('.').pop().toLowerCase();
-          const validExts = ['doc','docx','ppt','pptx','pdf','jpg','jpeg','png'];
+          const validExts = ['doc','docx','ppt','pptx','pdf','txt','jpg','jpeg','png'];
           return validExts.includes(ext);
         });
 

@@ -35,8 +35,8 @@ public class BatchPathProvider {
                 if (!isValidDocumentType(originalFileName)) {
                     continue;
                 }
-                String uniqueName = UUID.randomUUID().toString() + "." + ext;
-                Path path = storageDir.resolve(uniqueName);
+                String fileName = originalFileName.substring(0, originalFileName.lastIndexOf(".")) + UUID.randomUUID().toString() + "." + ext;
+                Path path = storageDir.resolve(fileName);
                 file.transferTo(path.toFile());
                 paths.add(path.toString());
             }

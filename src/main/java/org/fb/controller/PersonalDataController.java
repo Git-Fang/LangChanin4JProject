@@ -5,6 +5,8 @@ import org.fb.util.BatchPathProvider;
 import org.fb.service.impl.DocumentImpl;
 import org.fb.service.assistant.TermExtractionAgent;
 import org.fb.tools.QdrantOperationTools;
+import mapper.FileOperationMapper;
+import org.fb.bean.FileOperation;
 import java.io.File;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -51,6 +53,9 @@ public class PersonalDataController {
     
     @Autowired
     private QdrantOperationTools qdrantOperationTools;
+    
+    @Autowired
+    private FileOperationMapper fileOperationMapper;
 
     @PostMapping("/upload")
     @Operation(summary = "上传个人相关文件")
@@ -90,17 +95,23 @@ public class PersonalDataController {
                 List<CompletableFuture<Map<String, Object>>> futures = new ArrayList<>();
                 
                 for (MultipartFile file : files) {
+                    String fileName = file.getOriginalFilename();
+                    String fileType = getFileExtension(fileName);
+                    Long operationId = recordFileOperation(fileName, fileType, "VECTORIZE", "PROCESSING");
+                    
                     CompletableFuture<Map<String, Object>> future = CompletableFuture.supplyAsync(() -> {
                         Map<String, Object> fileResult = new HashMap<>();
                         try {
                             MultipartFile[] singleFile = new MultipartFile[]{file};
                             documentService.saveAndEmbedding(singleFile);
-                            fileResult.put(file.getOriginalFilename(), java.util.Map.of("success", true, "message", "文件已向量化存储"));
+                            fileResult.put(fileName, java.util.Map.of("success", true, "message", "文件已向量化存储"));
+                            updateFileOperationStatus(operationId, "SUCCESS");
                             return fileResult;
                         } catch (Exception e) {
-                            log.error("文件向量化失败: {}", file.getOriginalFilename(), e);
+                            log.error("文件向量化失败: {}", fileName, e);
+                            updateFileOperationStatus(operationId, "FAILED");
                             Map<String, Object> errorResult = new HashMap<>();
-                            errorResult.put(file.getOriginalFilename(), java.util.Map.of("success", false, "message", "处理失败: " + e.getMessage()));
+                            errorResult.put(fileName, java.util.Map.of("success", false, "message", "处理失败: " + e.getMessage()));
                             return errorResult;
                         }
                     }, executorService);
@@ -124,23 +135,30 @@ public class PersonalDataController {
             } else if ("TERMS".equalsIgnoreCase(operation)) {
                 java.util.Map<String, String> termsMap = new LinkedHashMap<>();
                 List<CompletableFuture<Map<String, Object>>> futures = new ArrayList<>();
-
+                
                 List<String> paths = batchPathProvider.saveFilesToLocalAndReturnPaths(files);
                 for (String path : paths) {
+                    File file = new File(path);
+                    String fileName = file.getName();
+                    String originalName = getOriginalFileName(fileName);
+                    String fileType = getFileExtension(originalName);
+                    Long operationId = recordFileOperation(originalName, fileType, "TERMS", "PROCESSING");
+                    
                     CompletableFuture<Map<String, Object>> future = CompletableFuture.supplyAsync(() -> {
-                        return processTermExtraction(path);
+                        Map<String, Object> fileResult = processTermExtraction(path, operationId);
+                        return fileResult;
                     }, executorService);
                     futures.add(future);
                 }
                 for (CompletableFuture<Map<String, Object>> future : futures) {
                     try {
                         Map<String, Object> fileResult = future.get();
-                        String fileName = (String) fileResult.get("fileName");
+                        String resultFileName = (String) fileResult.get("fileName");
                         Object terms = fileResult.get("terms");
                         if (terms != null) {
-                            termsMap.put(fileName, terms.toString());
+                            termsMap.put(resultFileName, terms.toString());
                         }
-                        fileResults.put(fileName, fileResult);
+                        fileResults.put(resultFileName, fileResult);
                     } catch (Exception e) {
                         log.error("获取术语提取结果失败", e);
                     }
@@ -167,6 +185,60 @@ public class PersonalDataController {
             log.warn("删除临时文件失败: {}", path);
         }
     }
+    
+    private String getFileExtension(String fileName) {
+        if (fileName == null) {
+            return "unknown";
+        }
+        int dot = fileName.lastIndexOf('.');
+        if (dot > 0) {
+            return fileName.substring(dot + 1).toLowerCase();
+        }
+        return "unknown";
+    }
+    
+    private String getOriginalFileName(String fileName) {
+        if (fileName == null) {
+            return "unknown";
+        }
+        int underscoreIndex = fileName.indexOf('_');
+        if (underscoreIndex > 0) {
+            String ext = getFileExtension(fileName);
+            String baseName = fileName.substring(0, underscoreIndex);
+            int uuidStart = fileName.lastIndexOf('_', underscoreIndex - 1);
+            if (uuidStart > 0) {
+                baseName = fileName.substring(0, uuidStart);
+            }
+            return baseName + "." + ext;
+        }
+        return fileName;
+    }
+    
+    private Long recordFileOperation(String fileName, String fileType, String operationType, String status) {
+        try {
+            FileOperation fileOperation = new FileOperation(fileName, fileType, operationType, status);
+            fileOperationMapper.insert(fileOperation);
+            log.info("记录文件操作: fileName={}, operationType={}, status={}", fileName, operationType, status);
+            return fileOperation.getId();
+        } catch (Exception e) {
+            log.error("记录文件操作失败: {}", fileName, e);
+            return null;
+        }
+    }
+    
+    private void updateFileOperationStatus(Long operationId, String status) {
+        if (operationId == null) return;
+        try {
+            FileOperation fileOperation = fileOperationMapper.selectById(operationId);
+            if (fileOperation != null) {
+                fileOperation.setStatus(status);
+                fileOperationMapper.updateById(fileOperation);
+                log.info("更新文件操作状态: id={}, status={}", operationId, status);
+            }
+        } catch (Exception e) {
+            log.error("更新文件操作状态失败: id={}", operationId, e);
+        }
+    }
 
     @PostMapping("/text")
     @Operation(summary = "添加个人简历文本信息")
@@ -187,10 +259,12 @@ public class PersonalDataController {
     }
 
 
-    private Map<String, Object> processTermExtraction(String path) {
+    private Map<String, Object> processTermExtraction(String path, Long operationId) {
         Map<String, Object> result = new HashMap<>();
         File f = new File(path);
-        result.put("fileName", f.getName());
+        String fileName = f.getName();
+        String originalName = getOriginalFileName(fileName);
+        result.put("fileName", originalName);
 
         try {
             List<TextSegment> segments = documentImpl.parseAndEmbedding(path);
@@ -220,11 +294,13 @@ public class PersonalDataController {
                 result.put("terms", termsResult);
                 result.put("success", true);
                 result.put("message", "术语解析成功");
+                updateFileOperationStatus(operationId, "SUCCESS");
             } else {
                 String message = "[图片OCR] 图片中未检测到文字内容，无需提取术语";
                 result.put("terms", message);
                 result.put("success", true);
                 result.put("message", "图片中未检测到文字内容");
+                updateFileOperationStatus(operationId, "SUCCESS");
             }
             deleteTempFile(path);
         } catch (Exception e) {
@@ -232,6 +308,7 @@ public class PersonalDataController {
             result.put("terms", "处理失败: " + e.getMessage());
             result.put("success", false);
             result.put("message", "处理失败: " + e.getMessage());
+            updateFileOperationStatus(operationId, "FAILED");
         }
 
         return result;
