@@ -165,11 +165,13 @@ public class LLMConfig {
     @Bean
     public ChatAssistantStream chatAssistantStream(StreamingChatModel chatModel, EmbeddingStore<TextSegment> embeddingStore, EmbeddingModel embeddingModel) {
 
-        // 构建支撑检索曾强的EmbeddingStore工具实例
+        // 构建支撑检索增强的EmbeddingStore工具实例
         EmbeddingStoreContentRetriever contentRetriever = EmbeddingStoreContentRetriever.builder()
                 .embeddingStore(embeddingStore)
                 .embeddingModel(embeddingModel)
-                .maxResults(5).build();
+                .maxResults(10)
+                .minScore(0.4)
+                .build();
         return AiServices
                 .builder(ChatAssistantStream.class)
                 .streamingChatModel(chatModel)
