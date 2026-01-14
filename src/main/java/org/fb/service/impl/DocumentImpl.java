@@ -155,10 +155,14 @@ public class DocumentImpl implements DocumentService {
 
     @Override
     public List<TextSegment> parseAndEmbedding(String filePath) {
+        return parseAndEmbedding(filePath, true);
+    }
+
+    public List<TextSegment> parseAndEmbedding(String filePath, boolean saveToVectorStore) {
         String extension = getFileExtension(filePath).toLowerCase();
         
         if (extension.matches("jpg|jpeg|png")) {
-            return parseImageAndEmbedding(filePath);
+            return parseImageAndEmbedding(filePath, saveToVectorStore);
         }
         
         Document document = FileSystemDocumentLoader.loadDocument(filePath, new ApacheTikaDocumentParser());
@@ -167,8 +171,11 @@ public class DocumentImpl implements DocumentService {
         DocumentByParagraphSplitter splitter = new DocumentByParagraphSplitter(800, 80);
         List<TextSegment> segments = splitter.split(document);
 
-        // 对分割后的文档数据进行向量化和存储
-//        embeddingAndSave(segments);
+        if (saveToVectorStore) {
+            List<Embedding> embeddings = embeddedModel.embedAll(segments).content();
+            embeddingStore.addAll(embeddings, segments);
+            log.info("文档向量化存储完成，共 {} 个段落", segments.size());
+        }
 
         return segments;
     }
@@ -341,6 +348,10 @@ public class DocumentImpl implements DocumentService {
     }
 
     public List<TextSegment> parseImageAndEmbedding(String imagePath) {
+        return parseImageAndEmbedding(imagePath, true);
+    }
+
+    public List<TextSegment> parseImageAndEmbedding(String imagePath, boolean saveToVectorStore) {
         try {
             String extractedText = performOCR(imagePath);
             
@@ -350,9 +361,11 @@ public class DocumentImpl implements DocumentService {
             segment.metadata().put("originalFile", Paths.get(imagePath).getFileName().toString());
 
             List<TextSegment> segments = List.of(segment);
-            List<Embedding> embeddings = embeddedModel.embedAll(segments).content();
 
-            embeddingStore.addAll(embeddings, segments);
+            if (saveToVectorStore) {
+                List<Embedding> embeddings = embeddedModel.embedAll(segments).content();
+                embeddingStore.addAll(embeddings, segments);
+            }
             
             log.info("图片OCR完成，提取文本长度: {}", extractedText.length());
             return segments;
@@ -575,7 +588,7 @@ public class DocumentImpl implements DocumentService {
         result.put("fileName", originalName);
 
         try {
-            List<TextSegment> segments = parseAndEmbedding(path);
+            List<TextSegment> segments = parseAndEmbedding(path, false);
             String fileText = segments.stream().map(TextSegment::text).collect(Collectors.joining("\n"));
 
             if (fileText != null && !fileText.isEmpty() && !fileText.contains("未检测到文字")) {
