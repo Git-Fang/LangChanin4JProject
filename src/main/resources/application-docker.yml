@@ -94,7 +94,7 @@ logging:
     root: INFO
     org.fb: DEBUG
   pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] [%X{traceId}/%X{spanId}] %-5level %logger{36} - %msg%n"
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] [traceId=%X{traceId}/spanId=%X{spanId}] %-5level %logger{36} - %msg%n"
 
 # 链路追踪配置
 tracing:
