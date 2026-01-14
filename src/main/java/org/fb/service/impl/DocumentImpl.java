@@ -26,6 +26,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
@@ -325,6 +326,9 @@ public class DocumentImpl implements DocumentService {
             FileOperation fileOperation = fileOperationMapper.selectById(operationId);
             if (fileOperation != null) {
                 fileOperation.setStatus(status);
+                if ("SUCCESS".equals(status) || "FAILED".equals(status)) {
+                    fileOperation.setFinishedTime(LocalDateTime.now());
+                }
                 fileOperationMapper.updateById(fileOperation);
                 log.info("更新文件操作状态: id={}, status={}", operationId, status);
             }

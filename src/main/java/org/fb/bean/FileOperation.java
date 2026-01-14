@@ -20,6 +20,8 @@ public class FileOperation {
     private LocalDateTime operationTime;
     
     private String status;
+    
+    private LocalDateTime finishedTime;
 
     public FileOperation() {
     }
@@ -78,5 +80,13 @@ public class FileOperation {
 
     public void setStatus(String status) {
         this.status = status;
+    }
+
+    public LocalDateTime getFinishedTime() {
+        return finishedTime;
+    }
+
+    public void setFinishedTime(LocalDateTime finishedTime) {
+        this.finishedTime = finishedTime;
     }
 }
