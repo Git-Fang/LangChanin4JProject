@@ -21,5 +21,5 @@ public class BusinessConstant {
 
     //  业务使用常量信息
     public static final int MAX_PARAGRAPH_LENGTH = 1500;
-    public static final int THREAD_POOL_SIZE = 5;
+    public static final int THREAD_POOL_SIZE = 15;
 }

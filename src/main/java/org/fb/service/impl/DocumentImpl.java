@@ -8,12 +8,10 @@ import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.store.embedding.EmbeddingStore;
-import io.qdrant.client.QdrantClient;
 import mapper.FileOperationMapper;
 import org.fb.bean.FileOperation;
 import org.fb.constant.BusinessConstant;
 import org.fb.service.DocumentService;
-import org.fb.service.assistant.ChatAssistant;
 import org.fb.service.assistant.TermExtractionAgent;
 import org.fb.tools.QdrantOperationTools;
 import org.fb.util.BatchPathProvider;
@@ -576,24 +574,45 @@ public class DocumentImpl implements DocumentService {
             if (fileText != null && !fileText.isEmpty() && !fileText.contains("未检测到文字")) {
                 // 文档切分成块
                 List<String> textChunks = splitTextByParagraph(fileText);
+                int totalChunks = textChunks.size();
+                log.info("文档已切分成 {} 个文本块，开始并发处理", totalChunks);
 
-                StringBuilder allTerms = new StringBuilder();
-                for (int i = 0; i < textChunks.size(); i++) {
-                    String chunk = textChunks.get(i);
-                    log.info("处理第 {} / {} 个文本块，文本长度: {}", i + 1, textChunks.size(), chunk.length());
+                // 并发处理所有文本块，使用线程安全的列表收集结果
+                List<String> allTermsList = Collections.synchronizedList(new ArrayList<>());
+                List<CompletableFuture<Void>> futures = new ArrayList<>();
+                for (int i = 0; i < totalChunks; i++) {
+                    final int chunkIndex = i;
+                    final String chunk = textChunks.get(i);
+                    CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
+                        log.info("处理第 {} / {} 个文本块，文本长度: {}", chunkIndex + 1, totalChunks, chunk.length());
+                        String terms = termExtractionAgent.chatWithTermTool(chunk);
+                        if (terms != null && !terms.isEmpty()) {
+                            allTermsList.add(terms);
+                            log.info("第 {} 个文本块术语提取完成，术语长度: {}", chunkIndex + 1, terms.length());
+                        }
+                    }, executorService);
+                    futures.add(future);
+                }
 
-                    String terms = termExtractionAgent.chatWithTermTool(chunk);
-                    if (terms != null && !terms.isEmpty()) {
-                        allTerms.append(terms).append("\n");
+                // 等待所有文本块处理完成
+                CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+                log.info("所有文本块术语提取完成，共提取 {} 个术语块", allTermsList.size());
+
+                // 顺序执行向量化存储，保证数据一致性
+                if (!allTermsList.isEmpty()) {
+                    log.info("开始向量化存储，共 {} 个术语块", allTermsList.size());
+                    for (int i = 0; i < allTermsList.size(); i++) {
+                        String terms = allTermsList.get(i);
                         qdrantOperationTools.embeddingTermAndSave(terms);
+                        log.info("第 {} / {} 个术语块向量化完成", i + 1, allTermsList.size());
                     }
                 }
 
-                String termsResult = allTerms.toString().trim();
+                // 合并所有术语结果
+                String termsResult = String.join("\n", allTermsList).trim();
                 if (termsResult.isEmpty()) {
                     termsResult = "未提取到术语";
                 }
-
                 result.put("terms", termsResult);
                 result.put("success", true);
                 result.put("message", "术语解析成功");
