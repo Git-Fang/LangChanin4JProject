@@ -927,9 +927,16 @@
         let messageId = 1;
         let tools = [];
 
-        // API 配置
-        const HTTP_API_BASE_URL = 'http://localhost:8000/mcp/exec';
-        const SSE_BASE_URL = 'http://localhost:8000/mcp';
+        // API 配置 - 使用动态地址以支持手机端和不同网络环境访问
+        const getApiBaseUrl = () => {
+            const protocol = window.location.protocol;
+            const hostname = window.location.hostname;
+            const port = window.location.port || (protocol === 'https:' ? '443' : '80');
+            return `${protocol}//${hostname}:${port}`;
+        };
+        const API_BASE_URL = getApiBaseUrl();
+        const HTTP_API_BASE_URL = `${API_BASE_URL}/mcp/exec`;
+        const SSE_BASE_URL = `${API_BASE_URL}/mcp`;
 
         // 切换模式
         function switchMode(mode) {
@@ -1348,7 +1355,7 @@
                     const controller = new AbortController();
                     const timeoutId = setTimeout(() => controller.abort(), 180000);
 
-                    const response = await fetch('http://localhost:8000/xiaozhi/chat', {
+                    const response = await fetch(`${API_BASE_URL}/xiaozhi/chat`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -1452,7 +1459,7 @@
         // 加载历史会话列表
         async function loadHistorySessions() {
             try {
-                const response = await fetch('http://localhost:8000/xiaozhi/history');
+                const response = await fetch(`${API_BASE_URL}/xiaozhi/history`);
                 if (!response.ok) {
                     throw new Error('Failed to load history sessions');
                 }
@@ -1535,7 +1542,7 @@
             container.innerHTML = '';
             
             try {
-                const response = await fetch(`http://localhost:8000/xiaozhi/history/${sessionId}`);
+                const response = await fetch(`${API_BASE_URL}/xiaozhi/history/${sessionId}`);
                 if (!response.ok) {
                     throw new Error('Failed to load history messages');
                 }
@@ -1570,7 +1577,7 @@
             formData.append('file', file);
 
             try {
-                const response = await fetch('http://localhost:8000/xiaozhi/personal/upload', {
+                const response = await fetch(`${API_BASE_URL}/xiaozhi/personal/upload`, {
                     method: 'POST',
                     body: formData
                 });
