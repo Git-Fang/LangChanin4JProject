@@ -94,4 +94,12 @@ logging:
     root: INFO
     org.fb: DEBUG
   pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] [%X{traceId}/%X{spanId}] %-5level %logger{36} - %msg%n"
+
+# 链路追踪配置
+tracing:
+  sampling:
+    probability: 1.0
+  enabled: true
+  propagation:
+    type: w3c

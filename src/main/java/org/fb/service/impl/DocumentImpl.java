@@ -30,8 +30,6 @@ import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 
 @Service
@@ -57,8 +55,11 @@ public class DocumentImpl implements DocumentService {
     @Autowired
     private QdrantOperationTools qdrantOperationTools;
 
+    @Autowired
+    @Qualifier("mdcExecutorService")
+    private java.util.concurrent.ExecutorService mdcExecutorService;
+
     private static final String storagePath = BusinessConstant.TEMP_FILE_PATH;
-    private final ExecutorService executorService = Executors.newFixedThreadPool(BusinessConstant.THREAD_POOL_SIZE);
 
 
     @Override
@@ -201,7 +202,7 @@ public class DocumentImpl implements DocumentService {
                             errorResult.put(fileName, Map.of("success", false, "message", "处理失败: " + e.getMessage()));
                             return errorResult;
                         }
-                    }, executorService);
+                    }, mdcExecutorService);
                     futures.add(future);
                 }
                 for (CompletableFuture<Map<String, Object>> future : futures) {
@@ -234,7 +235,7 @@ public class DocumentImpl implements DocumentService {
                     CompletableFuture<Map<String, Object>> future = CompletableFuture.supplyAsync(() -> {
                         Map<String, Object> fileResult = processTermExtraction(path, operationId);
                         return fileResult;
-                    }, executorService);
+                    }, mdcExecutorService);
                     futures.add(future);
                 }
                 for (CompletableFuture<Map<String, Object>> future : futures) {
@@ -596,7 +597,7 @@ public class DocumentImpl implements DocumentService {
                             allTermsList.add(terms);
                             log.info("第 {} 个文本块术语提取完成，术语长度: {}", chunkIndex + 1, terms.length());
                         }
-                    }, executorService);
+                    }, mdcExecutorService);
                     futures.add(future);
                 }
 
