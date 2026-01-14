@@ -17,4 +17,9 @@ public class BusinessConstant {
     public static final String SQL_OPERATION_TYPE = "sql_transfer";
 
     public static final String DEFAULT_TYPE = "general";
+
+
+    //  业务使用常量信息
+    public static final int MAX_PARAGRAPH_LENGTH = 1500;
+    public static final int THREAD_POOL_SIZE = 5;
 }
