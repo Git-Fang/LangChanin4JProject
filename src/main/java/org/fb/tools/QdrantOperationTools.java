@@ -50,7 +50,7 @@ public class QdrantOperationTools {
     @Tool(name = "embedding_term_and_save", value = "文本内容向量化、查询与保存:将传入数据{{text}}先进行向量化然后进行查询；若相似度>=0.85则不保存，否则将内容保存写入qdrant向量数据库中。")
     public void embeddingTermAndSave(@P(value = "传入数据") String text) {
 
-        EmbeddingSearchResult<TextSegment> searchResult = commonTools.getMatchWords(text);
+        EmbeddingSearchResult<TextSegment> searchResult = commonTools.getMatchWordsForTerms(text);
         
         if (searchResult.matches().isEmpty()) {
             log.info("未找到相似内容，开始保存新数据");
@@ -75,10 +75,37 @@ public class QdrantOperationTools {
         String path = saveTxtContentToLocal(text,fileName);
         log.info("开始向量化。内容地址：{}", path);
 
-        parseAndEmbedding(path, fileName);
+        parseAndEmbeddingForTerms(path, fileName);
         log.info("向量化完成。");
 
         deleteFile(path);
+    }
+
+    private List<TextSegment> parseAndEmbeddingForTerms(String filePath, String fileName) {
+
+        // 1.读取文档
+        Document document = FileSystemDocumentLoader.loadDocument(filePath, new ApacheTikaDocumentParser());
+        document.metadata().put("fileName", fileName);
+        document.metadata().put("author", "fb");
+        document.metadata().put("type", "TERMS");
+
+        // 2. 按段落切分
+        DocumentByParagraphSplitter splitter = new DocumentByParagraphSplitter(800, 80);
+        List<TextSegment> segments = splitter.split(document);
+
+        // 3. 分批调用 embedding（一次最多 10 条）
+        int batchSize = 10;
+        for (int i = 0; i < segments.size(); i += batchSize) {
+            int end = Math.min(i + batchSize, segments.size());
+            List<TextSegment> batch = segments.subList(i, end);
+
+            // 调用 embedding API
+            List<Embedding> embeddings = embeddedModel.embedAll(batch).content();
+
+            // 存入向量数据库
+            embeddingStore.addAll(embeddings, batch);
+        }
+        return segments;
     }
 
     // 删除临时文件的辅助方法
@@ -107,6 +134,7 @@ public class QdrantOperationTools {
         Document document = FileSystemDocumentLoader.loadDocument(filePath, new ApacheTikaDocumentParser());
         document.metadata().put("fileName", fileName);
         document.metadata().put("author", "fb");
+        document.metadata().put("type", "VECTORIZE");
 
         // 2. 按段落切分
         DocumentByParagraphSplitter splitter = new DocumentByParagraphSplitter(800, 80);

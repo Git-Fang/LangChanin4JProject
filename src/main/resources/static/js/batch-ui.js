@@ -46,13 +46,13 @@
               <p style="margin:0; color:#999; font-size:12px;">支持 doc/docx/ppt/pptx/pdf/txt/md/jpg/jpeg/png (最多5个)</p>
             </div>
             <div id="batchFileList" style="max-height:200px; overflow:auto; border:1px solid #e0e0e0; border-radius:4px; padding:10px; margin:10px 0; display:none;"></div>
-            <div style="margin-top:15px;">
-              <label style="display:block; margin-bottom:8px; font-size:13px; color:#666;">后续操作</label>
-              <select id="batchAction" style="width:100%; padding:10px; border:1px solid #e0e0e0; border-radius:4px; font-size:14px;">
-                <option value="TERMS">术语解析</option>
-                <option value="VECTORIZE" selected>向量化存储</option>
-              </select>
-            </div>
+              <div style="margin-top:15px;">
+                <label style="display:block; margin-bottom:8px; font-size:13px; color:#666;">后续操作</label>
+                <select id="batchAction" style="width:100%; padding:10px; border:1px solid #e0e0e0; border-radius:4px; font-size:14px;">
+                  <option value="TERMS">术语提取(TEMS)</option>
+                  <option value="VECTORIZE" selected>向量化存储(VECTORIZE)</option>
+                </select>
+              </div>
           </div>
           <div style="padding:16px 20px; border-top:1px solid #e0e0e0; text-align:right; background:#fafafa;">
             <button id="batchCancelBtn" style="padding:8px 16px; background:#f5f5f5; color:#666; border:1px solid #e0e0e0; border-radius:4px; cursor:pointer; font-size:13px;">取消</button>

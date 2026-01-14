@@ -143,6 +143,7 @@ public class DocumentImpl implements DocumentService {
         // 创建文本段
         TextSegment segment1 = TextSegment.from(document);
         segment1.metadata().put("author", "fb");
+        segment1.metadata().put("type", "VECTORIZE");
 
         // 向量化
         List<TextSegment> segments = List.of(segment1);
@@ -167,6 +168,7 @@ public class DocumentImpl implements DocumentService {
         
         Document document = FileSystemDocumentLoader.loadDocument(filePath, new ApacheTikaDocumentParser());
         document.metadata().put("author", "fb");
+        document.metadata().put("type", "VECTORIZE");
 
         DocumentByParagraphSplitter splitter = new DocumentByParagraphSplitter(800, 80);
         List<TextSegment> segments = splitter.split(document);
@@ -359,6 +361,7 @@ public class DocumentImpl implements DocumentService {
             segment.metadata().put("author", "fb");
             segment.metadata().put("source", "ocr");
             segment.metadata().put("originalFile", Paths.get(imagePath).getFileName().toString());
+            segment.metadata().put("type", "VECTORIZE");
 
             List<TextSegment> segments = List.of(segment);
 

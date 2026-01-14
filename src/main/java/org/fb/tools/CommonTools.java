@@ -9,13 +9,13 @@ import dev.langchain4j.store.embedding.EmbeddingMatch;
 import dev.langchain4j.store.embedding.EmbeddingSearchRequest;
 import dev.langchain4j.store.embedding.EmbeddingSearchResult;
 import dev.langchain4j.store.embedding.EmbeddingStore;
+import dev.langchain4j.store.embedding.filter.Filter;
+import dev.langchain4j.store.embedding.filter.MetadataFilterBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
-
-import java.util.stream.Collectors;
 
 @Component
 public class CommonTools {
@@ -60,6 +60,21 @@ public class CommonTools {
                 .queryEmbedding(queryEmbedding)
                 .maxResults(30)
                 .minScore(0.1)
+                .build();
+
+        return embeddingStore.search(searchRequest);
+    }
+
+    public EmbeddingSearchResult<TextSegment> getMatchWordsForTerms(String question) {
+        Embedding queryEmbedding = embeddingModel.embed(question).content();
+
+        Filter typeFilter = new MetadataFilterBuilder("type").isEqualTo("TERMS");
+
+        EmbeddingSearchRequest searchRequest = EmbeddingSearchRequest.builder()
+                .queryEmbedding(queryEmbedding)
+                .maxResults(30)
+                .minScore(0.1)
+                .filter(typeFilter)
                 .build();
 
         return embeddingStore.search(searchRequest);
