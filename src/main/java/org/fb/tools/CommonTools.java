@@ -51,6 +51,28 @@ public class CommonTools {
         return result.toString().trim();
     }
 
+    @Tool(name = "embedding_search_for_terms", value="查询qdrant术语向量数据信息:根据传入数据{{question}}从qdrant向量数据库中仅查询type为TERMS的术语数据并返回")
+    public String embeddingSearchForTerms(@P(value="question", required = true) String question) {
+        log.info("开始术语向量化查询。传入数据：{}", question);
+
+        EmbeddingSearchResult<TextSegment> searchResult = getMatchWordsForTerms(question);
+
+        if (searchResult.matches().isEmpty()) {
+            log.info("未查询到相关术语数据");
+            return "术语数据库查无相关数据";
+        }
+
+        StringBuilder result = new StringBuilder();
+        for (int i = 0; i < searchResult.matches().size(); i++) {
+            EmbeddingMatch<TextSegment> embeddingMatch = searchResult.matches().get(i);
+            log.info("术语匹配{}相似度score：{}; 结果为：{}", i + 1, embeddingMatch.score(), embeddingMatch.embedded().text());
+            result.append("【相关术语数据").append(i + 1).append("】\n");
+            result.append(embeddingMatch.embedded().text()).append("\n\n");
+        }
+
+        return result.toString().trim();
+    }
+
 
 
     public EmbeddingSearchResult<TextSegment> getMatchWords(String question) {

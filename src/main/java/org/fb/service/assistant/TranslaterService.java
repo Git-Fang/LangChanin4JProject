@@ -20,11 +20,11 @@ import dev.langchain4j.service.spring.AiServiceWiringMode;
 public interface TranslaterService {
 
     @SystemMessage(fromResource = "translate-prompt.txt")
-    @UserMessage("{{userMessage}}")
+    @UserMessage("结合向量数据中type为TERMSle的相似向量数据完成该次翻译：{{userMessage}}")
     String translate(String userMessage);
 
     @SystemMessage(fromResource = "translate-prompt.txt")
-    @UserMessage("{{userMessage}}")
+    @UserMessage("结合向量数据中type为TERMSle的相似向量数据完成该次翻译：{{userMessage}}")
     String translate(@MemoryId long memoryId,  @V("userMessage") String userMessage);
 
 }
