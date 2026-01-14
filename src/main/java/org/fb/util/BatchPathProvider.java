@@ -10,6 +10,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Random;
 import java.util.UUID;
 
 @Component
@@ -31,12 +32,10 @@ public class BatchPathProvider {
                 if (originalFileName == null) {
                     continue;
                 }
-                String ext = getFileExtension(originalFileName);
                 if (!isValidDocumentType(originalFileName)) {
                     continue;
                 }
-                String fileName = originalFileName.substring(0, originalFileName.lastIndexOf(".")) + UUID.randomUUID().toString() + "." + ext;
-                Path path = storageDir.resolve(fileName);
+                Path path = storageDir.resolve(originalFileName);
                 file.transferTo(path.toFile());
                 paths.add(path.toString());
             }
