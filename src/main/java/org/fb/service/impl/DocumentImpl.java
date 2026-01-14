@@ -18,6 +18,7 @@ import org.fb.util.BatchPathProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -38,6 +39,7 @@ public class DocumentImpl implements DocumentService {
     private static final Logger log = LoggerFactory.getLogger(DocumentImpl.class);
 
     @Autowired
+    @Qualifier("allMiniLmL6V2EmbeddingModel")
     private EmbeddingModel embeddedModel;
 
     @Autowired

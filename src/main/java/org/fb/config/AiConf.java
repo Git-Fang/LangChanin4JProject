@@ -33,6 +33,7 @@ import java.util.Map;
 public class AiConf {
 
     @Autowired
+    @Qualifier("allMiniLmL6V2EmbeddingModel")
     private EmbeddingModel embeddedModel;
 
     @Autowired
@@ -69,8 +70,8 @@ public class AiConf {
         return EmbeddingStoreContentRetriever.builder()
                 .embeddingModel(embeddedModel)
                 .embeddingStore(embeddingStore)
-                .maxResults(5)
-                .minScore(0.6)
+                .maxResults(10)
+                .minScore(0.4)
                 .build();
     }
 
