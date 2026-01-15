@@ -76,22 +76,21 @@ if errorlevel 1 (
 echo       Image built: %IMAGE_NAME%:latest
 
 echo.
-echo       Cleanup old container...
-docker stop %CONTAINER_NAME% >nul 2>&1
-docker rm -f %CONTAINER_NAME% >nul 2>&1
-
-echo.
-echo [6/7] Start application container...
-echo       Reading environment variables...
-
-for /f "usebackq tokens=1,* delims==" %%a in (".env") do (
-    if not "%%a"=="" if not "%%a:~0,1%"=="#" (
-        set "%%a=%%b"
-    )
+echo [6/7] Check .env file for environment variables...
+if not exist ".env" (
+    echo [WARNING] .env file not found, using default values
 )
 
-echo       Starting Docker container...
-docker run -d --name %CONTAINER_NAME% --network ai-network -p %APP_PORT%:%APP_PORT% -e SPRING_DATASOURCE_URL=jdbc:mysql://host.docker.internal:3306/mydocker?useUnicode=true^&characterEncoding=UTF-8^&serverTimezone=Asia/Shanghai^&useSSL=false^&allowPublicKeyRetrieval=true -e SPRING_DATASOURCE_USERNAME=root -e SPRING_DATASOURCE_PASSWORD=root -e SPRING_DATA_MONGODB_URI=mongodb://host.docker.internal:27017/chat_db -e SPRING_REDIS_HOST=172.20.0.5 -e SPRING_REDIS_PORT=6379 -e AI_EMBEDDINGSTORE_QDRANT_HOST=host.docker.internal -e AI_EMBEDDINGSTORE_QDRANT_PORT=6334 -e spring.kafka.bootstrap-servers=kafka:9092 -e DeepSeek_API_KEY=%DeepSeek_API_KEY% -e KIMI_API_KEY=%KIMI_API_KEY% -e DASHSCOPE_API_KEY=%DASHSCOPE_API_KEY% -e BAIDU_MAP_API_KEY=%BAIDU_MAP_API_KEY% -e TZ=Asia/Shanghai %IMAGE_NAME%:latest
+echo.
+echo [7/7] Start application container...
+echo       Stopping and removing old container if exists...
+docker stop %CONTAINER_NAME% >nul 2>&1
+docker rm -f %CONTAINER_NAME% >nul 2>&1
+echo       Old container cleaned up
+echo.
+echo       Starting Docker container with environment variables from .env...
+
+docker run -d --name %CONTAINER_NAME% --network ai-network -p %APP_PORT%:%APP_PORT% --env-file .env -e SPRING_DATASOURCE_URL=jdbc:mysql://host.docker.internal:3306/mydocker?useUnicode=true^&characterEncoding=UTF-8^&serverTimezone=Asia/Shanghai^&useSSL=false^&allowPublicKeyRetrieval=true -e SPRING_DATA_MONGODB_URI=mongodb://host.docker.internal:27017/chat_db -e SPRING_REDIS_HOST=172.20.0.5 -e SPRING_REDIS_PORT=6379 -e AI_EMBEDDINGSTORE_QDRANT_HOST=host.docker.internal -e AI_EMBEDDINGSTORE_QDRANT_PORT=6334 -e spring.kafka.bootstrap-servers=kafka:9092 -e TZ=Asia/Shanghai %IMAGE_NAME%:latest
 
 if errorlevel 1 (
     echo [ERROR] Container failed to start!

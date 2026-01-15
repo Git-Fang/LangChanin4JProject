@@ -11,6 +11,9 @@ WORKDIR /app
 # 复制JAR文件
 COPY target/*.jar app.jar
 
+# 复制环境变量文件
+COPY .env /app/.env
+
 EXPOSE 8000
 
 # 启动应用
