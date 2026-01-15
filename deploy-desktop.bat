@@ -25,7 +25,7 @@ echo       Docker Desktop运行正常
 
 :: 检查依赖的中间件容器
 echo.
-echo [2/6] 检查依赖的中间件容器...
+echo [2/7] 检查依赖的中间件容器...
 set MISSING_SERVICES=
 
 docker ps --format "{{.Names}}" | findstr /i "mysql" >nul 2>&1
@@ -37,14 +37,66 @@ if errorlevel 1 (set MISSING_SERVICES=!MISSING_SERVICES! MongoDB) else (echo    
 docker ps --format "{{.Names}}" | findstr /i "qdrant" >nul 2>&1
 if errorlevel 1 (set MISSING_SERVICES=!MISSING_SERVICES! Qdrant) else (echo       Qdrant: 运行中)
 
+docker ps --format "{{.Names}}" | findstr /i "kafka" >nul 2>&1
+if errorlevel 1 (
+    echo       Kafka: 未运行，准备启动...
+    set MISSING_SERVICES=!MISSING_SERVICES! Kafka
+) else (echo       Kafka: 运行中)
+
+docker ps --format "{{.Names}}" | findstr /i "zookeeper" >nul 2>&1
+if errorlevel 1 (
+    echo       Zookeeper: 未运行，准备启动...
+    set MISSING_SERVICES=!MISSING_SERVICES! Zookeeper
+) else (echo       Zookeeper: 运行中)
+
 if not "!MISSING_SERVICES!"=="" (
     echo.
     echo [警告] 以下中间件未运行:!MISSING_SERVICES!
-    set /p CONTINUE="是否继续部署? (Y/N): "
-    if /i not "!CONTINUE!"=="Y" (
-        echo 部署已取消。
-        pause
-        exit /b 1
+    
+    :: 检查是否包含Kafka或Zookeeper
+    echo.
+    echo [信息] 尝试启动缺失的中间件...
+    
+    :: 启动Zookeeper（如果需要）
+    docker ps --format "{{.Names}}" | findstr /i "zookeeper" >nul 2>&1
+    if errorlevel 1 (
+        echo       启动 Zookeeper...
+        docker run -d --name zookeeper -p 2181:2181 confluentinc/cp-zookeeper:7.5.0 >nul 2>&1
+        if errorlevel 1 (
+            echo [警告] Zookeeper启动失败，将尝试使用内置配置
+        ) else (
+            echo       Zookeeper 启动成功
+            timeout /t 5 /nobreak >nul
+        )
+    )
+    
+    :: 启动Kafka（如果需要）
+    docker ps --format "{{.Names}}" | findstr /i "kafka" >nul 2>&1
+    if errorlevel 1 (
+        echo       启动 Kafka...
+        docker run -d --name kafka -p 9092:9092 ^
+            -e KAFKA_BROKER_ID=1 ^
+            -e KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181 ^
+            -e KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://localhost:9092 ^
+            -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1 ^
+            confluentinc/cp-kafka:7.5.0 >nul 2>&1
+        if errorlevel 1 (
+            echo [警告] Kafka启动失败，将继续部署（Kafka将在首次请求时自动创建Topic）
+        ) else (
+            echo       Kafka 启动成功
+            timeout /t 10 /nobreak >nul
+        )
+    )
+    
+    :: 再次检查
+    docker ps --format "{{.Names}}" | findstr /i "mysql" >nul 2>&1
+    if errorlevel 1 (
+        set /p CONTINUE="是否继续部署? (Y/N): "
+        if /i not "!CONTINUE!"=="Y" (
+            echo 部署已取消。
+            pause
+            exit /b 1
+        )
     )
 )
 
@@ -62,7 +114,7 @@ echo       基础镜像已就绪
 
 :: Maven构建JAR包
 echo.
-echo [4/6] 构建Java应用...
+echo [4/7] 构建Java应用...
 call mvn clean package -DskipTests -q
 if errorlevel 1 (
     echo [错误] Maven构建失败！
@@ -73,7 +125,7 @@ echo       Java应用构建成功
 
 :: 构建Docker镜像
 echo.
-echo [5/6] 构建Docker镜像...
+echo [5/7] 构建Docker镜像...
 docker build -t %IMAGE_NAME%:latest .
 if errorlevel 1 (
     echo [错误] Docker镜像构建失败！
@@ -91,7 +143,7 @@ timeout /t 3 /nobreak >nul
 
 :: 启动新容器
 echo.
-echo [6/6] 启动应用容器...
+echo [6/7] 启动应用容器...
 
 :: 读取.env文件中的API密钥
 for /f "usebackq tokens=1,* delims==" %%a in (".env") do (
@@ -109,6 +161,7 @@ docker run -d ^
     -e SPRING_DATA_MONGODB_URI=mongodb://host.docker.internal:27017/chat_db ^
     -e AI_EMBEDDINGSTORE_QDRANT_HOST=host.docker.internal ^
     -e AI_EMBEDDINGSTORE_QDRANT_PORT=6334 ^
+    -e SPRING_KAFKA_BOOTSTRAP_SERVERS=host.docker.internal:9092 ^
     -e DeepSeek_API_KEY=%DeepSeek_API_KEY% ^
     -e KIMI_API_KEY=%KIMI_API_KEY% ^
     -e DASHSCOPE_API_KEY=%DASHSCOPE_API_KEY% ^
@@ -133,9 +186,14 @@ echo ============================================
 echo.
 echo   访问地址:
 echo   ----------------------------------------
-echo   统一客户端:  http://localhost:%APP_PORT%/unified.html
-echo   应用主页:    http://localhost:%APP_PORT%/
-echo   API文档:     http://localhost:%APP_PORT%/doc.html
+echo   SSE实时聊天:  http://localhost:%APP_PORT%/chat-sse.html  [新增!]
+echo   统一客户端:   http://localhost:%APP_PORT%/unified.html
+echo   应用主页:     http://localhost:%APP_PORT%/
+echo   API文档:      http://localhost:%APP_PORT%/doc.html
+echo   ----------------------------------------
+echo.
+echo   新功能介绍:
+echo   SSE实时聊天 - 基于Kafka异步处理+SSE推送，响应更快！
 echo   ----------------------------------------
 echo.
 echo   常用命令:
@@ -146,7 +204,7 @@ echo.
 echo ============================================
 
 echo 正在打开浏览器...
-start http://localhost:%APP_PORT%/unified.html
+start http://localhost:%APP_PORT%/chat-sse.html
 
 pause
 endlocal

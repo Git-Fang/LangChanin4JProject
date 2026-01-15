@@ -20,7 +20,7 @@ import java.util.List;
 import java.util.Random;
 import java.util.stream.Collectors;
 
-@Tag(name = "智能对话")
+@Tag(name = "智能对话", description = "提供同步和异步两种对话方式")
 @RestController
 @RequestMapping("/xiaozhi")
 public class ChatController {
@@ -32,7 +32,7 @@ public class ChatController {
     @Autowired
     private MongoChatMemoryStore mongoChatMemoryStore;
 
-    @Operation(summary = "智能对话")
+    @Operation(summary = "智能对话（同步）", description = "传统的同步对话方式，请求后会阻塞等待AI响应(2-5秒)")
     @PostMapping("/chat")
     public String chat(@RequestBody ChatForm chatForm) {
         Long memoryId = chatForm.getMemoryId();

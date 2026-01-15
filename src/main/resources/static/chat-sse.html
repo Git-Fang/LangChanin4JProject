@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Chat - SSE实时推送</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px; 
+            margin: 0 auto; 
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .chat-container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .chat-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        .chat-header h1 { margin: 0; font-size: 1.5rem; }
+        .chat-header p { margin: 5px 0 0; opacity: 0.9; font-size: 0.9rem; }
+        .badge {
+            background: rgba(255,255,255,0.2);
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            display: inline-block;
+            margin-top: 10px;
+        }
+        
+        .messages-area {
+            height: 400px;
+            overflow-y: auto;
+            padding: 20px;
+        }
+        
+        .message {
+            margin-bottom: 15px;
+            animation: fadeIn 0.3s ease;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .message.user {
+            text-align: right;
+        }
+        .message.user .bubble {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            display: inline-block;
+            padding: 12px 16px;
+            border-radius: 18px 18px 4px 18px;
+            max-width: 80%;
+            text-align: left;
+        }
+        
+        .message.ai .bubble {
+            background: #f0f0f0;
+            padding: 12px 16px;
+            border-radius: 18px 18px 18px 4px;
+            max-width: 80%;
+            white-space: pre-wrap;
+        }
+        
+        .message .meta {
+            font-size: 0.75rem;
+            color: #999;
+            margin-top: 4px;
+        }
+        
+        .typing-indicator {
+            display: inline-flex;
+            gap: 4px;
+            padding: 12px 16px;
+            background: #f0f0f0;
+            border-radius: 18px 18px 18px 4px;
+        }
+        .typing-indicator span {
+            width: 8px;
+            height: 8px;
+            background: #999;
+            border-radius: 50%;
+            animation: bounce 1.4s infinite ease-in-out both;
+        }
+        .typing-indicator span:nth-child(1) { animation-delay: -0.32s; }
+        .typing-indicator span:nth-child(2) { animation-delay: -0.16s; }
+        .typing-indicator span:nth-child(3) { animation-delay: 0s; }
+        @keyframes bounce {
+            0%, 80%, 100% { transform: scale(0); }
+            40% { transform: scale(1); }
+        }
+        
+        .input-area {
+            padding: 20px;
+            border-top: 1px solid #eee;
+            display: flex;
+            gap: 10px;
+        }
+        .input-area textarea {
+            flex: 1;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            resize: none;
+            height: 50px;
+            font-size: 14px;
+        }
+        .input-area textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        .input-area button {
+            padding: 12px 24px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .input-area button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+        .input-area button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        .status-bar {
+            padding: 10px 20px;
+            background: #f8f9fa;
+            border-top: 1px solid #eee;
+            font-size: 0.85rem;
+            color: #666;
+            display: flex;
+            justify-content: space-between;
+        }
+        .status-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #ccc;
+        }
+        .status-dot.connected { background: #4caf50; }
+        .status-dot.disconnected { background: #f44336; }
+        .status-dot.connecting { background: #ff9800; animation: pulse 1s infinite; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+        
+        .error-message {
+            background: #ffebee;
+            color: #c62828;
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin: 10px 0;
+        }
+        
+        .back-link {
+            display: inline-block;
+            margin-bottom: 20px;
+            color: #667eea;
+            text-decoration: none;
+        }
+        .back-link:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <a href="/" class="back-link">← 返回首页</a>
+    
+    <div class="chat-container">
+        <div class="chat-header">
+            <h1>🤖 AI 智能助手 (SSE实时版)</h1>
+            <p>基于Kafka异步处理 + SSE实时推送</p>
+            <span class="badge">实时推送 · 高性能</span>
+        </div>
+        
+        <div class="messages-area" id="messagesArea">
+        </div>
+        
+        <div class="input-area">
+            <textarea 
+                id="messageInput" 
+                placeholder="输入您的问题，按Enter发送..."
+                rows="1"
+            ></textarea>
+            <button id="sendBtn" onclick="sendMessage()">发送</button>
+        </div>
+        
+        <div class="status-bar">
+            <div class="status-indicator">
+                <span class="status-dot disconnected" id="statusDot"></span>
+                <span id="statusText">未连接</span>
+            </div>
+            <div id="requestInfo"></div>
+        </div>
+    </div>
+
+    <script>
+        let currentRequestId = null;
+        let eventSource = null;
+        let isProcessing = false;
+        
+        const messagesArea = document.getElementById('messagesArea');
+        const messageInput = document.getElementById('messageInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const statusDot = document.getElementById('statusDot');
+        const statusText = document.getElementById('statusText');
+        const requestInfo = document.getElementById('requestInfo');
+        
+        function updateConnectionStatus(status, text) {
+            statusDot.className = 'status-dot ' + status;
+            statusText.textContent = text;
+        }
+        
+        function addMessage(role, content) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message ' + role;
+            
+            const bubble = document.createElement('div');
+            bubble.className = 'bubble';
+            bubble.textContent = content;
+            
+            const meta = document.createElement('div');
+            meta.className = 'meta';
+            meta.textContent = role === 'user' ? '你' : 'AI助手 · 刚刚';
+            
+            messageDiv.appendChild(bubble);
+            messageDiv.appendChild(meta);
+            messagesArea.appendChild(messageDiv);
+            
+            messagesArea.scrollTop = messagesArea.scrollHeight;
+        }
+        
+        function showTypingIndicator() {
+            const id = 'typing-' + Date.now();
+            const typingDiv = document.createElement('div');
+            typingDiv.className = 'message ai';
+            typingDiv.id = id;
+            typingDiv.innerHTML = `
+                <div class="typing-indicator">
+                    <span></span><span></span><span></span>
+                </div>
+            `;
+            messagesArea.appendChild(typingDiv);
+            messagesArea.scrollTop = messagesArea.scrollHeight;
+            return id;
+        }
+        
+        function removeTypingIndicator(id) {
+            const element = document.getElementById(id);
+            if (element) element.remove();
+        }
+        
+        function showProcessingTime(ms) {
+            const info = document.createElement('div');
+            info.style.cssText = 'font-size: 0.75rem; color: #999; margin-top: 4px;';
+            info.textContent = '处理耗时: ' + ms + 'ms';
+            const lastMessage = messagesArea.lastElementChild;
+            if (lastMessage) lastMessage.appendChild(info);
+        }
+        
+        function showError(message) {
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'error-message';
+            errorDiv.textContent = message;
+            messagesArea.appendChild(errorDiv);
+            messagesArea.scrollTop = messagesArea.scrollHeight;
+        }
+        
+        function closeEventSource() {
+            if (eventSource) {
+                eventSource.close();
+                eventSource = null;
+            }
+        }
+        
+        async function sendMessage() {
+            const message = messageInput.value.trim();
+            if (!message || isProcessing) return;
+            
+            try {
+                isProcessing = true;
+                sendBtn.disabled = true;
+                messageInput.disabled = true;
+                
+                addMessage('user', message);
+                
+                const response = await fetch('/xiaozhi/chat/async', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        memoryId: Date.now(),
+                        message: message
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error('HTTP错误: ' + response.status);
+                }
+                
+                const { requestId, streamUrl } = await response.json();
+                currentRequestId = requestId;
+                
+                updateConnectionStatus('connecting', '连接中...');
+                requestInfo.textContent = '请求: ' + requestId.substring(0, 8) + '...';
+                
+                const waitingId = showTypingIndicator();
+                connectSSE(streamUrl, waitingId);
+                
+                messageInput.value = '';
+                
+            } catch (error) {
+                console.error('发送消息失败:', error);
+                showError('发送失败: ' + error.message);
+                isProcessing = false;
+                sendBtn.disabled = false;
+                messageInput.disabled = false;
+            }
+        }
+        
+        function connectSSE(streamUrl, waitingId) {
+            closeEventSource();
+            
+            eventSource = new EventSource(streamUrl);
+            
+            eventSource.addEventListener('connected', (e) => {
+                console.log('SSE连接已建立');
+                updateConnectionStatus('connected', '已连接');
+            });
+            
+            eventSource.addEventListener('processing', (e) => {
+                console.log('AI正在处理...');
+            });
+            
+            eventSource.addEventListener('progress', (e) => {
+                console.log('处理进度:', e.data);
+            });
+            
+            eventSource.addEventListener('result', (e) => {
+                try {
+                    const result = JSON.parse(e.data);
+                    console.log('收到结果:', result);
+                    
+                    removeTypingIndicator(waitingId);
+                    
+                    if (result.status === 'SUCCESS') {
+                        addMessage('ai', result.result);
+                        showProcessingTime(result.processingTimeMs);
+                    } else {
+                        showError('处理失败: ' + (result.error || '未知错误'));
+                    }
+                    
+                    resetState();
+                    
+                } catch (error) {
+                    console.error('解析结果失败:', error);
+                    showError('解析结果失败');
+                    resetState();
+                }
+            });
+            
+            eventSource.addEventListener('complete', (e) => {
+                console.log('SSE流完成');
+                closeEventSource();
+            });
+            
+            eventSource.addEventListener('error', (e) => {
+                console.error('SSE错误事件:', e);
+                const data = e.data ? JSON.parse(e.data) : {};
+                showError(data.message || '连接错误');
+                closeEventSource();
+            });
+            
+            eventSource.addEventListener('timeout', (e) => {
+                console.warn('SSE超时');
+                showError('处理超时，请稍后重试');
+                closeEventSource();
+                resetState();
+            });
+            
+            eventSource.onerror = (error) => {
+                console.error('SSE底层错误:', error);
+                showError('连接错误，请检查网络后重试');
+                closeEventSource();
+                resetState();
+            };
+        }
+        
+        function resetState() {
+            isProcessing = false;
+            sendBtn.disabled = false;
+            messageInput.disabled = false;
+            currentRequestId = null;
+            messageInput.focus();
+        }
+        
+        messageInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+        
+        messageInput.addEventListener('input', () => {
+            messageInput.style.height = 'auto';
+            messageInput.style.height = Math.min(messageInput.scrollHeight, 150) + 'px';
+        });
+        
+        window.addEventListener('beforeunload', () => {
+            closeEventSource();
+        });
+        
+        addMessage('ai', '你好！我是AI智能助手（SSE实时版）。\n使用Kafka异步处理+SSE实时推送，\n为您带来更快的响应体验！\n\n输入您的问题开始对话吧~');
+    </script>
+</body>
+</html>

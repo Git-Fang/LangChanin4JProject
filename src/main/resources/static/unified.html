@@ -291,7 +291,7 @@
             top: 20px;
             left: 50%;
             transform: translateX(-50%);
-            background-color: #4caf50;
+            background-color: #f44336;
             color: white;
             padding: 10px 20px;
             border-radius: 6px;
@@ -303,14 +303,25 @@
             gap: 8px;
         }
 
-        .error-message::before {
-            content: '🤖';
-            font-size: 16px;
-        }
-
         .error-message.show {
             display: flex;
             animation: slideDown 0.3s ease;
+        }
+
+        .retry-btn {
+            padding: 6px 16px;
+            background-color: white;
+            color: #f44336;
+            border: none;
+            border-radius: 4px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-weight: 500;
+        }
+
+        .retry-btn:hover {
+            background-color: #f5f5f5;
         }
 
         @keyframes slideDown {
@@ -849,7 +860,10 @@
                 </div>
             </div>
             
-            <div class="error-message" id="errorMessage">请求失败,请重试</div>
+            <div class="error-message" id="errorMessage">
+                <span id="errorText">请求失败,请重试</span>
+                <button class="retry-btn" id="retryBtn" onclick="retryLastMessage()">重试</button>
+            </div>
             
             <div class="messages-container" id="messagesContainer">
                 <div class="empty-state">开始新的对话吧</div>
@@ -926,6 +940,7 @@
         let sessionId = null;
         let messageId = 1;
         let tools = [];
+        let lastMessage = null; // 保存最后发送的消息用于重试
 
         // API 配置 - 使用动态地址以支持手机端和不同网络环境访问
         const getApiBaseUrl = () => {
@@ -1248,13 +1263,18 @@
         }
 
         // 显示错误消息
-        function showError(message) {
+        function showError(message, showRetry = true) {
             const errorEl = document.getElementById('errorMessage');
-            errorEl.textContent = message || '请求失败,请重试';
+            const errorText = document.getElementById('errorText');
+            const retryBtn = document.getElementById('retryBtn');
+            
+            errorText.textContent = message || '请求失败,请重试';
             errorEl.classList.add('show');
+            retryBtn.style.display = showRetry ? 'inline-block' : 'none';
+            
             setTimeout(() => {
                 errorEl.classList.remove('show');
-            }, 3000);
+            }, 5000);
         }
 
         // 添加日志
@@ -1321,6 +1341,13 @@
             return messageDiv;
         }
 
+        // 重试最后一次发送的消息
+        function retryLastMessage() {
+            if (lastMessage) {
+                sendMessage();
+            }
+        }
+
         // 发送消息
         async function sendMessage() {
             const input = document.getElementById('messageInput');
@@ -1331,6 +1358,9 @@
                 return;
             }
 
+            // 保存最后发送的消息用于重试
+            lastMessage = message;
+            
             // 禁用输入和按钮
             input.disabled = true;
             sendBtn.disabled = true;
@@ -1352,8 +1382,9 @@
 
                 if (currentMode === 'http') {
                     // HTTP 模式 - 使用 /xiaozhi/chat 接口，支持 memoryId
+                    // 设置150秒超时，与后端处理时间对齐
                     const controller = new AbortController();
-                    const timeoutId = setTimeout(() => controller.abort(), 180000);
+                    const timeoutId = setTimeout(() => controller.abort(), 150000);
 
                     const response = await fetch(`${API_BASE_URL}/xiaozhi/chat`, {
                         method: 'POST',
@@ -1405,6 +1436,7 @@
                 // 显示回复消息
                 if (replyText) {
                     addMessage(replyText, false);
+                    lastMessage = null; // 发送成功后清除重试消息
                 }
 
                 // 刷新历史会话列表
@@ -1415,13 +1447,14 @@
                 console.error('Error stack:', error.stack);
                 
                 let errorMsg = '请求失败,请重试';
+                let showRetry = true;
                 if (error.name === 'AbortError') {
                     errorMsg = '请求超时，请稍后重试';
                 } else if (error.message) {
                     errorMsg = error.message.length > 50 ? '请求失败,请重试' : error.message;
                 }
                 
-                showError(errorMsg);
+                showError(errorMsg, showRetry);
                 
                 // 移除加载消息
                 if (loadingDiv && loadingDiv.parentNode) {
@@ -1450,6 +1483,7 @@
         // 新会话
         function newChat() {
             memoryId = Date.now();
+            lastMessage = null;
             const container = document.getElementById('messagesContainer');
             container.innerHTML = '<div class="empty-state">开始新的对话吧</div>';
             // 刷新历史会话列表
