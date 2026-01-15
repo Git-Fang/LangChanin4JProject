@@ -28,7 +28,7 @@ spring:
     username: admin
     password: admin
   kafka:
-    bootstrap-servers: localhost:9092
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
@@ -44,9 +44,7 @@ spring:
         spring.json.trusted.packages: "*"
     listener:
       ack-mode: manual
-      concurrency: 5
-  profiles:
-    active: standalone
+    concurrency: 5
 
 # 禁用其他AI模型以测试基础功能
 # 仅测试基本HTTP服务功能
