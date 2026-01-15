@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 import java.util.stream.Collectors;
 
@@ -135,6 +136,39 @@ public class ChatController {
             return true;
         } catch (Exception e) {
             log.error("删除会话异常, memoryId={}, error={}", memoryId, e.getMessage(), e);
+            return false;
+        }
+    }
+
+    @PostMapping("/chat/saveHistory")
+    @Operation(summary = "保存对话到历史会话")
+    public Boolean saveHistory(@RequestBody Map<String, Object> request) {
+        try {
+            Long memoryId = Long.valueOf(request.get("memoryId").toString());
+            @SuppressWarnings("unchecked")
+            List<Map<String, String>> messages = (List<Map<String, String>>) request.get("messages");
+
+            if (messages == null || messages.isEmpty()) {
+                log.warn("保存历史会话失败: 消息列表为空, memoryId={}", memoryId);
+                return false;
+            }
+
+            List<ChatMessage> chatMessages = new ArrayList<>();
+            for (Map<String, String> msg : messages) {
+                String role = msg.get("role");
+                String content = msg.get("content");
+                if ("user".equals(role)) {
+                    chatMessages.add(UserMessage.from(content));
+                } else if ("ai".equals(role)) {
+                    chatMessages.add(AiMessage.from(content));
+                }
+            }
+
+            mongoChatMemoryStore.updateMessages(memoryId, chatMessages);
+            log.info("保存历史会话成功, memoryId={}, 消息数量={}", memoryId, chatMessages.size());
+            return true;
+        } catch (Exception e) {
+            log.error("保存历史会话异常, error={}", e.getMessage(), e);
             return false;
         }
     }

@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Chat - SSE实时推送</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
         * { box-sizing: border-box; }
         body { 
@@ -215,6 +216,8 @@
         let currentRequestId = null;
         let eventSource = null;
         let isProcessing = false;
+        let currentMemoryId = null;
+        let conversationHistory = [];
         
         const messagesArea = document.getElementById('messagesArea');
         const messageInput = document.getElementById('messageInput');
@@ -228,23 +231,35 @@
             statusText.textContent = text;
         }
         
-        function addMessage(role, content) {
+        function addMessage(role, content, memoryId = null) {
             const messageDiv = document.createElement('div');
             messageDiv.className = 'message ' + role;
             
             const bubble = document.createElement('div');
             bubble.className = 'bubble';
-            bubble.textContent = content;
+            
+            if (role === 'ai') {
+                bubble.innerHTML = marked.parse(content);
+            } else {
+                bubble.textContent = content;
+            }
             
             const meta = document.createElement('div');
             meta.className = 'meta';
-            meta.textContent = role === 'user' ? '你' : 'AI助手 · 刚刚';
+            const time = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+            meta.textContent = role === 'user' ? '你 · ' + time : 'AI助手 · ' + time;
             
             messageDiv.appendChild(bubble);
             messageDiv.appendChild(meta);
             messagesArea.appendChild(messageDiv);
             
             messagesArea.scrollTop = messagesArea.scrollHeight;
+            
+            if (memoryId && role === 'user') {
+                currentMemoryId = memoryId;
+            }
+            
+            return messageDiv;
         }
         
         function showTypingIndicator() {
@@ -299,13 +314,16 @@
                 sendBtn.disabled = true;
                 messageInput.disabled = true;
                 
-                addMessage('user', message);
+                const memoryId = Date.now();
+                addMessage('user', message, memoryId);
+                
+                conversationHistory.push({ role: 'user', content: message, memoryId: memoryId });
                 
                 const response = await fetch('/xiaozhi/chat/async', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        memoryId: Date.now(),
+                        memoryId: memoryId,
                         message: message
                     })
                 });
@@ -316,12 +334,13 @@
                 
                 const { requestId, streamUrl } = await response.json();
                 currentRequestId = requestId;
+                currentMemoryId = memoryId;
                 
                 updateConnectionStatus('connecting', '连接中...');
                 requestInfo.textContent = '请求: ' + requestId.substring(0, 8) + '...';
                 
                 const waitingId = showTypingIndicator();
-                connectSSE(streamUrl, waitingId);
+                connectSSE(streamUrl, waitingId, message);
                 
                 messageInput.value = '';
                 
@@ -334,7 +353,7 @@
             }
         }
         
-        function connectSSE(streamUrl, waitingId) {
+        function connectSSE(streamUrl, waitingId, userMessage) {
             closeEventSource();
             
             eventSource = new EventSource(streamUrl);
@@ -362,6 +381,15 @@
                     if (result.status === 'SUCCESS') {
                         addMessage('ai', result.result);
                         showProcessingTime(result.processingTimeMs);
+                        
+                        if (currentMemoryId) {
+                            conversationHistory.push({ 
+                                role: 'ai', 
+                                content: result.result, 
+                                memoryId: currentMemoryId 
+                            });
+                            saveToHistory(currentMemoryId, conversationHistory);
+                        }
                     } else {
                         showError('处理失败: ' + (result.error || '未知错误'));
                     }
@@ -408,6 +436,25 @@
             messageInput.disabled = false;
             currentRequestId = null;
             messageInput.focus();
+        }
+        
+        async function saveToHistory(memoryId, messages) {
+            try {
+                const response = await fetch('/xiaozhi/chat/saveHistory', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        memoryId: memoryId,
+                        messages: messages
+                    })
+                });
+                
+                if (response.ok) {
+                    console.log('对话已保存到历史会话, memoryId:', memoryId);
+                }
+            } catch (error) {
+                console.error('保存历史会话失败:', error);
+            }
         }
         
         messageInput.addEventListener('keydown', (e) => {

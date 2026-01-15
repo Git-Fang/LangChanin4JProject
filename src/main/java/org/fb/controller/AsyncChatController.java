@@ -99,6 +99,7 @@ public class AsyncChatController {
                             
                             Map<String, Object> resultData = new HashMap<>();
                             resultData.put("requestId", result.getRequestId());
+                            resultData.put("memoryId", result.getMemoryId());
                             resultData.put("status", result.getStatus());
                             resultData.put("result", result.getResult());
                             resultData.put("processingTimeMs", result.getProcessingTimeMs());
