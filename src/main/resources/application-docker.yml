@@ -38,7 +38,7 @@ spring:
 
   # Redis配置 - 支持环境变量覆盖
   redis:
-    host: ${SPRING_REDIS_HOST:localhost}
+    host: ${SPRING_REDIS_HOST:redis}
     port: ${SPRING_REDIS_PORT:6379}
 
   # RabbitMQ配置 - 支持环境变量覆盖
