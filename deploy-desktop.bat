@@ -99,5 +99,12 @@ echo   Home:      http://localhost:8000/
 echo   API Docs:  http://localhost:8000/doc.html
 echo   ----------------------------------------
 echo.
+echo   Commands:
+echo   Logs:      docker logs -f %CONTAINER_NAME%
+echo   Stop:      docker stop %CONTAINER_NAME%
+echo   Restart:   docker restart %CONTAINER_NAME%
+echo.
+echo ============================================
+echo.
 pause
 exit /b 0

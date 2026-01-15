@@ -1,84 +1,61 @@
 @echo off
-chcp 65001 >nul
 
 echo ============================================
-echo   启动 Kafka 服务
+echo   Kafka Startup Script
 echo ============================================
 echo.
 
-:: 检查Docker Desktop是否运行
-docker version >nul 2>&1
+echo [1/4] Cleanup old containers...
+docker rm -f zookeeper kafka 2>nul
+echo       Cleanup completed
+
+echo.
+echo [2/4] Create Docker network...
+docker network rm ai-network 2>nul
+docker network create ai-network >nul 2>&1
+echo       Network created
+
+echo.
+echo [3/4] Start Zookeeper...
+docker run -d --name zookeeper --network ai-network -p 2181:2181 -e ZOOKEEPER_CLIENT_PORT=2181 -e ZOOKEEPER_TICK_TIME=2000 confluentinc/cp-zookeeper:7.5.0
 if errorlevel 1 (
-    echo [错误] Docker Desktop未运行！
+    echo       Zookeeper failed to start
     pause
     exit /b 1
 )
-
-echo [1/3] 检查现有容器...
-docker ps --format "{{.Names}}" | findstr /i "zookeeper" >nul 2>&1
-if errorlevel 1 (
-    echo       Zookeeper 未运行，准备启动...
-    docker run -d --name zookeeper -p 2181:2181 -e ZOOKEEPER_CLIENT_PORT=2181 -e ZOOKEEPER_TICK_TIME=2000 confluentinc/cp-zookeeper:7.5.0
-    if errorlevel 1 (
-        echo [错误] Zookeeper 启动失败
-        pause
-        exit /b 1
-    )
-    echo       Zookeeper 启动成功
-) else (
-    echo       Zookeeper 已在运行
-)
-
-docker ps --format "{{.Names}}" | findstr /i "kafka" >nul 2>&1
-if errorlevel 1 (
-    echo       Kafka 未运行，准备启动...
-    docker run -d --name kafka -p 9092:9092 ^
-        -e KAFKA_BROKER_ID=1 ^
-        -e KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181 ^
-        -e KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://localhost:9092 ^
-        -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1 ^
-        -e KAFKA_AUTO_CREATE_TOPICS_ENABLE="true" ^
-        confluentinc/cp-kafka:7.5.0
-    if errorlevel 1 (
-        echo [错误] Kafka 启动失败
-        pause
-        exit /b 1
-    )
-    echo       Kafka 启动成功，等待初始化...
-    timeout /t 10 /nobreak >nul
-) else (
-    echo       Kafka 已在运行
-)
+echo       Zookeeper started successfully
+timeout /t 5 /nobreak >nul
 
 echo.
-echo [2/3] 验证Kafka状态...
-docker exec kafka kafka-topics.sh --bootstrap-server localhost:9092 --list >nul 2>&1
+echo [4/4] Start Kafka...
+docker run -d --name kafka --network ai-network -p 9092:9092 -e KAFKA_BROKER_ID=1 -e KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181 -e KAFKA_LISTENERS=PLAINTEXT://:9092 -e KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://localhost:9092 -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1 -e KAFKA_AUTO_CREATE_TOPICS_ENABLE="true" bitnami/kafka:3.8
 if errorlevel 1 (
-    echo [警告] Kafka可能还未就绪，请稍后重试
-) else (
-    echo       Kafka 已就绪
+    echo       Kafka failed to start
+    pause
+    exit /b 1
 )
-
-echo.
-echo [3/3] 创建测试Topic...
-docker exec kafka kafka-topics.sh --bootstrap-server localhost:9092 --create --topic ai-chat-request --partitions 3 --replication-factor 1 >nul 2>&1
-docker exec kafka kafka-topics.sh --bootstrap-server localhost:9092 --create --topic ai-chat-result --partitions 3 --replication-factor 1 >nul 2>&1
-echo       Topic 创建完成
+echo       Kafka started successfully
 
 echo.
 echo ============================================
-echo   Kafka 服务启动完成！
+echo   Kafka Services Started!
 echo ============================================
 echo.
-echo   服务状态:
+echo   Services:
 echo   - Zookeeper: localhost:2181
 echo   - Kafka:     localhost:9092
-echo   - UI:        http://localhost:8081 (可选)
 echo.
-echo   使用说明:
-echo   1. 确保Zookeeper和Kafka正常运行
-echo   2. 运行 deploy-desktop.bat 部署应用
-echo   3. 访问 http://localhost:8000/chat-sse.html 测试SSE聊天
-echo.
+echo   Please wait 30 seconds for Kafka to initialize...
 echo ============================================
+echo.
+timeout /t 30 /nobreak >nul
+
+echo Verify Kafka status...
+docker exec kafka kafka-topics.sh --bootstrap-server localhost:9092 --list >nul 2>&1
+if errorlevel 1 (
+    echo [WARNING] Kafka may not be ready yet
+) else (
+    echo       Kafka is ready
+)
+echo.
 pause
