@@ -21,7 +21,7 @@ public class EnvConf {
     @Value("${ai.ollama.model}")
     public String ollamaModel;
 
-    @Value("${ai.dashscope.apiKey}")
+    @Value("${ai.dashscope.apiKey:demo}")
     public String dashscopeApiKey;
 
     @Value("${ai.dashscope.model}")

@@ -34,7 +34,7 @@ import java.net.URI;
 @Tag(name = "9006--阿里万相文生图测试")
 public class ChatImageController {
 
-    @Autowired
+    @Autowired(required = false)
     private WanxImageModel wanxImageModel;
 
     @Autowired
@@ -66,6 +66,9 @@ public class ChatImageController {
     @PostMapping("/wanxImage")
     @Operation(summary = "阿里万相文生图简单测试1")
     public String wanxImage(String prompt) throws IOException {
+        if (wanxImageModel == null) {
+            return "错误: 图文生成功能未配置，请配置 DASHSCOPE_API_KEY";
+        }
         log.info("prompt:{}", prompt);
         Response<Image> imageResponse = wanxImageModel.generate(prompt);
         URI imageUri = imageResponse.content().url();

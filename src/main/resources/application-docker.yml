@@ -36,10 +36,10 @@ spring:
     mongodb:
       uri: ${SPRING_DATA_MONGODB_URI:mongodb://localhost:27017/chat_db}
 
-  # Redis配置 - 支持环境变量覆盖
+  # Redis配置 - 直接设置Docker网络IP
   redis:
-    host: ${SPRING_REDIS_HOST:redis}
-    port: ${SPRING_REDIS_PORT:6379}
+    host: 172.20.0.5
+    port: 6379
 
   # RabbitMQ配置 - 支持环境变量覆盖
   rabbitmq:
