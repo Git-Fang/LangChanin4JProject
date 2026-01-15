@@ -18,7 +18,7 @@ echo [1/3] 检查现有容器...
 docker ps --format "{{.Names}}" | findstr /i "zookeeper" >nul 2>&1
 if errorlevel 1 (
     echo       Zookeeper 未运行，准备启动...
-    docker run -d --name zookeeper -p 2181:2181 confluentinc/cp-zookeeper:7.5.0
+    docker run -d --name zookeeper -p 2181:2181 -e ZOOKEEPER_CLIENT_PORT=2181 -e ZOOKEEPER_TICK_TIME=2000 confluentinc/cp-zookeeper:7.5.0
     if errorlevel 1 (
         echo [错误] Zookeeper 启动失败
         pause

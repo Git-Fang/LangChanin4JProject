@@ -18,7 +18,7 @@ services:
 
   # Kafka单节点
   kafka:
-    image: confluentinc/cp-kafka:7.5.0
+    image: bitnami/kafka:3.8
     container_name: kafka
     ports:
       - "9092:9092"
