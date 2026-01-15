@@ -9,7 +9,6 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.fb.bean.kafka.ChatRequestMessage;
 import org.fb.bean.kafka.ChatResultMessage;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
@@ -27,10 +26,9 @@ import java.util.Map;
 
 @Configuration
 @EnableKafka
-@ConditionalOnProperty(name = "spring.kafka.bootstrap-servers")
 public class KafkaConfig {
     
-    @Value("${spring.kafka.bootstrap-servers:}")
+    @Value("${spring.kafka.bootstrap-servers:localhost:9092}")
     private String bootstrapServers;
     
     private boolean kafkaAvailable = false;
@@ -58,7 +56,6 @@ public class KafkaConfig {
     }
     
     @Bean
-    @ConditionalOnProperty(name = "spring.kafka.bootstrap-servers")
     public NewTopic aiRequestTopic() {
         return TopicBuilder.name("ai-chat-request")
                 .partitions(3)
@@ -68,7 +65,6 @@ public class KafkaConfig {
     }
     
     @Bean
-    @ConditionalOnProperty(name = "spring.kafka.bootstrap-servers")
     public NewTopic aiResultTopic() {
         return TopicBuilder.name("ai-chat-result")
                 .partitions(3)
@@ -78,7 +74,6 @@ public class KafkaConfig {
     }
     
     @Bean
-    @ConditionalOnProperty(name = "spring.kafka.bootstrap-servers")
     public NewTopic aiDlqTopic() {
         return TopicBuilder.name("ai-dlq")
                 .partitions(1)
@@ -88,7 +83,6 @@ public class KafkaConfig {
     
     @Bean
     @Primary
-    @ConditionalOnProperty(name = "spring.kafka.bootstrap-servers")
     public ProducerFactory<String, ChatRequestMessage> chatRequestProducerFactory() {
         Map<String, Object> configProps = new HashMap<>();
         configProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
@@ -104,14 +98,12 @@ public class KafkaConfig {
     
     @Bean
     @Primary
-    @ConditionalOnProperty(name = "spring.kafka.bootstrap-servers")
     public KafkaTemplate<String, ChatRequestMessage> chatRequestKafkaTemplate() {
         return new KafkaTemplate<>(chatRequestProducerFactory());
     }
     
     @Bean
     @Primary
-    @ConditionalOnProperty(name = "spring.kafka.bootstrap-servers")
     public ProducerFactory<String, ChatResultMessage> chatResultProducerFactory() {
         Map<String, Object> configProps = new HashMap<>();
         configProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
@@ -124,14 +116,12 @@ public class KafkaConfig {
     
     @Bean
     @Primary
-    @ConditionalOnProperty(name = "spring.kafka.bootstrap-servers")
     public KafkaTemplate<String, ChatResultMessage> chatResultKafkaTemplate() {
         return new KafkaTemplate<>(chatResultProducerFactory());
     }
     
     @Bean
     @Primary
-    @ConditionalOnProperty(name = "spring.kafka.bootstrap-servers")
     public ConsumerFactory<String, ChatRequestMessage> chatRequestConsumerFactory() {
         Map<String, Object> props = new HashMap<>();
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
@@ -149,7 +139,6 @@ public class KafkaConfig {
     
     @Bean
     @Primary
-    @ConditionalOnProperty(name = "spring.kafka.bootstrap-servers")
     public ConcurrentKafkaListenerContainerFactory<String, ChatRequestMessage> 
             chatRequestListenerContainerFactory() {
         ConcurrentKafkaListenerContainerFactory<String, ChatRequestMessage> factory =
@@ -162,7 +151,6 @@ public class KafkaConfig {
     }
     
     @Bean
-    @ConditionalOnProperty(name = "spring.kafka.bootstrap-servers")
     public KafkaAdmin kafkaAdmin() {
         Map<String, Object> configs = new HashMap<>();
         configs.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
