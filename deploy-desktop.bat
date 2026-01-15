@@ -33,6 +33,18 @@ if errorlevel 1 (echo       MongoDB: Not running) else (echo       MongoDB: Runn
 docker ps --format "{{.Names}}" | findstr /i "qdrant" >nul 2>&1
 if errorlevel 1 (echo       Qdrant: Not running) else (echo       Qdrant: Running)
 
+docker ps --format "{{.Names}}" | findstr /i "redis" >nul 2>&1
+if errorlevel 1 (
+    echo       Redis: Not running, starting...
+    docker rm -f redis >nul 2>&1
+    docker run -d --name redis --network ai-network -p 6379:6379 redis:alpine
+    if errorlevel 1 (
+        echo       Redis failed to start
+    ) else (
+        echo       Redis started successfully
+    )
+) else (echo       Redis: Running)
+
 echo.
 echo [3/6] Check Java base image...
 docker images eclipse-temurin:17-jre-alpine --format "{{.ID}}" | findstr /r "." >nul 2>&1
@@ -79,7 +91,7 @@ for /f "usebackq tokens=1,* delims==" %%a in (".env") do (
 )
 
 echo       Starting Docker container...
-docker run -d --name %CONTAINER_NAME% --network ai-network -p %APP_PORT%:%APP_PORT% -e SPRING_DATASOURCE_URL=jdbc:mysql://host.docker.internal:3306/mydocker?useUnicode=true^&characterEncoding=UTF-8^&serverTimezone=Asia/Shanghai^&useSSL=false^&allowPublicKeyRetrieval=true -e SPRING_DATASOURCE_USERNAME=root -e SPRING_DATASOURCE_PASSWORD=root -e SPRING_DATA_MONGODB_URI=mongodb://host.docker.internal:27017/chat_db -e AI_EMBEDDINGSTORE_QDRANT_HOST=host.docker.internal -e AI_EMBEDDINGSTORE_QDRANT_PORT=6334 -e SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092 -e DeepSeek_API_KEY=%DeepSeek_API_KEY% -e KIMI_API_KEY=%KIMI_API_KEY% -e DASHSCOPE_API_KEY=%DASHSCOPE_API_KEY% -e BAIDU_MAP_API_KEY=%BAIDU_MAP_API_KEY% -e TZ=Asia/Shanghai %IMAGE_NAME%:latest
+docker run -d --name %CONTAINER_NAME% --network ai-network -p %APP_PORT%:%APP_PORT% -e SPRING_DATASOURCE_URL=jdbc:mysql://host.docker.internal:3306/mydocker?useUnicode=true^&characterEncoding=UTF-8^&serverTimezone=Asia/Shanghai^&useSSL=false^&allowPublicKeyRetrieval=true -e SPRING_DATASOURCE_USERNAME=root -e SPRING_DATASOURCE_PASSWORD=root -e SPRING_DATA_MONGODB_URI=mongodb://host.docker.internal:27017/chat_db -e SPRING_REDIS_HOST=redis -e SPRING_REDIS_PORT=6379 -e AI_EMBEDDINGSTORE_QDRANT_HOST=host.docker.internal -e AI_EMBEDDINGSTORE_QDRANT_PORT=6334 -e SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092 -e DeepSeek_API_KEY=%DeepSeek_API_KEY% -e KIMI_API_KEY=%KIMI_API_KEY% -e DASHSCOPE_API_KEY=%DASHSCOPE_API_KEY% -e BAIDU_MAP_API_KEY=%BAIDU_MAP_API_KEY% -e TZ=Asia/Shanghai %IMAGE_NAME%:latest
 
 if errorlevel 1 (
     echo [ERROR] Container failed to start!
