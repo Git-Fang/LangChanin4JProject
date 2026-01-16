@@ -1353,6 +1353,7 @@
         // 重试最后一次发送的消息
         function retryLastMessage() {
             if (lastMessage) {
+                document.getElementById('messageInput').value = lastMessage;
                 sendMessage();
             }
         }
