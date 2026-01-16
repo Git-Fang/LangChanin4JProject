@@ -1391,9 +1391,9 @@
 
                 if (currentMode === 'http') {
                     // HTTP 模式 - 使用 /xiaozhi/chat 接口，支持 memoryId
-                    // 设置150秒超时，与后端处理时间对齐
+                    // 设置300秒超时，与后端处理时间对齐
                     const controller = new AbortController();
-                    const timeoutId = setTimeout(() => controller.abort(), 150000);
+                    const timeoutId = setTimeout(() => controller.abort(), 300000);
 
                     const response = await fetch(`${API_BASE_URL}/xiaozhi/chat`, {
                         method: 'POST',
@@ -1451,7 +1451,7 @@
                 // 刷新历史会话列表
                 loadHistorySessions();
                 
-            } catch (error) {
+                } catch (error) {
                 console.error('Error:', error);
                 console.error('Error stack:', error.stack);
                 
@@ -1463,7 +1463,12 @@
                     errorMsg = error.message.length > 50 ? '请求失败,请重试' : error.message;
                 }
                 
-                showError(errorMsg, showRetry);
+                // SSE模式错误时也显示重试按钮
+                if (currentMode === 'sse') {
+                    showError(errorMsg, showRetry);
+                } else {
+                    showError(errorMsg, showRetry);
+                }
                 
                 // 移除加载消息
                 if (loadingDiv && loadingDiv.parentNode) {

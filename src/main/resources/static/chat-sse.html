@@ -9,7 +9,7 @@
         * { box-sizing: border-box; }
         body { 
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            max-width: 800px; 
+            max-width: 1200px; 
             margin: 0 auto; 
             padding: 20px;
             background: #f5f5f5;
@@ -61,16 +61,28 @@
             display: inline-block;
             padding: 12px 16px;
             border-radius: 18px 18px 4px 18px;
-            max-width: 80%;
+            max-width: 90%;
             text-align: left;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
         }
         
         .message.ai .bubble {
             background: #f0f0f0;
             padding: 12px 16px;
             border-radius: 18px 18px 18px 4px;
-            max-width: 80%;
+            max-width: 90%;
             white-space: pre-wrap;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+        }
+        
+        .message.ai .bubble p {
+            margin: 0 0 8px 0;
+        }
+        
+        .message.ai .bubble p:last-child {
+            margin-bottom: 0;
         }
         
         .message .meta {
@@ -473,7 +485,7 @@
             closeEventSource();
         });
         
-        addMessage('ai', '你好！我是AI智能助手（SSE实时版）。\n使用Kafka异步处理+SSE实时推送，\n为您带来更快的响应体验！\n\n输入您的问题开始对话吧~');
+        addMessage('ai', '你好！我是AI智能助手（SSE实时版）。使用Kafka异步处理+SSE实时推送，为您带来更快的响应体验！\n\n输入您的问题开始对话吧~');
     </script>
 </body>
 </html>
