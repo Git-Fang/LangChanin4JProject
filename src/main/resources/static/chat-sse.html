@@ -422,9 +422,18 @@
             
             eventSource.addEventListener('error', (e) => {
                 console.error('SSE错误事件:', e);
-                const data = e.data ? JSON.parse(e.data) : {};
-                showError(data.message || '连接错误');
+                if (e.data) {
+                    try {
+                        const data = JSON.parse(e.data);
+                        showError(data.message || '连接错误');
+                    } catch (parseError) {
+                        showError('连接错误，请检查网络后重试');
+                    }
+                } else {
+                    showError('连接错误，请检查网络后重试');
+                }
                 closeEventSource();
+                resetState();
             });
             
             eventSource.addEventListener('timeout', (e) => {

@@ -187,10 +187,13 @@ public class AsyncChatController implements EnvironmentAware {
                             Map<String, Object> resultData = new HashMap<>();
                             resultData.put("requestId", result.getRequestId());
                             resultData.put("memoryId", result.getMemoryId());
-                            resultData.put("status", result.getStatus());
+                            resultData.put("status", result.getStatus() != null ? result.getStatus().name() : null);
                             resultData.put("result", result.getResult());
                             resultData.put("processingTimeMs", result.getProcessingTimeMs());
                             resultData.put("intent", result.getIntent());
+                            if (result.getErrorMessage() != null) {
+                                resultData.put("error", result.getErrorMessage());
+                            }
                             
                             sendSseEvent(emitter, "result", resultData);
                             sendSseEvent(emitter, "complete", Map.of("event", "complete"));
