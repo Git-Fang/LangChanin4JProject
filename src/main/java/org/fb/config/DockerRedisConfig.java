@@ -1,6 +1,5 @@
 package org.fb.config;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
@@ -10,20 +9,14 @@ import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactor
 import org.springframework.data.redis.core.StringRedisTemplate;
 
 @Configuration
-@Profile("!docker")
-public class RedisConfig {
-
-    @Value("${spring.data.redis.host:localhost}")
-    private String redisHost;
-
-    @Value("${spring.data.redis.port:6379}")
-    private int redisPort;
+@Profile("docker")
+public class DockerRedisConfig {
 
     @Bean
     public LettuceConnectionFactory redisConnectionFactory() {
         RedisStandaloneConfiguration config = new RedisStandaloneConfiguration();
-        config.setHostName(redisHost);
-        config.setPort(redisPort);
+        config.setHostName("172.20.0.5");
+        config.setPort(6379);
         return new LettuceConnectionFactory(config);
     }
 
