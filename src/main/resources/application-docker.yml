@@ -71,6 +71,10 @@ spring:
       ack-mode: manual
       concurrency: 5
 
+# SSE配置
+sse:
+  timeout: 240000
+
 # Kafka自定义配置
 kafka:
   topics:
