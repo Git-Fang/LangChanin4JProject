@@ -9,6 +9,7 @@ import org.fb.bean.kafka.ChatResultMessage;
 import org.fb.constant.BusinessConstant;
 import org.fb.service.assistant.*;
 import org.fb.service.impl.NL2SQLService;
+import org.springframework.context.annotation.Profile;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.support.Acknowledgment;
@@ -23,6 +24,7 @@ import java.util.regex.Pattern;
 
 @Slf4j
 @Service
+@Profile("!standalone")
 @RequiredArgsConstructor
 public class ChatRequestConsumer {
     
@@ -43,7 +45,8 @@ public class ChatRequestConsumer {
     @KafkaListener(
             topics = "ai-chat-request",
             groupId = "ai-request-consumer",
-            containerFactory = "chatRequestListenerContainerFactory"
+            containerFactory = "chatRequestListenerContainerFactory",
+            autoStartup = "false"
     )
     public void consumeChatRequest(
             ConsumerRecord<String, ChatRequestMessage> record,

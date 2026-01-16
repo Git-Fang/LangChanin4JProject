@@ -1,12 +1,17 @@
 package org.fb.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.fb.bean.ChatForm;
 import org.fb.bean.kafka.ChatRequestMessage;
 import org.fb.bean.kafka.ChatResultMessage;
+import org.fb.service.ChatService;
 import org.fb.service.kafka.ChatRequestProducer;
+import org.fb.service.kafka.StandaloneChatRequestProducer;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
+import org.springframework.context.EnvironmentAware;
+import org.springframework.core.env.Environment;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
@@ -22,16 +27,52 @@ import java.util.concurrent.ConcurrentHashMap;
 @Slf4j
 @RestController
 @RequestMapping("/xiaozhi")
-@RequiredArgsConstructor
-public class AsyncChatController {
+public class AsyncChatController implements EnvironmentAware {
     
     private final ChatRequestProducer requestProducer;
+    private final StandaloneChatRequestProducer standaloneRequestProducer;
     private final StringRedisTemplate redisTemplate;
     private final ObjectMapper objectMapper;
+    private final ChatService chatService;
+    
+    private Environment environment;
+
+    @Autowired
+    public AsyncChatController(
+            @Lazy ChatRequestProducer requestProducer,
+            StandaloneChatRequestProducer standaloneRequestProducer,
+            StringRedisTemplate redisTemplate,
+            ObjectMapper objectMapper,
+            ChatService chatService) {
+        this.requestProducer = requestProducer;
+        this.standaloneRequestProducer = standaloneRequestProducer;
+        this.redisTemplate = redisTemplate;
+        this.objectMapper = objectMapper;
+        this.chatService = chatService;
+    }
+
+    @Override
+    public void setEnvironment(Environment environment) {
+        this.environment = environment;
+    }
+    
+    private boolean isStandalone() {
+        String[] profiles = environment.getActiveProfiles();
+        for (String profile : profiles) {
+            if ("standalone".equals(profile)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private ChatRequestProducer getProducer() {
+        return isStandalone() ? null : requestProducer;
+    }
     
     private static final String RESULT_CACHE_PREFIX = "chat:result:";
     private static final Duration RESULT_TTL = Duration.ofHours(24);
-    private static final long SSE_TIMEOUT = 60000L;
+    private static final long SSE_TIMEOUT = 300000L; // 5分钟
     
     private static final ConcurrentHashMap<String, SseEmitter> sseConnections = new ConcurrentHashMap<>();
     
@@ -43,7 +84,13 @@ public class AsyncChatController {
         log.info("收到异步聊天请求, memoryId: {}, message: {}", memoryId, userMessage);
         
         ChatRequestMessage request = ChatRequestMessage.create(memoryId, userMessage);
-        requestProducer.sendRequest(request);
+        
+        if (isStandalone()) {
+            log.info("[Standalone模式] 同步处理请求");
+            processSynchronously(request);
+        } else {
+            ((ChatRequestProducer) getProducer()).sendRequest(request);
+        }
         
         Map<String, Object> response = new HashMap<>();
         response.put("requestId", request.getRequestId());
@@ -53,6 +100,46 @@ public class AsyncChatController {
         response.put("streamUrl", "/xiaozhi/chat/stream/" + request.getRequestId());
         
         return response;
+    }
+    
+    private void processSynchronously(ChatRequestMessage request) {
+        CompletableFuture.runAsync(() -> {
+            try {
+                long startTime = System.currentTimeMillis();
+                String result = chatService.chat(request.getMemoryId(), request.getMessage());
+                long processingTime = System.currentTimeMillis() - startTime;
+                
+                ChatResultMessage resultMessage = ChatResultMessage.builder()
+                        .requestId(request.getRequestId())
+                        .memoryId(request.getMemoryId())
+                        .result(result)
+                        .status(ChatResultMessage.ResultStatus.SUCCESS)
+                        .processingTimeMs(processingTime)
+                        .build();
+                
+                cacheResult(request.getRequestId(), resultMessage);
+                log.info("[Standalone模式] 同步处理完成, requestId: {}, 处理时间: {}ms", 
+                        request.getRequestId(), processingTime);
+            } catch (Exception e) {
+                log.error("[Standalone模式] 处理失败, requestId: {}", request.getRequestId(), e);
+                ChatResultMessage failedResult = ChatResultMessage.builder()
+                        .requestId(request.getRequestId())
+                        .memoryId(request.getMemoryId())
+                        .status(ChatResultMessage.ResultStatus.FAILED)
+                        .errorMessage(e.getMessage())
+                        .build();
+                cacheResult(request.getRequestId(), failedResult);
+            }
+        });
+    }
+    
+    private void cacheResult(String requestId, ChatResultMessage result) {
+        try {
+            String jsonResult = objectMapper.writeValueAsString(result);
+            redisTemplate.opsForValue().set(RESULT_CACHE_PREFIX + requestId, jsonResult, RESULT_TTL);
+        } catch (Exception e) {
+            log.error("缓存结果失败, requestId: {}", requestId, e);
+        }
     }
     
     @GetMapping(value = "/chat/stream/{requestId}", produces = MediaType.TEXT_EVENT_STREAM_VALUE)

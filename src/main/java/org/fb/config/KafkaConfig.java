@@ -9,9 +9,11 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.fb.bean.kafka.ChatRequestMessage;
 import org.fb.bean.kafka.ChatResultMessage;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
+import org.springframework.context.annotation.Profile;
 import org.springframework.kafka.annotation.EnableKafka;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.config.TopicBuilder;
@@ -26,10 +28,15 @@ import java.util.Map;
 
 @Configuration
 @EnableKafka
+@Profile("!standalone")
+@ConditionalOnProperty(name = "kafka.enabled", havingValue = "true", matchIfMissing = true)
 public class KafkaConfig {
     
     @Value("${spring.kafka.bootstrap-servers:localhost:9092}")
     private String bootstrapServers;
+    
+    @Value("${kafka.consumer.enabled:true}")
+    private boolean consumerEnabled;
     
     private boolean kafkaAvailable = false;
     
@@ -122,6 +129,7 @@ public class KafkaConfig {
     
     @Bean
     @Primary
+    @ConditionalOnProperty(name = "kafka.consumer.enabled", havingValue = "true", matchIfMissing = true)
     public ConsumerFactory<String, ChatRequestMessage> chatRequestConsumerFactory() {
         Map<String, Object> props = new HashMap<>();
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
@@ -139,6 +147,7 @@ public class KafkaConfig {
     
     @Bean
     @Primary
+    @ConditionalOnProperty(name = "kafka.consumer.enabled", havingValue = "true", matchIfMissing = true)
     public ConcurrentKafkaListenerContainerFactory<String, ChatRequestMessage> 
             chatRequestListenerContainerFactory() {
         ConcurrentKafkaListenerContainerFactory<String, ChatRequestMessage> factory =
