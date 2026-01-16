@@ -40,7 +40,7 @@ public class AsyncChatController implements EnvironmentAware {
     @Autowired
     public AsyncChatController(
             @Lazy ChatRequestProducer requestProducer,
-            StandaloneChatRequestProducer standaloneRequestProducer,
+            @Autowired(required = false) StandaloneChatRequestProducer standaloneRequestProducer,
             StringRedisTemplate redisTemplate,
             ObjectMapper objectMapper,
             ChatService chatService) {

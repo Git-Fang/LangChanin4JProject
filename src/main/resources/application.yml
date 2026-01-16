@@ -1,3 +1,4 @@
 spring:
   profiles:
-    active: standalone
+    active: ${SPRING_PROFILES_ACTIVE:docker}
+

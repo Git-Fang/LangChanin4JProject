@@ -45,8 +45,7 @@ public class ChatRequestConsumer {
     @KafkaListener(
             topics = "ai-chat-request",
             groupId = "ai-request-consumer",
-            containerFactory = "chatRequestListenerContainerFactory",
-            autoStartup = "false"
+            containerFactory = "chatRequestListenerContainerFactory"
     )
     public void consumeChatRequest(
             ConsumerRecord<String, ChatRequestMessage> record,

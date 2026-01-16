@@ -25,6 +25,7 @@ import org.fb.tools.MongoChatMemoryStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -116,6 +117,7 @@ public class LLMConfig {
     }
 
     @Bean
+    @ConditionalOnProperty(name = "ai.dashscope.api-key")
     public StreamingChatModel streamingChatModel() {
         if (envConf.dashscopeApiKey == null || envConf.dashscopeApiKey.isEmpty() || envConf.dashscopeApiKey.equals("demo")) {
             log.warn("DashScope API Key未配置，Streaming模型不可用");
@@ -177,6 +179,7 @@ public class LLMConfig {
 //    }
 
     @Bean
+    @ConditionalOnBean(StreamingChatModel.class)
     public ChatAssistantStream chatAssistantStream(StreamingChatModel chatModel, EmbeddingStore<TextSegment> embeddingStore, EmbeddingModel embeddingModel) {
         if (chatModel == null) {
             log.warn("StreamingChatModel未配置，ChatAssistantStream不可用");

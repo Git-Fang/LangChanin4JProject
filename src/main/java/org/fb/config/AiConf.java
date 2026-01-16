@@ -45,7 +45,7 @@ public class AiConf {
     @Autowired
     private EmbeddingStore<TextSegment> embeddingStore;
 
-    @Autowired
+    @Autowired(required = false)
     private StreamingChatModel streamingChatModel;
 
     @Autowired
@@ -83,7 +83,9 @@ public class AiConf {
     @Bean
     @ConditionalOnProperty(name = "mcp.enabled", havingValue = "true", matchIfMissing = false)
     BaiduMapMcpStreamAssistant baiduMapMcpStreamAssistant() {
-
+        if (streamingChatModel == null) {
+            return null;
+        }
         return buildGenericMcpAssistant(BaiduMapMcpStreamAssistant.class, streamingChatModel);
     }
 
