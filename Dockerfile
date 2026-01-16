@@ -16,5 +16,5 @@ COPY .env /app/.env
 
 EXPOSE 8000
 
-# 启动应用
-ENTRYPOINT ["java", "-Dfile.encoding=UTF-8", "-Dspring.profiles.active=docker", "-jar", "app.jar"]
+# 启动应用（支持通过SPRING_PROFILES_ACTIVE环境变量覆盖profile）
+ENTRYPOINT ["java", "-Dfile.encoding=UTF-8", "-jar", "app.jar"]
