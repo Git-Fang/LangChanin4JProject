@@ -1,12 +1,16 @@
 package org.fb.controller;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import dev.langchain4j.data.segment.TextSegment;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import mapper.FileOperationMapper;
+import org.fb.bean.FileOperation;
 import org.fb.service.impl.DocumentImpl;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -14,7 +18,12 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/ragTranslation/doc")
@@ -24,6 +33,9 @@ public class DocumentController {
 
     @Autowired
     private DocumentImpl documentImpl;
+
+    @Autowired
+    private FileOperationMapper fileOperationMapper;
 
     @PostMapping("/uploadAndEmbeddingMultipleDocuments")
     @Operation(summary = "1-上传多个文档并向量存储")
@@ -74,6 +86,28 @@ public class DocumentController {
         return documentImpl.saveFilesToLocal(files);
     }
 
+    @GetMapping("/history")
+    @Operation(summary = "获取上传文档历史记录")
+    public List<Map<String, Object>> getDocumentHistory() {
+        List<FileOperation> records = fileOperationMapper.selectList(
+            new LambdaQueryWrapper<FileOperation>()
+                .orderByDesc(FileOperation::getOperationTime)
+        );
 
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
+        return records.stream().map(record -> {
+            Map<String, Object> map = new HashMap<>();
+            map.put("id", record.getId());
+            map.put("fileName", record.getFileName());
+            map.put("fileType", record.getFileType());
+            map.put("operationType", record.getOperationType());
+            map.put("operationTime", record.getOperationTime() != null ?
+                record.getOperationTime().format(formatter) : null);
+            map.put("status", record.getStatus());
+            map.put("finishedTime", record.getFinishedTime() != null ?
+                record.getFinishedTime().format(formatter) : null);
+            return map;
+        }).collect(Collectors.toList());
+    }
 }
