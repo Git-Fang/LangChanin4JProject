@@ -1,5 +1,6 @@
 package org.fb.service.impl;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import dev.langchain4j.data.document.Document;
 import dev.langchain4j.data.document.loader.FileSystemDocumentLoader;
 import dev.langchain4j.data.document.parser.apache.tika.ApacheTikaDocumentParser;
@@ -15,6 +16,7 @@ import org.fb.service.DocumentService;
 import org.fb.service.assistant.TermExtractionAgent;
 import org.fb.tools.QdrantOperationTools;
 import org.fb.util.BatchPathProvider;
+import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,6 +30,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
@@ -273,6 +276,49 @@ public class DocumentImpl implements DocumentService {
             result.put("message", "Batch upload failed: " + e.getMessage());
         }
         return result;
+    }
+
+    @Override
+    public List<Map<String, Object>> getFileOperationData(String sortField, String sortOrder, String operationType) {
+        LambdaQueryWrapper<FileOperation> queryWrapper = new LambdaQueryWrapper<>();
+
+        if (operationType != null && !operationType.isEmpty()) {
+            queryWrapper.eq(FileOperation::getOperationType, operationType.toUpperCase());
+        }
+
+        if ("operationTime".equals(sortField)) {
+            if ("asc".equalsIgnoreCase(sortOrder)) {
+                queryWrapper.orderByAsc(FileOperation::getOperationTime);
+            } else {
+                queryWrapper.orderByDesc(FileOperation::getOperationTime);
+            }
+        } else if ("finishedTime".equals(sortField)) {
+            if ("asc".equalsIgnoreCase(sortOrder)) {
+                queryWrapper.orderByAsc(FileOperation::getFinishedTime);
+            } else {
+                queryWrapper.orderByDesc(FileOperation::getFinishedTime);
+            }
+        } else {
+            queryWrapper.orderByDesc(FileOperation::getOperationTime);
+        }
+
+        List<FileOperation> records = fileOperationMapper.selectList(queryWrapper);
+
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+
+        return records.stream().map(record -> {
+            Map<String, Object> map = new HashMap<>();
+            map.put("id", record.getId());
+            map.put("fileName", record.getFileName());
+            map.put("fileType", record.getFileType());
+            map.put("operationType", record.getOperationType());
+            map.put("operationTime", record.getOperationTime() != null ?
+                    record.getOperationTime().format(formatter) : null);
+            map.put("status", record.getStatus());
+            map.put("finishedTime", record.getFinishedTime() != null ?
+                    record.getFinishedTime().format(formatter) : null);
+            return map;
+        }).collect(Collectors.toList());
     }
 
 

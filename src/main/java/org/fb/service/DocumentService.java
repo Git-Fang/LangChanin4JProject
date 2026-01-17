@@ -17,4 +17,6 @@ public interface DocumentService {
     public List<TextSegment> parseAndEmbedding(String filePath);
 
     public Map<String, Object> processBatchFiles(MultipartFile[] files, String operation);
+
+    public List<Map<String, Object>> getFileOperationData(String sortField, String sortOrder, String operationType);
 }
