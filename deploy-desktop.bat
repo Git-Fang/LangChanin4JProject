@@ -9,7 +9,7 @@ set IMAGE_NAME=ragtranslation-app
 set CONTAINER_NAME=ragtranslation-app
 set APP_PORT=8000
 
-echo [1/7] Check Docker Desktop status...
+echo [1/8] Check Docker Desktop status...
 docker version >nul 2>&1
 if errorlevel 1 (
     echo [ERROR] Docker Desktop is not running!
@@ -19,7 +19,7 @@ if errorlevel 1 (
 echo       Docker Desktop is running
 
 echo.
-echo [2/7] Setup Docker network and check middleware...
+echo [2/8] Setup Docker network and check middleware...
 
 echo       Create/verify Docker network...
 docker network create ai-network >nul 2>&1
@@ -34,8 +34,12 @@ if errorlevel 1 (echo       MySQL: Not running) else (echo       MySQL: Running)
 docker ps --format "{{.Names}}" | findstr /i "mongo" >nul 2>&1
 if errorlevel 1 (echo       MongoDB: Not running) else (echo       MongoDB: Running)
 
-docker ps --format "{{.Names}}" | findstr /i "qdrant" >nul 2>&1
-if errorlevel 1 (echo       Qdrant: Not running) else (echo       Qdrant: Running)
+docker ps --format "{{.Names}}" | findstr /i "nacos" >nul 2>&1
+if errorlevel 1 (
+    echo       Nacos: Not running
+) else (
+    echo       Nacos: Running
+)
 
 docker ps --format "{{.Names}}" | findstr /i "redis" >nul 2>&1
 if errorlevel 1 (
@@ -85,7 +89,7 @@ if not errorlevel 1 (
 
 echo.
 if "%ZOOKEEPER_RUNNING%"=="0" (
-    echo [3/7] Start Zookeeper...
+    echo [3/8] Start Zookeeper...
     docker rm -f zookeeper >nul 2>&1
     docker run -d --name zookeeper --network ai-network -p 2181:2181 -e ZOOKEEPER_CLIENT_PORT=2181 -e ZOOKEEPER_TICK_TIME=2000 confluentinc/cp-zookeeper:7.5.0
     if errorlevel 1 (
@@ -96,12 +100,12 @@ if "%ZOOKEEPER_RUNNING%"=="0" (
     echo       Zookeeper started successfully
     timeout /t 5 /nobreak >nul
 ) else (
-    echo [3/7] Zookeeper: Skipped (already running)
+    echo [3/8] Zookeeper: Skipped (already running)
 )
 
 if "%KAFKA_RUNNING%"=="0" (
     echo.
-    echo [4/7] Start Kafka...
+    echo [4/8] Start Kafka...
     docker rm -f kafka >nul 2>&1
     docker run -d --name kafka --network ai-network -p 9092:9092 -e KAFKA_BROKER_ID=1 -e KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181 -e KAFKA_LISTENERS=PLAINTEXT://:9092 -e KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://localhost:9092 -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1 -e KAFKA_AUTO_CREATE_TOPICS_ENABLE="true" confluentinc/cp-kafka:7.5.0
     if errorlevel 1 (
@@ -122,11 +126,40 @@ if "%KAFKA_RUNNING%"=="0" (
         echo       Kafka is ready
     )
 ) else (
-    echo [4/7] Kafka: Skipped (already running)
+    echo [4/8] Kafka: Skipped (already running)
 )
 
 echo.
-echo [5/7] Check Java base image...
+echo [5/8] Check Nacos status and start if needed...
+
+docker ps --format "{{.Names}}" | findstr /i "nacos" >nul 2>&1
+if errorlevel 1 (
+    echo       Nacos container not found, starting...
+    
+    echo       Creating nacos_config database in MySQL...
+    docker exec mysql mysql -uroot -proot -e "CREATE DATABASE IF NOT EXISTS nacos_config DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;" 2>nul
+    if errorlevel 1 (
+        echo [WARNING] Failed to create nacos_config database, Nacos may use embedded database
+    ) else (
+        echo       Database nacos_config ready
+    )
+    
+    docker rm -f nacos >nul 2>&1
+    docker run -d --name nacos --network ai-network -p 8848:8848 -e MODE=standalone -e NACOS_AUTH_ENABLE=false -e TZ=Asia/Shanghai nacos/nacos-server:v2.4.2
+    
+    if errorlevel 1 (
+        echo [ERROR] Nacos failed to start
+        pause
+        exit /b 1
+    )
+    echo       Nacos started successfully
+    timeout /t 10 /nobreak >nul
+) else (
+    echo [5/8] Nacos: Skipped (already running)
+)
+
+echo.
+echo [6/8] Check Java base image...
 docker images eclipse-temurin:17-jre-alpine --format "{{.ID}}" | findstr /r "." >nul 2>&1
 if errorlevel 1 (
     echo [ERROR] Base image not found: eclipse-temurin:17-jre-alpine
@@ -136,7 +169,7 @@ if errorlevel 1 (
 echo       Base image is ready
 
 echo.
-echo [6/7] Build Java application...
+echo [7/8] Build Java application...
 call mvn clean package -DskipTests -q
 if errorlevel 1 (
     echo [ERROR] Maven build failed!
@@ -146,7 +179,7 @@ if errorlevel 1 (
 echo       Java application built successfully
 
 echo.
-echo [7/7] Build Docker image...
+echo [8/8] Build Docker image...
 docker build -t %IMAGE_NAME%:latest .
 if errorlevel 1 (
     echo [ERROR] Docker image build failed!
@@ -188,16 +221,20 @@ echo ============================================
 echo.
 echo   URLs:
 echo   ----------------------------------------
-echo   SSE Chat:  http://localhost:8000/chat-sse.html
-echo   Unified:   http://localhost:8000/unified.html
-echo   Home:      http://localhost:8000/
-echo   API Docs:  http://localhost:8000/doc.html
+echo   Nacos:    http://localhost:8848/nacos
+echo   SSE Chat: http://localhost:8000/chat-sse.html
+echo   Unified:  http://localhost:8000/unified.html
+echo   Home:     http://localhost:8000/
+echo   API Docs: http://localhost:8000/doc.html
 echo   ----------------------------------------
 echo.
 echo   Commands:
-echo   Logs:      docker logs -f %CONTAINER_NAME%
-echo   Stop:      docker stop %CONTAINER_NAME%
-echo   Restart:   docker restart %CONTAINER_NAME%
+echo   ----------------------------------------
+echo   Nacos:    http://localhost:8848/nacos (default login: nacos/nacos)
+echo   App:      docker logs -f %CONTAINER_NAME%
+echo   Stop App: docker stop %CONTAINER_NAME%
+echo   Restart:  docker restart %CONTAINER_NAME%
+echo   ----------------------------------------
 echo.
 echo ============================================
 echo.
