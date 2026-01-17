@@ -72,6 +72,18 @@ spring:
       ack-mode: manual
       concurrency: 5
 
+# Nacos 配置中心
+nacos:
+  config:
+    server-addr: ${NACOS_SERVER_ADDR:localhost:8848}
+    namespace: ${NACOS_NAMESPACE:}
+    group: DEFAULT_GROUP
+    data-id: application-docker.yml
+    type: yaml
+    auto-refresh: true
+    bootstrap:
+      enable: true
+
 # SSE配置
 sse:
   timeout: 240000

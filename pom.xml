@@ -166,6 +166,13 @@
             <groupId>org.springframework.kafka</groupId>
             <artifactId>spring-kafka</artifactId>
         </dependency>
+
+        <!-- Nacos Config 配置中心 -->
+        <dependency>
+            <groupId>com.alibaba.boot</groupId>
+            <artifactId>nacos-config-spring-boot3-starter</artifactId>
+            <version>0.2.13</version>
+        </dependency>
     </dependencies>
 
     <dependencyManagement>
