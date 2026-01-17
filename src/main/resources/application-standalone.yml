@@ -9,6 +9,8 @@ server:
 spring:
   application:
     name: RAGTranslationApplication
+  main:
+    allow-bean-definition-overriding: true
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://localhost:3306/guiguxiaozhi?allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=UTC
@@ -18,17 +20,64 @@ spring:
       connection-timeout: 30000
   data:
     mongodb:
-      uri: mongodb://localhost:27017/chat_db
+      uri: ${SPRING_DATA_MONGODB_URI:mongodb://localhost:27017/chat_db}
     redis:
-      host: localhost
-      port: 6379
+      host: ${SPRING_REDIS_HOST:localhost}
+      port: ${SPRING_REDIS_PORT:6379}
   rabbitmq:
     host: localhost
     port: 5672
     username: admin
     password: admin
-  profiles:
-    active: standalone
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: ai-chat-consumer-group
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "*"
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      acks: all
+      retries: 3
+    listener:
+      ack-mode: manual
+      concurrency: 5
+
+# AI模型配置
+ai:
+  deepSeek:
+    base-url: https://api.deepseek.com/v1
+    model: deepseek-chat
+    apiKey: ${DeepSeek_API_KEY:}
+
+  kimi:
+    base-url: https://api.moonshot.cn/v1
+    model: kimi-k2-turbo-preview
+    apiKey: ${KIMI_API_KEY:}
+
+  embeddingStore:
+    qdrant:
+      collectionName: ragTranslation-1226
+      host: localhost
+      port: 6334
+
+  dashscope:
+    apiKey: ${DASHSCOPE_API_KEY:demo}
+    model: qwen-vl-max
+    base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
+
+  ollama:
+    base-url: http://localhost:11434
+    model: deepseek-r1:8b
+
+  mcp:
+    baiduMap:
+      apiKey: ${BAIDU_MAP_API_KEY:}
 
 # 禁用其他AI模型以测试基础功能
 # 仅测试基本HTTP服务功能

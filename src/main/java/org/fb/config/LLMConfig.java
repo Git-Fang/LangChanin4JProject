@@ -25,6 +25,8 @@ import org.fb.tools.MongoChatMemoryStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -45,7 +47,12 @@ public class LLMConfig {
      * 万象模型
      * */
     @Bean
+    @ConditionalOnProperty(name = "ai.dashscope.api-key")
     public WanxImageModel imageModel() {
+        if (envConf.dashscopeApiKey == null || envConf.dashscopeApiKey.isEmpty() || envConf.dashscopeApiKey.equals("demo")) {
+            log.warn("DashScope API Key未配置，图文生成功能不可用");
+            return null;
+        }
         WanxImageModel build = WanxImageModel.builder()
                 .apiKey(envConf.dashscopeApiKey)
                 .modelName("wanx2.0-t2i-turbo")
@@ -58,6 +65,10 @@ public class LLMConfig {
      * 千问大模型*/
     @Bean(name = "qwen")
     public ChatModel qwenChatModel() {
+        if (envConf.dashscopeApiKey == null || envConf.dashscopeApiKey.isEmpty() || envConf.dashscopeApiKey.equals("demo")) {
+            log.warn("DashScope API Key未配置，Qwen模型不可用");
+            return null;
+        }
         return OpenAiChatModel.builder()
                 .apiKey(envConf.dashscopeApiKey)
                 .modelName(envConf.dashscopeModel)
@@ -106,7 +117,12 @@ public class LLMConfig {
     }
 
     @Bean
+    @ConditionalOnProperty(name = "ai.dashscope.api-key")
     public StreamingChatModel streamingChatModel() {
+        if (envConf.dashscopeApiKey == null || envConf.dashscopeApiKey.isEmpty() || envConf.dashscopeApiKey.equals("demo")) {
+            log.warn("DashScope API Key未配置，Streaming模型不可用");
+            return null;
+        }
         return OpenAiStreamingChatModel.builder()
                 .apiKey(envConf.dashscopeApiKey)
                 .modelName(envConf.dashscopeModel)
@@ -163,7 +179,12 @@ public class LLMConfig {
 //    }
 
     @Bean
+    @ConditionalOnBean(StreamingChatModel.class)
     public ChatAssistantStream chatAssistantStream(StreamingChatModel chatModel, EmbeddingStore<TextSegment> embeddingStore, EmbeddingModel embeddingModel) {
+        if (chatModel == null) {
+            log.warn("StreamingChatModel未配置，ChatAssistantStream不可用");
+            return null;
+        }
 
         // 构建支撑检索增强的EmbeddingStore工具实例
         EmbeddingStoreContentRetriever contentRetriever = EmbeddingStoreContentRetriever.builder()

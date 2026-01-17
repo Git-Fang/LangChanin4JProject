@@ -1,5 +1,6 @@
 package org.fb.config;
 
+import dev.langchain4j.exception.HttpException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -25,6 +26,17 @@ public class GlobalExceptionHandler {
                 .body(Map.of(
                         "error", "Internal Server Error",
                         "message", "处理请求时发生错误，请稍后重试"
+                ));
+    }
+
+    @ExceptionHandler(HttpException.class)
+    @ResponseStatus(HttpStatus.UNAUTHORIZED)
+    public ResponseEntity<Map<String, Object>> handleHttpException(HttpException e) {
+        log.error("AI服务认证失败: {}", e.getMessage());
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(Map.of(
+                        "error", "Authentication Failed",
+                        "message", "AI服务认证失败，请检查API Key配置"
                 ));
     }
 
