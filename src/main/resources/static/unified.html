@@ -408,16 +408,27 @@
             opacity: 1;
         }
 
-        .message.user .message-actions {
-            clear: both;
-        }
-
         .message.assistant .message-actions {
             clear: both;
         }
 
         .message-actions-http {
-            float: left;
+            display: flex;
+            margin-top: 6px;
+            width: 100%;
+        }
+
+        .message-http-wrapper {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .message-http-user {
+            align-items: flex-end;
+        }
+
+        .message-http-user .message-actions-http {
+            justify-content: flex-end;
         }
 
         .message-content {
@@ -1446,9 +1457,46 @@
                 actionsDiv.appendChild(retryBtn);
             }
 
-            messageDiv.appendChild(avatar);
-            messageDiv.appendChild(contentDiv);
-            messageDiv.appendChild(actionsDiv);
+            if (isUser) {
+                const wrapperDiv = document.createElement('div');
+                wrapperDiv.className = 'message-http-wrapper message-http-user';
+                
+                const userContentDiv = document.createElement('div');
+                userContentDiv.className = 'message-content';
+                userContentDiv.textContent = content;
+                
+                const userActionsDiv = document.createElement('div');
+                userActionsDiv.className = 'message-actions message-actions-http';
+                
+                const userCopyBtn = document.createElement('button');
+                userCopyBtn.className = 'message-action-btn copy-btn';
+                userCopyBtn.innerHTML = '<span>📋</span> 复制';
+                userCopyBtn.onclick = () => copyMessage(content, userCopyBtn);
+                
+                const userRetryBtn = document.createElement('button');
+                userRetryBtn.className = 'message-action-btn retry-btn';
+                userRetryBtn.innerHTML = '<span>🔄</span> 编辑重试';
+                userRetryBtn.onclick = () => retryWithEdit(content);
+                
+                userActionsDiv.appendChild(userCopyBtn);
+                userActionsDiv.appendChild(userRetryBtn);
+                
+                wrapperDiv.appendChild(userContentDiv);
+                wrapperDiv.appendChild(userActionsDiv);
+                messageDiv.appendChild(avatar);
+                messageDiv.appendChild(wrapperDiv);
+            } else if (!isUser && currentMode === 'http') {
+                const wrapperDiv = document.createElement('div');
+                wrapperDiv.className = 'message-http-wrapper';
+                wrapperDiv.appendChild(contentDiv);
+                wrapperDiv.appendChild(actionsDiv);
+                messageDiv.appendChild(avatar);
+                messageDiv.appendChild(wrapperDiv);
+            } else {
+                messageDiv.appendChild(avatar);
+                messageDiv.appendChild(contentDiv);
+                messageDiv.appendChild(actionsDiv);
+            }
             container.appendChild(messageDiv);
 
             // 滚动到底部
