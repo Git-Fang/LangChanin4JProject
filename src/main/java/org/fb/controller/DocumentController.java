@@ -88,11 +88,34 @@ public class DocumentController {
 
     @GetMapping("/history")
     @Operation(summary = "获取上传文档历史记录")
-    public List<Map<String, Object>> getDocumentHistory() {
-        List<FileOperation> records = fileOperationMapper.selectList(
-            new LambdaQueryWrapper<FileOperation>()
-                .orderByDesc(FileOperation::getOperationTime)
-        );
+    public List<Map<String, Object>> getDocumentHistory(
+            @RequestParam(required = false) String sortField,
+            @RequestParam(required = false, defaultValue = "desc") String sortOrder,
+            @RequestParam(required = false) String operationType) {
+
+        LambdaQueryWrapper<FileOperation> queryWrapper = new LambdaQueryWrapper<>();
+
+        if (operationType != null && !operationType.isEmpty()) {
+            queryWrapper.eq(FileOperation::getOperationType, operationType.toUpperCase());
+        }
+
+        if ("operationTime".equals(sortField)) {
+            if ("asc".equalsIgnoreCase(sortOrder)) {
+                queryWrapper.orderByAsc(FileOperation::getOperationTime);
+            } else {
+                queryWrapper.orderByDesc(FileOperation::getOperationTime);
+            }
+        } else if ("finishedTime".equals(sortField)) {
+            if ("asc".equalsIgnoreCase(sortOrder)) {
+                queryWrapper.orderByAsc(FileOperation::getFinishedTime);
+            } else {
+                queryWrapper.orderByDesc(FileOperation::getFinishedTime);
+            }
+        } else {
+            queryWrapper.orderByDesc(FileOperation::getOperationTime);
+        }
+
+        List<FileOperation> records = fileOperationMapper.selectList(queryWrapper);
 
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 

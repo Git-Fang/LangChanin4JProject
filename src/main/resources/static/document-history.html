@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>上传文档历史 - 小智Agent</title>
+    <link rel="icon" type="image/png" href="/icon.png">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+            background-color: #f5f5f5;
+            min-height: 100vh;
+        }
+
+        .header {
+            background-color: white;
+            border-bottom: 1px solid #e0e0e0;
+            padding: 16px 24px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .header h1 {
+            font-size: 18px;
+            font-weight: 500;
+            color: #333;
+        }
+
+        .back-btn {
+            padding: 8px 16px;
+            background-color: #667eea;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .back-btn:hover {
+            background-color: #5568d3;
+        }
+
+        .container {
+            padding: 24px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .card {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        .card-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid #e0e0e0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .card-title {
+            font-size: 16px;
+            font-weight: 500;
+            color: #333;
+        }
+
+        .filter-container {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .filter-group {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .filter-group label {
+            font-size: 13px;
+            color: #666;
+            white-space: nowrap;
+        }
+
+        .filter-group select {
+            padding: 6px 10px;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            font-size: 13px;
+            color: #333;
+            background-color: white;
+            cursor: pointer;
+            outline: none;
+        }
+
+        .filter-group select:focus {
+            border-color: #667eea;
+        }
+
+        .refresh-btn {
+            padding: 8px 16px;
+            background-color: #667eea;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .refresh-btn:hover {
+            background-color: #5568d3;
+        }
+
+        .table-container {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            padding: 12px 16px;
+            text-align: left;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        th {
+            background-color: #f9f9f9;
+            font-weight: 500;
+            color: #666;
+            font-size: 13px;
+            white-space: nowrap;
+        }
+
+        td {
+            color: #333;
+            font-size: 14px;
+        }
+
+        tr:hover {
+            background-color: #f9f9f9;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .status-success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+
+        .status-failed {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+
+        .status-processing {
+            background-color: #d1ecf1;
+            color: #0c5460;
+        }
+
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .loading::before {
+            content: '';
+            width: 20px;
+            height: 20px;
+            border: 2px solid #e0e0e0;
+            border-top-color: #667eea;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-right: 10px;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .empty-state {
+            padding: 60px 20px;
+            text-align: center;
+            color: #999;
+        }
+
+        .error-message {
+            padding: 20px;
+            text-align: center;
+            color: #f44336;
+        }
+
+        .operation-type {
+            font-weight: 500;
+        }
+
+        .operation-type.vectorize {
+            color: #667eea;
+        }
+
+        .operation-type.terms {
+            color: #4caf50;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <button class="back-btn" onclick="window.location.href='/unified.html'">返回主页</button>
+        <h1>上传文档历史</h1>
+    </div>
+
+    <div class="container">
+        <div class="card">
+            <div class="card-header">
+                <span class="card-title">文档操作记录</span>
+                <div class="filter-container">
+                    <div class="filter-group">
+                        <label for="sortField">排序字段:</label>
+                        <select id="sortField" onchange="loadDocumentHistory()">
+                            <option value="operationTime">操作时间</option>
+                            <option value="finishedTime">完成时间</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label for="sortOrder">排序方式:</label>
+                        <select id="sortOrder" onchange="loadDocumentHistory()">
+                            <option value="desc">倒序</option>
+                            <option value="asc">正序</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label for="operationType">操作类型:</label>
+                        <select id="operationType" onchange="loadDocumentHistory()">
+                            <option value="">全部</option>
+                            <option value="VECTORIZE">向量化</option>
+                            <option value="TERMS">术语提取</option>
+                        </select>
+                    </div>
+                    <button class="refresh-btn" onclick="loadDocumentHistory()">刷新数据</button>
+                </div>
+            </div>
+            <div class="table-container">
+                <div id="loadingState" class="loading">加载中...</div>
+                <div id="emptyState" class="empty-state" style="display: none;">暂无文档操作记录</div>
+                <div id="errorState" class="error-message" style="display: none;">加载失败，请刷新重试</div>
+                <table id="historyTable" style="display: none;">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>文件名</th>
+                            <th>文件类型</th>
+                            <th>操作类型</th>
+                            <th>操作时间</th>
+                            <th>状态</th>
+                            <th>完成时间</th>
+                        </tr>
+                    </thead>
+                    <tbody id="historyTableBody">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE_URL = getApiBaseUrl();
+
+        function getApiBaseUrl() {
+            const protocol = window.location.protocol;
+            const hostname = window.location.hostname;
+            const port = window.location.port || (protocol === 'https:' ? '443' : '80');
+            return `${protocol}//${hostname}:${port}`;
+        }
+
+        async function loadDocumentHistory() {
+            const loadingState = document.getElementById('loadingState');
+            const emptyState = document.getElementById('emptyState');
+            const errorState = document.getElementById('errorState');
+            const historyTable = document.getElementById('historyTable');
+            const tableBody = document.getElementById('historyTableBody');
+
+            const sortField = document.getElementById('sortField').value;
+            const sortOrder = document.getElementById('sortOrder').value;
+            const operationType = document.getElementById('operationType').value;
+
+            loadingState.style.display = 'flex';
+            emptyState.style.display = 'none';
+            errorState.style.display = 'none';
+            historyTable.style.display = 'none';
+            tableBody.innerHTML = '';
+
+            try {
+                const params = new URLSearchParams({
+                    sortField: sortField,
+                    sortOrder: sortOrder
+                });
+
+                if (operationType) {
+                    params.append('operationType', operationType);
+                }
+
+                const response = await fetch(`${API_BASE_URL}/ragTranslation/doc/history?${params.toString()}`);
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+
+                loadingState.style.display = 'none';
+
+                if (!data || data.length === 0) {
+                    emptyState.style.display = 'block';
+                    return;
+                }
+
+                historyTable.style.display = 'table';
+
+                data.forEach(record => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${record.id || '-'}</td>
+                        <td>${escapeHtml(record.fileName || '-')}</td>
+                        <td>${escapeHtml(record.fileType || '-')}</td>
+                        <td><span class="operation-type ${getOperationTypeClass(record.operationType)}">${escapeHtml(record.operationType || '-')}</span></td>
+                        <td>${formatDateTime(record.operationTime)}</td>
+                        <td><span class="status-badge ${getStatusClass(record.status)}">${escapeHtml(record.status || '-')}</span></td>
+                        <td>${formatDateTime(record.finishedTime)}</td>
+                    `;
+                    tableBody.appendChild(row);
+                });
+
+            } catch (error) {
+                console.error('加载文档历史失败:', error);
+                loadingState.style.display = 'none';
+                errorState.style.display = 'block';
+            }
+        }
+
+        function getOperationTypeClass(operationType) {
+            if (!operationType) return '';
+            if (operationType.toUpperCase() === 'VECTORIZE') return 'vectorize';
+            if (operationType.toUpperCase() === 'TERMS') return 'terms';
+            return '';
+        }
+
+        function getStatusClass(status) {
+            if (!status) return '';
+            const upperStatus = status.toUpperCase();
+            if (upperStatus === 'SUCCESS') return 'status-success';
+            if (upperStatus === 'FAILED') return 'status-failed';
+            return 'status-processing';
+        }
+
+        function formatDateTime(dateTime) {
+            if (!dateTime) return '-';
+            try {
+                const date = new Date(dateTime);
+                if (isNaN(date.getTime())) return dateTime;
+                return date.toLocaleString('zh-CN', {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    hour12: false
+                });
+            } catch (e) {
+                return dateTime;
+            }
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        document.addEventListener('DOMContentLoaded', loadDocumentHistory);
+    </script>
+</body>
+</html>
