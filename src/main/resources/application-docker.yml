@@ -134,6 +134,22 @@ logging:
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] [traceId=%X{traceId}/spanId=%X{spanId}] %-5level %logger{36} - %msg%n"
 
+# Nacos配置中心配置
+nacos:
+  enabled: ${NACOS_ENABLED:false}
+  server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:8848}
+  namespace: ${NACOS_NAMESPACE:}
+  group: ${NACOS_GROUP:DEFAULT_GROUP}
+  data-id: ${NACOS_DATA_ID:RAGTranslationApplication-docker.yml}
+
+# 应用配置
+app:
+  test:
+    value: ${APP_TEST_VALUE:test}
+  dynamic:
+    enabled: ${APP_DYNAMIC_ENABLED:true}
+    refresh-interval: ${APP_DYNAMIC_REFRESH_INTERVAL:30}
+
 # 链路追踪配置
 tracing:
   sampling:
@@ -141,3 +157,4 @@ tracing:
   enabled: true
   propagation:
     type: w3c
+
