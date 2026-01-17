@@ -572,6 +572,58 @@
             border-radius: 4px;
             margin: 0.5em 0;
         }
+
+        .message-actions {
+            display: flex;
+            gap: 6px;
+            margin-top: 8px;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        .message:hover .message-actions {
+            opacity: 1;
+        }
+
+        .message-action-btn {
+            padding: 4px 10px;
+            font-size: 0.75rem;
+            border: 1px solid #ddd;
+            background: white;
+            border-radius: 4px;
+            cursor: pointer;
+            color: #666;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .message-action-btn:hover {
+            background: #f0f0f0;
+            border-color: #ccc;
+        }
+
+        .message-action-btn.copied {
+            background: #4caf50;
+            color: white;
+            border-color: #4caf50;
+        }
+
+        .message.user .message-action-btn {
+            border-color: rgba(255,255,255,0.3);
+            background: rgba(255,255,255,0.1);
+            color: white;
+        }
+
+        .message.user .message-action-btn:hover {
+            background: rgba(255,255,255,0.2);
+        }
+
+        .message.user .message-action-btn.copied {
+            background: #81c784;
+            border-color: #81c784;
+        }
     </style>
 </head>
 <body>
@@ -657,29 +709,92 @@
 
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${isUser ? 'user' : 'assistant'}`;
-            
+            messageDiv.dataset.content = content;
+
             const avatar = document.createElement('div');
             avatar.className = 'message-avatar';
             avatar.textContent = isUser ? '我' : '智';
-            
+
             const contentDiv = document.createElement('div');
             contentDiv.className = 'message-content';
-            
+
             // 如果是助手消息，使用markdown解析
             if (!isUser) {
                 contentDiv.innerHTML = marked.parse(content);
             } else {
                 contentDiv.textContent = content;
             }
-            
+
+            const actionsDiv = document.createElement('div');
+            actionsDiv.className = 'message-actions';
+
+            const copyBtn = document.createElement('button');
+            copyBtn.className = 'message-action-btn copy-btn';
+            copyBtn.innerHTML = '<span>📋</span> 复制';
+            copyBtn.onclick = () => copyMessage(content, copyBtn);
+
+            const retryBtn = document.createElement('button');
+            retryBtn.className = 'message-action-btn retry-btn';
+            if (isUser) {
+                retryBtn.innerHTML = '<span>🔄</span> 编辑重试';
+                retryBtn.onclick = () => retryWithEdit(content);
+            } else {
+                retryBtn.innerHTML = '<span>🔄</span> 重试';
+                retryBtn.onclick = () => retryWithSameQuestion();
+            }
+
+            actionsDiv.appendChild(copyBtn);
+            actionsDiv.appendChild(retryBtn);
+
             messageDiv.appendChild(avatar);
             messageDiv.appendChild(contentDiv);
+            messageDiv.appendChild(actionsDiv);
             container.appendChild(messageDiv);
-            
+
             // 滚动到底部
             container.scrollTop = container.scrollHeight;
-            
+
             return contentDiv;
+        }
+
+        function copyMessage(content, btn) {
+            navigator.clipboard.writeText(content).then(() => {
+                btn.classList.add('copied');
+                btn.innerHTML = '<span>✓</span> 已复制';
+                setTimeout(() => {
+                    btn.classList.remove('copied');
+                    btn.innerHTML = '<span>📋</span> 复制';
+                }, 2000);
+            }).catch(err => {
+                console.error('复制失败:', err);
+                alert('复制失败，请手动选择文本复制');
+            });
+        }
+
+        function retryWithEdit(content) {
+            const input = document.getElementById('messageInput');
+            input.value = content;
+            input.focus();
+        }
+
+        function retryWithSameQuestion() {
+            const messages = document.querySelectorAll('.message');
+            let lastUserMessage = null;
+            for (let i = messages.length - 1; i >= 0; i--) {
+                if (messages[i].classList.contains('user')) {
+                    lastUserMessage = messages[i];
+                    break;
+                }
+            }
+
+            if (lastUserMessage) {
+                const content = lastUserMessage.dataset.content;
+                if (content) {
+                    const input = document.getElementById('messageInput');
+                    input.value = content;
+                    input.focus();
+                }
+            }
         }
 
         // 发送消息

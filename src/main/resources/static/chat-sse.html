@@ -66,7 +66,7 @@
             word-wrap: break-word;
             overflow-wrap: break-word;
         }
-        
+
         .message.ai .bubble {
             background: #f0f0f0;
             padding: 12px 16px;
@@ -89,6 +89,67 @@
             font-size: 0.75rem;
             color: #999;
             margin-top: 4px;
+        }
+
+        .message .actions {
+            display: inline-flex;
+            gap: 8px;
+            margin-top: 6px;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        .message:hover .actions {
+            opacity: 1;
+        }
+
+        .message.user .actions {
+            float: right;
+            clear: both;
+        }
+
+        .message.ai .actions {
+            display: inline-flex;
+        }
+
+        .action-btn {
+            padding: 4px 10px;
+            font-size: 0.75rem;
+            border: 1px solid #ddd;
+            background: white;
+            border-radius: 4px;
+            cursor: pointer;
+            color: #666;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .action-btn:hover {
+            background: #f5f5f5;
+            border-color: #ccc;
+        }
+
+        .action-btn.copied {
+            background: #4caf50;
+            color: white;
+            border-color: #4caf50;
+        }
+
+        .message.user .action-btn {
+            border-color: rgba(255,255,255,0.3);
+            background: rgba(255,255,255,0.1);
+            color: white;
+        }
+
+        .message.user .action-btn:hover {
+            background: rgba(255,255,255,0.2);
+        }
+
+        .message.user .action-btn.copied {
+            background: #81c784;
+            border-color: #81c784;
         }
         
         .typing-indicator {
@@ -146,11 +207,12 @@
             transform: translateY(-2px);
             box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
         }
+
         .input-area button:disabled {
             opacity: 0.6;
             cursor: not-allowed;
         }
-        
+
         .status-bar {
             padding: 10px 20px;
             background: #f8f9fa;
@@ -230,6 +292,8 @@
         let isProcessing = false;
         let currentMemoryId = null;
         let conversationHistory = [];
+        let lastUserMessage = null;
+        let lastUserMemoryId = null;
         
         const messagesArea = document.getElementById('messagesArea');
         const messageInput = document.getElementById('messageInput');
@@ -246,32 +310,95 @@
         function addMessage(role, content, memoryId = null) {
             const messageDiv = document.createElement('div');
             messageDiv.className = 'message ' + role;
-            
+            messageDiv.dataset.content = content;
+            messageDiv.dataset.memoryId = memoryId || '';
+
             const bubble = document.createElement('div');
             bubble.className = 'bubble';
-            
+
             if (role === 'ai') {
                 bubble.innerHTML = marked.parse(content);
             } else {
                 bubble.textContent = content;
             }
-            
+
             const meta = document.createElement('div');
             meta.className = 'meta';
             const time = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
             meta.textContent = role === 'user' ? '你 · ' + time : 'AI助手 · ' + time;
-            
+
+            const actionsDiv = document.createElement('div');
+            actionsDiv.className = 'actions';
+
+            const copyBtn = document.createElement('button');
+            copyBtn.className = 'action-btn copy-btn';
+            copyBtn.innerHTML = '<span>📋</span> 复制';
+            copyBtn.onclick = () => copyMessage(content, copyBtn);
+
+            actionsDiv.appendChild(copyBtn);
+
+            if (role === 'user') {
+                const editRetryBtn = document.createElement('button');
+                editRetryBtn.className = 'action-btn retry-btn';
+                editRetryBtn.innerHTML = '<span>🔄</span> 编辑重试';
+                editRetryBtn.onclick = () => retryWithEdit(content);
+                actionsDiv.appendChild(editRetryBtn);
+            }
+
+            if (role === 'ai') {
+                const retryBtn = document.createElement('button');
+                retryBtn.className = 'action-btn retry-btn';
+                retryBtn.innerHTML = '<span>🔄</span> 重试';
+                retryBtn.onclick = () => retryLastRequest();
+                actionsDiv.appendChild(retryBtn);
+            }
+
             messageDiv.appendChild(bubble);
+            messageDiv.appendChild(actionsDiv);
             messageDiv.appendChild(meta);
             messagesArea.appendChild(messageDiv);
-            
+
             messagesArea.scrollTop = messagesArea.scrollHeight;
-            
+
             if (memoryId && role === 'user') {
                 currentMemoryId = memoryId;
             }
-            
+
             return messageDiv;
+        }
+        
+        function copyMessage(content, btn) {
+            navigator.clipboard.writeText(content).then(() => {
+                btn.classList.add('copied');
+                btn.innerHTML = '<span>✓</span> 已复制';
+                setTimeout(() => {
+                    btn.classList.remove('copied');
+                    btn.innerHTML = '<span>📋</span> 复制';
+                }, 2000);
+            }).catch(err => {
+                console.error('复制失败:', err);
+                alert('复制失败，请手动选择文本复制');
+            });
+        }
+
+        function retryWithEdit(content) {
+            messageInput.value = content;
+            messageInput.focus();
+            adjustTextareaHeight();
+        }
+
+        function retryLastRequest() {
+            if (lastUserMessage) {
+                messageInput.value = lastUserMessage;
+                sendMessage();
+            } else {
+                alert('没有可重试的请求');
+            }
+        }
+        
+        function adjustTextareaHeight() {
+            messageInput.style.height = 'auto';
+            messageInput.style.height = Math.min(messageInput.scrollHeight, 150) + 'px';
         }
         
         function showTypingIndicator() {
@@ -320,17 +447,20 @@
         async function sendMessage() {
             const message = messageInput.value.trim();
             if (!message || isProcessing) return;
-            
+
+            lastUserMessage = message;
+            lastUserMemoryId = Date.now();
+
             try {
                 isProcessing = true;
                 sendBtn.disabled = true;
                 messageInput.disabled = true;
-                
-                const memoryId = Date.now();
+
+                const memoryId = lastUserMemoryId;
                 addMessage('user', message, memoryId);
-                
+
                 conversationHistory.push({ role: 'user', content: message, memoryId: memoryId });
-                
+
                 const response = await fetch('/xiaozhi/chat/async', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -339,15 +469,15 @@
                         message: message
                     })
                 });
-                
+
                 if (!response.ok) {
                     throw new Error('HTTP错误: ' + response.status);
                 }
-                
+
                 const { requestId, streamUrl } = await response.json();
                 currentRequestId = requestId;
                 currentMemoryId = memoryId;
-                
+
                 updateConnectionStatus('connecting', '连接中...');
                 requestInfo.textContent = '请求: ' + requestId.substring(0, 8) + '...';
                 
