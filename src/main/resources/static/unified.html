@@ -414,8 +414,9 @@
 
         .message-actions-http {
             display: flex;
-            margin-top: 6px;
-            width: 100%;
+            gap: 4px;
+            margin-top: 4px;
+            width: auto;
         }
 
         .message-http-wrapper {
@@ -865,8 +866,8 @@
         }
 
         .message-action-btn {
-            padding: 4px 10px;
-            font-size: 0.75rem;
+            padding: 2px 8px;
+            font-size: 0.7rem;
             border: 1px solid #ddd;
             background: white;
             border-radius: 4px;
@@ -875,7 +876,7 @@
             transition: all 0.2s;
             display: flex;
             align-items: center;
-            gap: 4px;
+            gap: 2px;
         }
 
         .message-action-btn:hover {
@@ -891,17 +892,28 @@
 
         .message.user .message-action-btn {
             border-color: rgba(255,255,255,0.3);
-            background: rgba(255,255,255,0.1);
+            background: rgba(255,255,255,0.15);
             color: white;
         }
 
         .message.user .message-action-btn:hover {
-            background: rgba(255,255,255,0.2);
+            background: rgba(255,255,255,0.25);
         }
 
         .message.user .message-action-btn.copied {
             background: #81c784;
             border-color: #81c784;
+        }
+
+        .message.assistant .message-action-btn {
+            border-color: #ddd;
+            background: white;
+            color: #666;
+        }
+
+        .message.assistant .message-action-btn:hover {
+            background: #f0f0f0;
+            border-color: #ccc;
         }
     </style>
 </head>

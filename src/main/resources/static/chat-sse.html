@@ -93,8 +93,8 @@
 
         .message .actions {
             display: inline-flex;
-            gap: 8px;
-            margin-top: 6px;
+            gap: 4px;
+            margin-top: 4px;
             opacity: 0;
             transition: opacity 0.2s;
         }
@@ -104,7 +104,6 @@
         }
 
         .message.user .actions {
-            float: right;
             clear: both;
         }
 
@@ -113,8 +112,8 @@
         }
 
         .action-btn {
-            padding: 4px 10px;
-            font-size: 0.75rem;
+            padding: 2px 8px;
+            font-size: 0.7rem;
             border: 1px solid #ddd;
             background: white;
             border-radius: 4px;
@@ -123,7 +122,7 @@
             transition: all 0.2s;
             display: flex;
             align-items: center;
-            gap: 4px;
+            gap: 2px;
         }
 
         .action-btn:hover {
@@ -139,17 +138,28 @@
 
         .message.user .action-btn {
             border-color: rgba(255,255,255,0.3);
-            background: rgba(255,255,255,0.1);
+            background: rgba(255,255,255,0.15);
             color: white;
         }
 
         .message.user .action-btn:hover {
-            background: rgba(255,255,255,0.2);
+            background: rgba(255,255,255,0.25);
         }
 
         .message.user .action-btn.copied {
             background: #81c784;
             border-color: #81c784;
+        }
+
+        .message.ai .action-btn {
+            border-color: #ddd;
+            background: white;
+            color: #666;
+        }
+
+        .message.ai .action-btn:hover {
+            background: #f5f5f5;
+            border-color: #ccc;
         }
         
         .typing-indicator {
@@ -353,9 +363,27 @@
                 actionsDiv.appendChild(retryBtn);
             }
 
-            messageDiv.appendChild(bubble);
-            messageDiv.appendChild(actionsDiv);
-            messageDiv.appendChild(meta);
+            if (role === 'user') {
+                const wrapperDiv = document.createElement('div');
+                wrapperDiv.className = 'message-user-wrapper';
+                wrapperDiv.style.cssText = 'display: flex; flex-direction: column; align-items: flex-end;';
+
+                const bubbleClone = bubble.cloneNode(true);
+                const actionsClone = actionsDiv.cloneNode(true);
+
+                wrapperDiv.appendChild(bubbleClone);
+                wrapperDiv.appendChild(actionsClone);
+
+                const metaDiv = meta.cloneNode(true);
+
+                messageDiv.innerHTML = '';
+                messageDiv.appendChild(wrapperDiv);
+                messageDiv.appendChild(metaDiv);
+            } else {
+                messageDiv.appendChild(bubble);
+                messageDiv.appendChild(actionsDiv);
+                messageDiv.appendChild(meta);
+            }
             messagesArea.appendChild(messageDiv);
 
             messagesArea.scrollTop = messagesArea.scrollHeight;
