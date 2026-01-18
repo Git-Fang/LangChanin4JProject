@@ -21,6 +21,7 @@ import org.fb.service.assistant.BaiduMapMcpAssistant;
 import org.fb.service.assistant.BaiduMapMcpStreamAssistant;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -40,9 +41,7 @@ public class AiConf {
     private QdrantClient qdrantClient;
 
     @Autowired
-    private EnvConf envConf;
-
-    @Autowired
+    @Qualifier("qdrantEmbeddingStore")
     private EmbeddingStore<TextSegment> embeddingStore;
 
     @Autowired(required = false)
@@ -52,13 +51,27 @@ public class AiConf {
     @Qualifier("chatModel")
     private ChatModel chatModel;
 
+    @Value("${ai.embeddingStore.qdrant.collectionName:ragTranslation-1226}")
+    private String collectionName;
+
+    @Value("${ai.mcp.baiduMap.apiKey:}")
+    private String baiduMapApiKey;
+
     @PostConstruct
     public void createCollection() throws IOException {
-        Collections.VectorParams vectorParams = Collections.VectorParams.newBuilder()
-                .setDistance(Collections.Distance.Cosine)
-                .setSize(embeddedModel.dimension())
-                .build();
-        qdrantClient.createCollectionAsync(envConf.collectionName, vectorParams);
+        if (collectionName == null || collectionName.isEmpty()) {
+            collectionName = "ragTranslation-1226";
+        }
+        try {
+            Collections.VectorParams vectorParams = Collections.VectorParams.newBuilder()
+                    .setDistance(Collections.Distance.Cosine)
+                    .setSize(embeddedModel.dimension())
+                    .build();
+            qdrantClient.createCollectionAsync(collectionName, vectorParams);
+        } catch (Exception e) {
+            // 集合可能已存在，忽略错误
+            System.out.println("Qdrant集合创建完成或已存在: " + e.getMessage());
+        }
     }
 
 
@@ -117,7 +130,7 @@ public class AiConf {
         // 1.启动百度地图MCP服务
         McpTransport transport = new StdioMcpTransport.Builder()
                 .command(List.of("cmd", "/c", "npx", "-y", BusinessConstant.BAIDU_MAP_MCP_SERVER))
-                .environment(Map.of("BAIDU_MAP_API_KEY", envConf.baiduMapApiKey))
+                .environment(Map.of("BAIDU_MAP_API_KEY", baiduMapApiKey))
                 .logEvents(true) // only if you want to see the traffic in the log
                 .build();
 

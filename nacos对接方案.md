@@ -209,8 +209,14 @@ BAIDU_MAP_API_KEY=your_baidu_map_api_key_here
 | 4 | application-standalone.yml | 修改 | 添加spring.cloud.nacos配置 |
 | 5 | EnvConf.java | 修改 | 添加@RefreshScope注解 |
 | 6 | TraceIdFilter.java | 修改 | 添加SSE路径排除，支持所有HTML页面 |
-| 7 | deploy-desktop.bat | 修改 | 添加Nacos环境变量 |
-| 8 | .env.example | 修改 | 添加Nacos配置说明 |
+| 7 | LLMConfig.java | 修改 | 添加@RefreshScope支持动态刷新 |
+| 8 | AiConf.java | 修改 | 移除EnvConf依赖，直接使用@Value |
+| 9 | RedisConfig.java | 修改 | 统一Redis配置，支持Docker环境 |
+| 10 | WebMvcConfig.java | 修改 | 添加消息转换器配置 |
+| 11 | GlobalExceptionHandler.java | 修改 | 排除SSE请求的错误处理 |
+| 12 | ConfigRefreshController.java | 新增 | 配置刷新控制器 |
+| 13 | deploy-desktop.bat | 修改 | 添加Nacos环境变量 |
+| 14 | .env.example | 修改 | 添加Nacos配置说明 |
 
 ## 五、Nacos控制台配置
 
@@ -429,6 +435,74 @@ spring:
 
 **说明**: 此设置允许在较新版本的Spring Boot上运行Spring Cloud组件，通常不会影响功能正常使用。
 
+### 11.7 动态配置刷新功能
+
+**功能描述**: 实现Nacos配置动态刷新，支持在不重启服务的情况下更新配置。
+
+**实现方案**:
+
+1. **配置类添加@RefreshScope**:
+
+```java
+@Configuration
+@RefreshScope
+public class LLMConfig {
+    @Value("${ai.deepSeek.model:deepseek-chat}")
+    private volatile String deepSeekModel;
+    
+    // ... 其他配置属性
+}
+```
+
+2. **配置刷新控制器**:
+
+```java
+@RestController
+@RequestMapping("/config")
+public class ConfigRefreshController {
+    
+    @Autowired
+    private ApplicationEventPublisher eventPublisher;
+    
+    @PostMapping("/refresh")
+    public Map<String, Object> refreshConfig() {
+        eventPublisher.publishEvent(new RefreshScopeRefreshedEvent());
+        return Map.of("success", true, "message", "配置已刷新");
+    }
+}
+```
+
+**使用步骤**:
+
+1. **在Nacos控制台修改配置**:
+   - 访问 http://localhost:8848/nacos
+   - 修改配置后点击发布
+
+2. **调用刷新接口**:
+   ```bash
+   curl -X POST http://localhost:8000/config/refresh
+   ```
+
+3. **验证配置已更新**:
+   - 新的API调用将使用更新后的配置
+
+**支持的动态刷新配置**:
+- ✅ API密钥（DeepSeek、Kimi、DashScope等）
+- ✅ 模型名称（ai.deepSeek.model等）
+- ✅ base-url配置
+- ✅ 功能开关配置
+
+**无法动态刷新的配置**（需要重启服务）:
+- ❌ 数据库连接池配置
+- ❌ Redis连接配置
+- ❌ Qdrant连接配置
+
+**修改文件**:
+- `src/main/java/org/fb/config/LLMConfig.java` - 添加@RefreshScope
+- `src/main/java/org/fb/controller/ConfigRefreshController.java` - 新建刷新控制器
+
+### 11.8 依赖版本兼容性问题
+
 **问题描述**: 原始使用的`com.alibaba.boot:nacos-*-spring-boot3-starter:0.2.13`在Spring Boot 3.x环境下无法找到依赖。
 
 **解决方案**: 改用Spring Cloud Alibaba版本:
@@ -468,6 +542,8 @@ src/main/resources/application-standalone.yml     # 本地环境配置
 src/main/java/org/fb/RAGTranslationApplication.java  # 主应用类
 src/main/java/org/fb/config/EnvConf.java          # 环境配置类
 src/main/java/org/fb/config/TraceIdFilter.java    # 链路追踪过滤器
+src/main/java/org/fb/config/LLMConfig.java        # LLM配置类
+src/main/java/org/fb/controller/ConfigRefreshController.java  # 配置刷新控制器
 deploy-desktop.bat                                # Docker部署脚本
 .env.example                                      # 环境变量模板
 ```
@@ -480,3 +556,4 @@ deploy-desktop.bat                                # Docker部署脚本
 ### 12.3 监控和管理
 - Nacos控制台: http://localhost:8848/nacos
 - 应用健康检查: http://localhost:8000/actuator/health
+- 配置刷新接口: POST http://localhost:8000/config/refresh

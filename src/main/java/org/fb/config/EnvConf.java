@@ -1,9 +1,11 @@
 package org.fb.config;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cloud.context.config.annotation.RefreshScope;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
+@RefreshScope
 public class EnvConf {
  
     @Value("${ai.embeddingStore.qdrant.host:localhost}")
@@ -14,7 +16,7 @@ public class EnvConf {
  
     @Value("${ai.embeddingStore.qdrant.collectionName:ragTranslation-1226}")
     public String collectionName;
-
+ 
     @Value("${ai.ollama.base-url:http://localhost:11434}")
     public String ollamaUrl;
  
@@ -51,5 +53,4 @@ public class EnvConf {
  
     @Value("${ai.deepSeek.base-url:https://api.deepseek.com/v1}")
     public String deepSeekUrl;
-
 }
