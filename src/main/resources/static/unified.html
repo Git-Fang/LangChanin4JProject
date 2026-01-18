@@ -965,6 +965,16 @@
                 <h3 class="upload-title">文档查询</h3>
                 <button class="upload-btn" onclick="window.open('/document-history.html', '_blank')">上传文档历史</button>
             </div>
+
+            <!-- 配置更新区域 -->
+            <div class="upload-section" id="configRefreshSection" style="margin-top: auto; padding-top: 20px; border-top: 1px solid #e0e0e0;">
+                <h3 class="upload-title">配置更新</h3>
+                <button class="upload-btn" id="configRefreshBtn" onclick="refreshConfig()">
+                    <span id="refreshBtnIcon">🔄</span>
+                    <span id="refreshBtnText">手动刷新配置</span>
+                </button>
+                <div id="configRefreshResult" style="margin-top: 8px; font-size: 12px; color: #666; display: none; word-break: break-all;"></div>
+            </div>
         </div>
 
         <!-- 主聊天区域 -->
@@ -1889,6 +1899,52 @@
             // 加载历史会话列表
             loadHistorySessions();
         });
+
+        // 配置刷新功能
+        async function refreshConfig() {
+            const refreshBtn = document.getElementById('configRefreshBtn');
+            const refreshBtnIcon = document.getElementById('refreshBtnIcon');
+            const refreshBtnText = document.getElementById('refreshBtnText');
+            const resultDiv = document.getElementById('configRefreshResult');
+
+            // 禁用按钮并显示加载状态
+            refreshBtn.disabled = true;
+            refreshBtnIcon.textContent = '⏳';
+            refreshBtnText.textContent = '刷新中...';
+            resultDiv.style.display = 'none';
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/config/refresh`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const result = await response.json();
+
+                resultDiv.style.display = 'block';
+
+                if (result.success) {
+                    resultDiv.innerHTML = `<span style="color: #4caf50;">✓ ${result.message}</span>`;
+                } else {
+                    resultDiv.innerHTML = `<span style="color: #f44336;">✗ ${result.message}</span>`;
+                }
+            } catch (error) {
+                resultDiv.style.display = 'block';
+                resultDiv.innerHTML = `<span style="color: #f44336;">✗ 请求失败: ${error.message}</span>`;
+            } finally {
+                // 恢复按钮状态
+                refreshBtn.disabled = false;
+                refreshBtnIcon.textContent = '🔄';
+                refreshBtnText.textContent = '手动刷新配置';
+
+                // 3秒后隐藏结果
+                setTimeout(() => {
+                    resultDiv.style.display = 'none';
+                }, 3000);
+            }
+        }
     </script>
     <script src="/js/batch-ui.js"></script>
     
