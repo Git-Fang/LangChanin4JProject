@@ -17,6 +17,9 @@ server:
 spring:
   application:
     name: RAGTranslationApplication
+  config:
+    import:
+      - optional:nacos:application-docker.yml
   web:
     timeout: 240s
   servlet:
@@ -37,10 +40,10 @@ spring:
     mongodb:
       uri: ${SPRING_DATA_MONGODB_URI:mongodb://localhost:27017/chat_db}
 
-  # Redis配置 - 直接设置Docker网络IP
+  # Redis配置 - 支持环境变量覆盖
   redis:
-    host: 172.20.0.5
-    port: 6379
+    host: ${SPRING_REDIS_HOST:localhost}
+    port: ${SPRING_REDIS_PORT:6379}
 
   # RabbitMQ配置 - 支持环境变量覆盖
   rabbitmq:
@@ -72,17 +75,26 @@ spring:
       ack-mode: manual
       concurrency: 5
 
-# Nacos 配置中心
-nacos:
-  config:
-    server-addr: ${NACOS_SERVER_ADDR:localhost:8848}
-    namespace: ${NACOS_NAMESPACE:}
-    group: DEFAULT_GROUP
-    data-id: application-docker.yml
-    type: yaml
-    auto-refresh: true
-    bootstrap:
-      enable: true
+  # Nacos 配置中心和服务注册
+  cloud:
+    compatibility-verifier:
+      enabled: false
+    nacos:
+      config:
+        server-addr: ${NACOS_SERVER_ADDR:localhost:8848}
+        namespace: ${NACOS_NAMESPACE:}
+        group: DEFAULT_GROUP
+        data-id: application-docker.yml
+        type: yaml
+        auto-refresh: true
+
+      # Nacos Discovery 服务注册
+      discovery:
+        server-addr: ${NACOS_SERVER_ADDR:localhost:8848}
+        namespace: ${NACOS_NAMESPACE:}
+        group: DEFAULT_GROUP
+        service: ${spring.application.name}
+        cluster-name: docker
 
 # SSE配置
 sse:

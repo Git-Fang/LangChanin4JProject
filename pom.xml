@@ -167,16 +167,32 @@
             <artifactId>spring-kafka</artifactId>
         </dependency>
 
-        <!-- Nacos Config 配置中心 -->
+        <!-- Nacos Config 配置中心 (Spring Boot 3.x兼容) -->
         <dependency>
-            <groupId>com.alibaba.boot</groupId>
-            <artifactId>nacos-config-spring-boot3-starter</artifactId>
-            <version>0.2.13</version>
+            <groupId>com.alibaba.cloud</groupId>
+            <artifactId>spring-cloud-starter-alibaba-nacos-config</artifactId>
+            <version>2023.0.3.4</version>
+        </dependency>
+
+        <!-- Nacos Discovery 服务注册与发现 (Spring Boot 3.x兼容) -->
+        <dependency>
+            <groupId>com.alibaba.cloud</groupId>
+            <artifactId>spring-cloud-starter-alibaba-nacos-discovery</artifactId>
+            <version>2023.0.3.4</version>
         </dependency>
     </dependencies>
 
     <dependencyManagement>
         <dependencies>
+
+            <!-- Spring Cloud 版本管理 -->
+            <dependency>
+                <groupId>org.springframework.cloud</groupId>
+                <artifactId>spring-cloud-dependencies</artifactId>
+                <version>2023.0.3</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
 
             <dependency>
                 <groupId>com.github.xiaoymin</groupId>

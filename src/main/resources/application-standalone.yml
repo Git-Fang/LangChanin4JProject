@@ -9,6 +9,12 @@ server:
 spring:
   application:
     name: RAGTranslationApplication
+  config:
+    import:
+      - optional:nacos:application-standalone.yml
+  cloud:
+    compatibility-verifier:
+      enabled: false
   main:
     allow-bean-definition-overriding: true
   datasource:
@@ -78,6 +84,24 @@ ai:
   mcp:
     baiduMap:
       apiKey: ${BAIDU_MAP_API_KEY:}
+
+  # Nacos 配置中心和服务注册
+  cloud:
+    nacos:
+      config:
+        server-addr: ${NACOS_SERVER_ADDR:localhost:8848}
+        namespace: ${NACOS_NAMESPACE:}
+        group: DEFAULT_GROUP
+        data-id: application-standalone.yml
+        type: yaml
+        auto-refresh: true
+
+      # Nacos Discovery 服务注册
+      discovery:
+        server-addr: ${NACOS_SERVER_ADDR:localhost:8848}
+        namespace: ${NACOS_NAMESPACE:}
+        group: DEFAULT_GROUP
+        service: ${spring.application.name}
 
 # 禁用其他AI模型以测试基础功能
 # 仅测试基本HTTP服务功能

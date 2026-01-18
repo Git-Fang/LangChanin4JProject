@@ -42,6 +42,8 @@ public class TraceIdFilter extends OncePerRequestFilter {
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String path = request.getRequestURI();
-        return path.startsWith("/mcp/sse");
+        return path.startsWith("/mcp/sse") 
+            || path.startsWith("/mcp/messages") 
+            || path.startsWith("/xiaozhi/chat/stream");
     }
 }

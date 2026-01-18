@@ -8,6 +8,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.NoHandlerFoundException;
 
@@ -20,8 +21,14 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
-    public ResponseEntity<Map<String, Object>> handleException(Exception e) {
+    public ResponseEntity<Map<String, Object>> handleException(Exception e, WebRequest request) {
         log.error("请求处理异常", e);
+        
+        // 排除SSE请求，避免与SSE流冲突
+        if (isSseRequest(request)) {
+            return null;
+        }
+        
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(Map.of(
                         "error", "Internal Server Error",
@@ -31,8 +38,14 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(HttpException.class)
     @ResponseStatus(HttpStatus.UNAUTHORIZED)
-    public ResponseEntity<Map<String, Object>> handleHttpException(HttpException e) {
+    public ResponseEntity<Map<String, Object>> handleHttpException(HttpException e, WebRequest request) {
         log.error("AI服务认证失败: {}", e.getMessage());
+        
+        // 排除SSE请求
+        if (isSseRequest(request)) {
+            return null;
+        }
+        
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                 .body(Map.of(
                         "error", "Authentication Failed",
@@ -42,8 +55,14 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
-    public ResponseEntity<Map<String, Object>> handleMethodArgumentTypeMismatch(MethodArgumentTypeMismatchException e) {
+    public ResponseEntity<Map<String, Object>> handleMethodArgumentTypeMismatch(MethodArgumentTypeMismatchException e, WebRequest request) {
         log.warn("参数类型不匹配: {}", e.getMessage());
+        
+        // 排除SSE请求
+        if (isSseRequest(request)) {
+            return null;
+        }
+        
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(Map.of(
                         "error", "Bad Request",
@@ -53,8 +72,14 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(NoHandlerFoundException.class)
     @ResponseStatus(HttpStatus.NOT_FOUND)
-    public ResponseEntity<Map<String, Object>> handleNoHandlerFound(NoHandlerFoundException e) {
+    public ResponseEntity<Map<String, Object>> handleNoHandlerFound(NoHandlerFoundException e, WebRequest request) {
         log.warn("未找到处理器: {} {}", e.getHttpMethod(), e.getRequestURL());
+        
+        // 排除SSE请求
+        if (isSseRequest(request)) {
+            return null;
+        }
+        
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .body(Map.of(
                         "error", "Not Found",
@@ -64,12 +89,23 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(IllegalArgumentException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
-    public ResponseEntity<Map<String, Object>> handleIllegalArgument(IllegalArgumentException e) {
+    public ResponseEntity<Map<String, Object>> handleIllegalArgument(IllegalArgumentException e, WebRequest request) {
         log.warn("参数错误: {}", e.getMessage());
+        
+        // 排除SSE请求
+        if (isSseRequest(request)) {
+            return null;
+        }
+        
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(Map.of(
                         "error", "Bad Request",
                         "message", e.getMessage()
                 ));
+    }
+    
+    private boolean isSseRequest(WebRequest request) {
+        String description = request.getDescription(false);
+        return description != null && description.contains("uri=/xiaozhi/chat/stream");
     }
 }
