@@ -40,6 +40,7 @@ public class ChatRequestConsumer {
     private final ExecutorService mdcExecutorService;
     
     private static final String RESULT_CACHE_PREFIX = "chat:result:";
+    private static final String STREAM_CACHE_PREFIX = "chat:stream:";
     private static final Duration RESULT_TTL = Duration.ofHours(24);
     
     @KafkaListener(
@@ -55,14 +56,25 @@ public class ChatRequestConsumer {
         log.info("收到AI请求, requestId: {}, partition: {}, offset: {}", 
                 request.getRequestId(), record.partition(), record.offset());
         
-        long startTime = System.currentTimeMillis();
-        
         try {
+            clearStreamContent(request.getRequestId());
+            
+            ChatResultMessage processingResult = ChatResultMessage.builder()
+                    .requestId(request.getRequestId())
+                    .memoryId(request.getMemoryId())
+                    .status(ChatResultMessage.ResultStatus.PROCESSING)
+                    .processedAt(LocalDateTime.now())
+                    .build();
+            cacheResult(request.getRequestId(), processingResult);
+            
+            long startTime = System.currentTimeMillis();
+            
             CompletableFuture.supplyAsync(() -> processRequest(request), mdcExecutorService)
                     .thenAccept(result -> {
                         long processingTime = System.currentTimeMillis() - startTime;
                         result.setProcessingTimeMs(processingTime);
                         cacheResult(request.getRequestId(), result);
+                        updateStreamContent(request.getRequestId(), result.getResult());
                         requestProducer.sendResult(result);
                         log.info("请求处理完成, requestId: {}, 处理时间: {}ms", 
                                 request.getRequestId(), processingTime);
@@ -70,6 +82,15 @@ public class ChatRequestConsumer {
                     })
                     .exceptionally(ex -> {
                         log.error("请求处理异常, requestId: {}", request.getRequestId(), ex);
+                        ChatResultMessage failedResult = ChatResultMessage.builder()
+                                .requestId(request.getRequestId())
+                                .memoryId(request.getMemoryId())
+                                .status(ChatResultMessage.ResultStatus.FAILED)
+                                .errorMessage(ex.getMessage())
+                                .processedAt(LocalDateTime.now())
+                                .processingTimeMs(System.currentTimeMillis() - startTime)
+                                .build();
+                        cacheResult(request.getRequestId(), failedResult);
                         requestProducer.sendFailedStatus(
                                 request.getRequestId(), 
                                 request.getMemoryId(), 
@@ -169,6 +190,28 @@ public class ChatRequestConsumer {
             log.info("结果已缓存, requestId: {}", requestId);
         } catch (Exception e) {
             log.error("缓存结果失败, requestId: {}", requestId, e);
+        }
+    }
+    
+    private void updateStreamContent(String requestId, String content) {
+        String cacheKey = STREAM_CACHE_PREFIX + requestId;
+        try {
+            String existingContent = redisTemplate.opsForValue().get(cacheKey);
+            String newContent = (existingContent != null ? existingContent : "") + content;
+            redisTemplate.opsForValue().set(cacheKey, newContent, RESULT_TTL);
+            log.debug("流式内容已更新, requestId: {}, 新增内容长度: {}", requestId, content.length());
+        } catch (Exception e) {
+            log.error("更新流式内容失败, requestId: {}", requestId, e);
+        }
+    }
+    
+    private void clearStreamContent(String requestId) {
+        String cacheKey = STREAM_CACHE_PREFIX + requestId;
+        try {
+            redisTemplate.delete(cacheKey);
+            log.debug("流式内容已清理, requestId: {}", requestId);
+        } catch (Exception e) {
+            log.error("清理流式内容失败, requestId: {}", requestId, e);
         }
     }
 }

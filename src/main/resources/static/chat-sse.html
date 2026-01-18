@@ -304,6 +304,10 @@
         let conversationHistory = [];
         let lastUserMessage = null;
         let lastUserMemoryId = null;
+        let currentAiMessageDiv = null;
+        let currentAiBubble = null;
+        let accumulatedContent = '';
+        let isStreaming = false;
         
         const messagesArea = document.getElementById('messagesArea');
         const messageInput = document.getElementById('messageInput');
@@ -317,7 +321,7 @@
             statusText.textContent = text;
         }
         
-        function addMessage(role, content, memoryId = null) {
+        function addMessage(role, content, memoryId = null, isStreamingMessage = false) {
             const messageDiv = document.createElement('div');
             messageDiv.className = 'message ' + role;
             messageDiv.dataset.content = content;
@@ -384,6 +388,16 @@
                 messageDiv.appendChild(actionsDiv);
                 messageDiv.appendChild(meta);
             }
+            
+            if (isStreamingMessage && currentAiMessageDiv) {
+                const existingBubble = currentAiMessageDiv.querySelector('.bubble');
+                if (existingBubble) {
+                    existingBubble.innerHTML = marked.parse(content);
+                    messageDiv.remove();
+                    return currentAiMessageDiv;
+                }
+            }
+            
             messagesArea.appendChild(messageDiv);
 
             messagesArea.scrollTop = messagesArea.scrollHeight;
@@ -475,7 +489,10 @@
         async function sendMessage() {
             const message = messageInput.value.trim();
             if (!message || isProcessing) return;
-
+            
+            const charCount = message.length;
+            console.log('发送消息, 字符数:', charCount);
+            
             lastUserMessage = message;
             lastUserMemoryId = Date.now();
 
@@ -507,12 +524,14 @@
                 currentMemoryId = memoryId;
 
                 updateConnectionStatus('connecting', '连接中...');
-                requestInfo.textContent = '请求: ' + requestId.substring(0, 8) + '...';
+                requestInfo.textContent = '请求: ' + requestId.substring(0, 8) + '... (' + charCount + '字符)';
                 
                 const waitingId = showTypingIndicator();
                 connectSSE(streamUrl, waitingId, message);
                 
                 messageInput.value = '';
+                adjustTextareaHeight();
+                messageInput.focus();
                 
             } catch (error) {
                 console.error('发送消息失败:', error);
@@ -526,7 +545,48 @@
         function connectSSE(streamUrl, waitingId, userMessage) {
             closeEventSource();
             
+            accumulatedContent = '';
+            isStreaming = true;
+            
             eventSource = new EventSource(streamUrl);
+            
+            const aiMessageDiv = document.createElement('div');
+            aiMessageDiv.className = 'message ai';
+            currentAiMessageDiv = aiMessageDiv;
+            
+            const bubble = document.createElement('div');
+            bubble.className = 'bubble';
+            bubble.style.whiteSpace = 'pre-wrap';
+            bubble.style.wordWrap = 'break-word';
+            bubble.textContent = '';
+            currentAiBubble = bubble;
+            
+            const meta = document.createElement('div');
+            meta.className = 'meta';
+            meta.textContent = 'AI助手 · ' + new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+            
+            const actionsDiv = document.createElement('div');
+            actionsDiv.className = 'actions';
+            
+            const copyBtn = document.createElement('button');
+            copyBtn.className = 'action-btn copy-btn';
+            copyBtn.innerHTML = '<span>📋</span> 复制';
+            copyBtn.onclick = () => copyMessage(accumulatedContent, copyBtn);
+            actionsDiv.appendChild(copyBtn);
+            
+            const retryBtn = document.createElement('button');
+            retryBtn.className = 'action-btn retry-btn';
+            retryBtn.innerHTML = '<span>🔄</span> 重试';
+            retryBtn.onclick = () => retryLastRequest();
+            actionsDiv.appendChild(retryBtn);
+            
+            aiMessageDiv.appendChild(bubble);
+            aiMessageDiv.appendChild(actionsDiv);
+            aiMessageDiv.appendChild(meta);
+            
+            removeTypingIndicator(waitingId);
+            messagesArea.appendChild(aiMessageDiv);
+            messagesArea.scrollTop = messagesArea.scrollHeight;
             
             eventSource.addEventListener('connected', (e) => {
                 console.log('SSE连接已建立');
@@ -535,6 +595,27 @@
             
             eventSource.addEventListener('processing', (e) => {
                 console.log('AI正在处理...');
+                updateConnectionStatus('connecting', 'AI正在思考...');
+            });
+            
+            eventSource.addEventListener('chunk', (e) => {
+                try {
+                    const data = JSON.parse(e.data);
+                    console.log('收到内容块:', data);
+                    
+                    if (data.content) {
+                        accumulatedContent += data.content;
+                        bubble.textContent = accumulatedContent;
+                        
+                        messagesArea.scrollTop = messagesArea.scrollHeight;
+                    }
+                    
+                    if (data.status === 'streaming') {
+                        updateConnectionStatus('connected', '正在生成...');
+                    }
+                } catch (error) {
+                    console.error('解析内容块失败:', error);
+                }
             });
             
             eventSource.addEventListener('progress', (e) => {
@@ -546,16 +627,28 @@
                     const result = JSON.parse(e.data);
                     console.log('收到结果:', result);
                     
-                    removeTypingIndicator(waitingId);
+                    isStreaming = false;
                     
-                    if (result.status === 'SUCCESS') {
-                        addMessage('ai', result.result);
-                        showProcessingTime(result.processingTimeMs);
+                    if (result.status === 'SUCCESS' || result.status === 'success') {
+                        if (result.result && accumulatedContent !== result.result) {
+                            accumulatedContent = result.result;
+                            bubble.innerHTML = marked.parse(accumulatedContent);
+                        }
+                        
+                        bubble.dataset.content = accumulatedContent;
+                        aiMessageDiv.dataset.content = accumulatedContent;
+                        
+                        const processingTimeDiv = document.createElement('div');
+                        processingTimeDiv.style.cssText = 'font-size: 0.75rem; color: #999; margin-top: 4px;';
+                        processingTimeDiv.textContent = '处理耗时: ' + result.processingTimeMs + 'ms';
+                        aiMessageDiv.appendChild(processingTimeDiv);
+                        
+                        updateConnectionStatus('connected', '已完成');
                         
                         if (currentMemoryId) {
                             conversationHistory.push({ 
                                 role: 'ai', 
-                                content: result.result, 
+                                content: accumulatedContent, 
                                 memoryId: currentMemoryId 
                             });
                             saveToHistory(currentMemoryId, conversationHistory);
@@ -568,6 +661,7 @@
                     
                 } catch (error) {
                     console.error('解析结果失败:', error);
+                    isStreaming = false;
                     showError('解析结果失败');
                     resetState();
                 }
@@ -576,10 +670,13 @@
             eventSource.addEventListener('complete', (e) => {
                 console.log('SSE流完成');
                 closeEventSource();
+                isStreaming = false;
             });
             
             eventSource.addEventListener('error', (e) => {
                 console.error('SSE错误事件:', e);
+                isStreaming = false;
+                
                 if (e.data) {
                     try {
                         const data = JSON.parse(e.data);
@@ -596,6 +693,7 @@
             
             eventSource.addEventListener('timeout', (e) => {
                 console.warn('SSE超时');
+                isStreaming = false;
                 showError('处理超时，请稍后重试');
                 closeEventSource();
                 resetState();
@@ -603,6 +701,7 @@
             
             eventSource.onerror = (error) => {
                 console.error('SSE底层错误:', error);
+                isStreaming = false;
                 showError('连接错误，请检查网络后重试');
                 closeEventSource();
                 resetState();
