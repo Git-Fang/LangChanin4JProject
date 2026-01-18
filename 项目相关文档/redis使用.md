@@ -55,7 +55,7 @@ private void cacheResult(String requestId, ChatResultMessage result) {
 
 ### 3. 流式输出内容累加
 
-在SSE流式输出过程中，累加各个内容片段，支持断点续传和内容查询。
+在SSE流式输出过程中，累加各个内容片段，支持断点续传。
 
 | 用途 | Key模式 | TTL |
 |------|---------|-----|
@@ -108,6 +108,356 @@ private static final String STREAM_CACHE_PREFIX = "chat:stream:";
 private static final Duration RESULT_TTL = Duration.ofHours(24);
 ```
 
+---
+
+## Kafka与Redis交互
+
+### 整体架构
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                              Kafka-Redis 交互架构                               │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                 │
+│   ┌──────────────┐     ┌──────────────┐     ┌──────────────┐                   │
+│   │   客户端      │────▶│  API接口     │────▶│   Redis      │                   │
+│   │              │     │              │     │ 缓存请求数据   │                   │
+│   └──────────────┘     └──────────────┘     └──────────────┘                   │
+│                                                  │                               │
+│                                                  ▼                               │
+│   ┌──────────────┐     ┌──────────────┐     ┌──────────────┐                   │
+│   │   客户端      │◀────│  SSE接口     │◀────│   Redis      │                   │
+│   │              │     │              │     │ 读取缓存内容   │                   │
+│   └──────────────┘     └──────────────┘     └──────────────┘                   │
+│                                                                                 │
+│                        ┌──────────────┐                                         │
+│                        │   Kafka      │                                         │
+│                        │  请求队列     │                                         │
+│                        └──────────────┘                                         │
+│                              ▲                                                 │
+│                              │                                                 │
+│   ┌──────────────┐     ┌──────────────┐                                         │
+│   │   Redis      │     │  生产者      │                                         │
+│   │ 缓存请求数据   │────▶│  发送请求    │                                         │
+│   └──────────────┘     └──────────────┘                                         │
+│                              │                                                 │
+│                              ▼                                                 │
+│                        ┌──────────────┐                                         │
+│                        │  消费者      │                                         │
+│                        │  消费消息     │                                         │
+│                        └──────────────┘                                         │
+│                              │                                                 │
+│                              ▼                                                 │
+│   ┌──────────────┐     ┌──────────────┐     ┌──────────────┐                   │
+│   │   Redis      │◀────│  业务处理    │────▶│   Kafka      │                   │
+│   │ 缓存处理结果   │     │  意图识别    │     │  结果队列     │                   │
+│   └──────────────┘     └──────────────┘     └──────────────┘                   │
+│                                                                                 │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Kafka Topics
+
+| Topic名称 | 用途 | 消息类型 |
+|-----------|------|----------|
+| `ai-chat-request` | AI聊天请求队列 | `ChatRequestMessage` |
+| `ai-chat-result` | AI处理结果队列 | `ChatResultMessage` |
+
+### 交互流程详解
+
+```
+┌──────────────────────────────────────────────────────────────────────────────────┐
+│                           Kafka-Redis 完整交互流程                                │
+├──────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                  │
+│  1. 请求发起与缓存                                                                │
+│  ┌──────────────────────────────────────────────────────────────────────────┐    │
+│  │  客户端                                                                      │    │
+│  │    │                                                                        │    │
+│  │    ▼                                                                        │    │
+│  │  POST /xiaozhi/chat/async                                                  │    │
+│  │    │                                                                        │    │
+│  │    ▼                                                                        │    │
+│  │  AsyncChatController                                                        │    │
+│  │    │                                                                        │    │
+│  │    ▼                                                                        │    │
+│  │  redisTemplate.opsForValue().set("chat:request:{requestId}",               │    │
+│  │      requestJson, RESULT_TTL)  ←── 缓存请求消息                              │    │
+│  │    │                                                                        │    │
+│  │    ▼                                                                        │    │
+│  │  ChatRequestProducer.sendRequest()                                          │    │
+│  │    │                                                                        │    │
+│  │    ▼                                                                        │    │
+│  │  Kafka:ai-chat-request  ←── 生产请求消息                                     │    │
+│  └──────────────────────────────────────────────────────────────────────────┘    │
+│                                    │                                            │
+│                                    ▼                                            │
+│  2. 消息消费与处理                                                                │
+│  ┌──────────────────────────────────────────────────────────────────────────┐    │
+│  │  Kafka Consumer (ChatRequestConsumer)                                      │    │
+│  │  @KafkaListener(topics = "ai-chat-request")                                │    │
+│  │    │                                                                        │    │
+│  │    ▼                                                                        │    │
+│  │  clearStreamContent(requestId)  ←── 清理旧流式内容                           │    │
+│  │  redisTemplate.delete("chat:stream:{requestId}")                           │    │
+│  │    │                                                                        │    │
+│  │    ▼                                                                        │    │
+│  │  ChatResultMessage processing = PROCESSING状态                               │    │
+│  │    │                                                                        │    │
+│  │    ▼                                                                        │    │
+│  │  cacheResult(requestId, processing)  ←── 缓存处理中状态                       │    │
+│  │  redisTemplate.opsForValue().set("chat:result:{requestId}",                │    │
+│  │      processingJson, RESULT_TTL)                                            │    │
+│  │    │                                                                        │    │
+│  │    ▼                                                                        │    │
+│  │  CompletableFuture.supplyAsync(() -> processRequest())                      │    │
+│  │    │                                                                        │    │
+│  │    ▼                                                                        │    │
+│  │  processRequest()  ←── 异步业务处理                                           │    │
+│  │    ├── intentRecognition()  ←── 意图识别                                     │    │
+│  │    └── routeToService()  ←── 路由到具体服务                                   │    │
+│  │         ├── doctorAgent.chat()  ←── 医疗咨询                                 │    │
+│  │         ├── translaterService.translate()  ←── 翻译                          │    │
+│  │         ├── termExtractionAgent.chat()  ←── 术语提取                         │    │
+│  │         └── nl2SQLService.execute()  ←── 自然语言查询                         │    │
+│  │    │                                                                        │    │
+│  │    ▼                                                                        │    │
+│  │  ChatResultMessage result = SUCCESS状态                                      │    │
+│  │    │                                                                        │    │
+│  │    ▼                                                                        │    │
+│  │  cacheResult(requestId, result)  ←── 缓存处理结果                             │    │
+│  │  redisTemplate.opsForValue().set("chat:result:{requestId}",                │    │
+│  │      resultJson, RESULT_TTL)                                                │    │
+│  │    │                                                                        │    │
+│  │    ▼                                                                        │    │
+│  │  updateStreamContent(requestId, resultContent)  ←── 累加流式内容              │    │
+│  │  String existing = redisTemplate.opsForValue().get("chat:stream:{id}")     │    │
+│  │  redisTemplate.opsForValue().set("chat:stream:{id}",                       │    │
+│  │      existing + newContent, RESULT_TTL)                                     │    │
+│  │    │                                                                        │    │
+│  │    ▼                                                                        │    │
+│  │  ChatRequestProducer.sendResult()                                           │    │
+│  │    │                                                                        │    │
+│  │    ▼                                                                        │    │
+│  │  Kafka:ai-chat-result  ←── 生产结果消息                                      │    │
+│  └──────────────────────────────────────────────────────────────────────────┘    │
+│                                    │                                            │
+│                                    ▼                                            │
+│  3. 异常处理与失败状态                                                            │
+│  ┌──────────────────────────────────────────────────────────────────────────┐    │
+│  │  异常捕获                                                                   │    │
+│  │    │                                                                        │    │
+│  │    ▼                                                                        │    │
+│  │  ChatResultMessage failed = FAILED状态                                       │    │
+│  │    │                                                                        │    │
+│  │    ▼                                                                        │    │
+│  │  cacheResult(requestId, failed)  ←── 缓存失败结果                             │    │
+│  │    │                                                                        │    │
+│  │    ▼                                                                        │    │
+│  │  ChatRequestProducer.sendFailedStatus()                                     │    │
+│  │    │                                                                        │    │
+│  │    ▼                                                                        │    │
+│  │  Kafka:ai-chat-result  ←── 生产失败状态                                      │    │
+│  └──────────────────────────────────────────────────────────────────────────┘    │
+│                                                                                  │
+└──────────────────────────────────────────────────────────────────────────────────┘
+```
+
+### 核心代码：Kafka消费者中的Redis操作
+
+**文件**: `ChatRequestConsumer.java`
+
+```java
+@Slf4j
+@Service
+@Profile("!standalone")
+@RequiredArgsConstructor
+public class ChatRequestConsumer {
+    
+    private final StringRedisTemplate redisTemplate;
+    private final ChatRequestProducer requestProducer;
+    private final ObjectMapper objectMapper;
+    
+    private static final String RESULT_CACHE_PREFIX = "chat:result:";
+    private static final String STREAM_CACHE_PREFIX = "chat:stream:";
+    private static final Duration RESULT_TTL = Duration.ofHours(24);
+    
+    @KafkaListener(topics = "ai-chat-request", groupId = "ai-request-consumer")
+    public void consumeChatRequest(ConsumerRecord<String, ChatRequestMessage> record, Acknowledgment ack) {
+        ChatRequestMessage request = record.value();
+        
+        try {
+            // 1. 清理流式内容（新的请求开始）
+            clearStreamContent(request.getRequestId());
+            
+            // 2. 缓存处理中状态
+            ChatResultMessage processingResult = ChatResultMessage.builder()
+                    .requestId(request.getRequestId())
+                    .memoryId(request.getMemoryId())
+                    .status(ChatResultMessage.ResultStatus.PROCESSING)
+                    .processedAt(LocalDateTime.now())
+                    .build();
+            cacheResult(request.getRequestId(), processingResult);
+            
+            // 3. 异步处理请求
+            CompletableFuture.supplyAsync(() -> processRequest(request), mdcExecutorService)
+                    .thenAccept(result -> {
+                        // 4. 缓存处理结果
+                        cacheResult(request.getRequestId(), result);
+                        
+                        // 5. 累加流式内容
+                        updateStreamContent(request.getRequestId(), result.getResult());
+                        
+                        // 6. 发送结果到Kafka
+                        requestProducer.sendResult(result);
+                        
+                        ack.acknowledge();
+                    })
+                    .exceptionally(ex -> {
+                        // 异常处理：缓存失败结果并发送失败状态
+                        ChatResultMessage failedResult = ChatResultMessage.builder()
+                                .requestId(request.getRequestId())
+                                .memoryId(request.getMemoryId())
+                                .status(ChatResultMessage.ResultStatus.FAILED)
+                                .errorMessage(ex.getMessage())
+                                .processedAt(LocalDateTime.now())
+                                .build();
+                        cacheResult(request.getRequestId(), failedResult);
+                        requestProducer.sendFailedStatus(request.getRequestId(), request.getMemoryId(), ex.getMessage());
+                        ack.acknowledge();
+                        return null;
+                    });
+                    
+        } catch (Exception e) {
+            log.error("消费消息异常", e);
+            requestProducer.sendFailedStatus(request.getRequestId(), request.getMemoryId(), e.getMessage());
+            ack.acknowledge();
+        }
+    }
+    
+    private void cacheResult(String requestId, ChatResultMessage result) {
+        String cacheKey = RESULT_CACHE_PREFIX + requestId;
+        try {
+            String jsonResult = objectMapper.writeValueAsString(result);
+            redisTemplate.opsForValue().set(cacheKey, jsonResult, RESULT_TTL);
+            log.info("结果已缓存, requestId: {}", requestId);
+        } catch (Exception e) {
+            log.error("缓存结果失败, requestId: {}", requestId, e);
+        }
+    }
+    
+    private void updateStreamContent(String requestId, String content) {
+        String cacheKey = STREAM_CACHE_PREFIX + requestId;
+        try {
+            String existingContent = redisTemplate.opsForValue().get(cacheKey);
+            String newContent = (existingContent != null ? existingContent : "") + content;
+            redisTemplate.opsForValue().set(cacheKey, newContent, RESULT_TTL);
+        } catch (Exception e) {
+            log.error("更新流式内容失败, requestId: {}", requestId, e);
+        }
+    }
+    
+    private void clearStreamContent(String requestId) {
+        String cacheKey = STREAM_CACHE_PREFIX + requestId;
+        try {
+            redisTemplate.delete(cacheKey);
+        } catch (Exception e) {
+            log.error("清理流式内容失败, requestId: {}", requestId, e);
+        }
+    }
+}
+```
+
+### 消息生产者：Kafka发送结果
+
+**文件**: `ChatRequestProducer.java`
+
+```java
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class ChatRequestProducer {
+    
+    private final KafkaTemplate<String, ChatRequestMessage> requestKafkaTemplate;
+    private final KafkaTemplate<String, ChatResultMessage> resultKafkaTemplate;
+    
+    private static final String AI_REQUEST_TOPIC = "ai-chat-request";
+    private static final String AI_RESULT_TOPIC = "ai-chat-result";
+    
+    // 发送请求到Kafka
+    public CompletableFuture<SendResult<String, ChatRequestMessage>> sendRequest(ChatRequestMessage request) {
+        return requestKafkaTemplate.send(AI_REQUEST_TOPIC, request.getRequestId(), request)
+                .whenComplete((result, ex) -> {
+                    if (ex == null) {
+                        log.info("请求发送成功, requestId: {}", request.getRequestId());
+                    } else {
+                        log.error("请求发送失败, requestId: {}", request.getRequestId(), ex);
+                    }
+                });
+    }
+    
+    // 发送处理结果到Kafka
+    public CompletableFuture<SendResult<String, ChatResultMessage>> sendResult(ChatResultMessage result) {
+        return resultKafkaTemplate.send(AI_RESULT_TOPIC, result.getRequestId(), result)
+                .whenComplete((sendResult, ex) -> {
+                    if (ex == null) {
+                        log.info("结果发送成功, requestId: {}", result.getRequestId());
+                    } else {
+                        log.error("结果发送失败, requestId: {}", result.getRequestId(), ex);
+                    }
+                });
+    }
+    
+    // 发送失败状态
+    public void sendFailedStatus(String requestId, Long memoryId, String errorMessage) {
+        ChatResultMessage failedResult = ChatResultMessage.builder()
+                .requestId(requestId)
+                .memoryId(memoryId)
+                .status(ChatResultMessage.ResultStatus.FAILED)
+                .errorMessage(errorMessage)
+                .processedAt(LocalDateTime.now())
+                .build();
+        sendResult(failedResult);
+    }
+}
+```
+
+### 断点续传支持
+
+Redis在SSE流式输出中实现断点续传功能：
+
+```java
+// AsyncChatController.java - SSE流式查询
+@GetMapping(value = "/chat/stream/{requestId}", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+public SseEmitter streamChatResult(@PathVariable String requestId) {
+    SseEmitter emitter = new SseEmitter(SSE_TIMEOUT);
+    
+    CompletableFuture.runAsync(() -> {
+        try {
+            // 1. 从Redis读取已缓存的流式内容
+            String cacheKey = STREAM_CACHE_PREFIX + requestId;
+            String existingContent = redisTemplate.opsForValue().get(cacheKey);
+            
+            // 2. 发送已缓存的内容（断点续传）
+            if (existingContent != null && !existingContent.isEmpty()) {
+                emitter.send(SseEmitter.event()
+                        .name("message")
+                        .data(existingContent));
+            }
+            
+            // 3. 订阅Kafka消息，实时推送新内容...
+            
+        } catch (Exception e) {
+            emitter.completeWithError(e);
+        }
+    });
+    
+    return emitter;
+}
+```
+
+---
+
 ## 业务场景
 
 ### 异步聊天流程
@@ -149,6 +499,8 @@ GET /xiaozhi/result/{requestId}
 GET /xiaozhi/chat/stream/{requestId}
 ```
 
+---
+
 ## Redis操作封装
 
 **配置类**: `RedisConfig.java`
@@ -156,6 +508,12 @@ GET /xiaozhi/chat/stream/{requestId}
 ```java
 @Configuration
 public class RedisConfig {
+    @Value("${SPRING_REDIS_HOST:localhost}")
+    private String redisHost;
+
+    @Value("${SPRING_REDIS_PORT:6379}")
+    private int redisPort;
+
     @Bean
     public LettuceConnectionFactory redisConnectionFactory() {
         RedisStandaloneConfiguration config = new RedisStandaloneConfiguration();
@@ -170,6 +528,8 @@ public class RedisConfig {
     }
 }
 ```
+
+---
 
 ## 监控和维护
 
@@ -191,9 +551,13 @@ GET chat:result:{requestId}
 # 查看流式内容
 GET chat:stream:{requestId}
 
+# 查看请求数据
+GET chat:request:{requestId}
+
 # 删除过期数据
 DEL chat:result:{requestId}
 DEL chat:stream:{requestId}
+DEL chat:request:{requestId}
 ```
 
 ### 清理策略
@@ -202,9 +566,13 @@ DEL chat:stream:{requestId}
 - **手动清理**：处理完成后由消费者主动删除流式内容
 - **建议定期执行**：如需手动清理，可使用 `redis-cli --scan --pattern "chat:*" | xargs DEL`
 
+---
+
 ## 注意事项
 
 1. **数据一致性**：Redis仅作为缓存，不作为持久化存储，原始数据存储在MongoDB
 2. **内存管理**：建议生产环境配置 `maxmemory` 和淘汰策略
 3. **键命名规范**：统一使用 `{业务}:{类型}:{ID}` 格式
 4. **TTL设置**：当前统一为24小时，可根据业务需求调整
+5. **Kafka消费者**：使用 `CompletableFuture` 异步处理，不阻塞消费线程
+6. **断点续传**：流式内容累加到Redis，支持客户端中断后重新连接获取完整内容
