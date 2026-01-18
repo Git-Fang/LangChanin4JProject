@@ -372,11 +372,25 @@
                 wrapperDiv.className = 'message-user-wrapper';
                 wrapperDiv.style.cssText = 'display: flex; flex-direction: column; align-items: flex-end;';
 
-                const bubbleClone = bubble.cloneNode(true);
-                const actionsClone = actionsDiv.cloneNode(true);
+                wrapperDiv.appendChild(bubble);
 
-                wrapperDiv.appendChild(bubbleClone);
-                wrapperDiv.appendChild(actionsClone);
+                const userActionsDiv = document.createElement('div');
+                userActionsDiv.className = 'actions';
+                userActionsDiv.style.marginTop = '8px';
+
+                const userCopyBtn = document.createElement('button');
+                userCopyBtn.className = 'action-btn copy-btn';
+                userCopyBtn.innerHTML = '<span>📋</span> 复制';
+                userCopyBtn.onclick = () => copyMessage(content, userCopyBtn);
+                userActionsDiv.appendChild(userCopyBtn);
+
+                const userRetryBtn = document.createElement('button');
+                userRetryBtn.className = 'action-btn retry-btn';
+                userRetryBtn.innerHTML = '<span>🔄</span> 编辑重试';
+                userRetryBtn.onclick = () => retryWithEdit(content);
+                userActionsDiv.appendChild(userRetryBtn);
+
+                wrapperDiv.appendChild(userActionsDiv);
 
                 const metaDiv = meta.cloneNode(true);
 
