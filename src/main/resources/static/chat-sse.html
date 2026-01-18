@@ -527,7 +527,9 @@
                 requestInfo.textContent = '请求: ' + requestId.substring(0, 8) + '... (' + charCount + '字符)';
                 
                 const waitingId = showTypingIndicator();
-                connectSSE(streamUrl, waitingId, message);
+                
+                const streamingUrl = streamUrl.replace('/chat/stream/', '/chat/streaming/');
+                connectSSE(streamingUrl, waitingId, message);
                 
                 messageInput.value = '';
                 adjustTextareaHeight();
@@ -559,7 +561,14 @@
             bubble.style.whiteSpace = 'pre-wrap';
             bubble.style.wordWrap = 'break-word';
             bubble.textContent = '';
+            bubble.style.minHeight = '24px';
             currentAiBubble = bubble;
+            
+            const streamingIndicator = document.createElement('div');
+            streamingIndicator.className = 'streaming-indicator';
+            streamingIndicator.innerHTML = '<span style="color: #667eea; font-size: 0.75rem;">● 正在流式输出</span>';
+            streamingIndicator.style.display = 'none';
+            streamingIndicator.style.marginTop = '4px';
             
             const meta = document.createElement('div');
             meta.className = 'meta';
@@ -581,6 +590,7 @@
             actionsDiv.appendChild(retryBtn);
             
             aiMessageDiv.appendChild(bubble);
+            aiMessageDiv.appendChild(streamingIndicator);
             aiMessageDiv.appendChild(actionsDiv);
             aiMessageDiv.appendChild(meta);
             
@@ -588,9 +598,31 @@
             messagesArea.appendChild(aiMessageDiv);
             messagesArea.scrollTop = messagesArea.scrollHeight;
             
+            let lastChunkTime = Date.now();
+            let chunkBuffer = '';
+            const MIN_CHUNK_DELAY = 20;
+            
+            function processChunk(content) {
+                if (!content) return;
+                
+                chunkBuffer += content;
+                const now = Date.now();
+                
+                if (chunkBuffer.length >= 10 || (now - lastChunkTime >= MIN_CHUNK_DELAY && chunkBuffer.length > 0)) {
+                    accumulatedContent += chunkBuffer;
+                    bubble.textContent = accumulatedContent;
+                    
+                    messagesArea.scrollTop = messagesArea.scrollHeight;
+                    
+                    chunkBuffer = '';
+                    lastChunkTime = now;
+                }
+            }
+            
             eventSource.addEventListener('connected', (e) => {
                 console.log('SSE连接已建立');
                 updateConnectionStatus('connected', '已连接');
+                streamingIndicator.style.display = 'block';
             });
             
             eventSource.addEventListener('processing', (e) => {
@@ -604,14 +636,17 @@
                     console.log('收到内容块:', data);
                     
                     if (data.content) {
-                        accumulatedContent += data.content;
-                        bubble.textContent = accumulatedContent;
-                        
-                        messagesArea.scrollTop = messagesArea.scrollHeight;
+                        processChunk(data.content);
                     }
                     
                     if (data.status === 'streaming') {
                         updateConnectionStatus('connected', '正在生成...');
+                        streamingIndicator.style.display = 'block';
+                    }
+                    
+                    if (data.progress !== undefined) {
+                        const progressPercent = Math.min(data.progress, 100);
+                        streamingIndicator.innerHTML = `<span style="color: #667eea; font-size: 0.75rem;">● 正在生成 ${progressPercent}%</span>`;
                     }
                 } catch (error) {
                     console.error('解析内容块失败:', error);
@@ -620,6 +655,14 @@
             
             eventSource.addEventListener('progress', (e) => {
                 console.log('处理进度:', e.data);
+                try {
+                    const data = JSON.parse(e.data);
+                    if (data.intent) {
+                        updateConnectionStatus('connected', '识别意图: ' + data.intent);
+                    }
+                } catch (error) {
+                    console.error('解析进度失败:', error);
+                }
             });
             
             eventSource.addEventListener('result', (e) => {
@@ -627,20 +670,27 @@
                     const result = JSON.parse(e.data);
                     console.log('收到结果:', result);
                     
+                    if (chunkBuffer.length > 0) {
+                        accumulatedContent += chunkBuffer;
+                        bubble.textContent = accumulatedContent;
+                        chunkBuffer = '';
+                    }
+                    
                     isStreaming = false;
+                    streamingIndicator.style.display = 'none';
                     
                     if (result.status === 'SUCCESS' || result.status === 'success') {
                         if (result.result && accumulatedContent !== result.result) {
                             accumulatedContent = result.result;
-                            bubble.innerHTML = marked.parse(accumulatedContent);
                         }
                         
+                        bubble.innerHTML = marked.parse(accumulatedContent);
                         bubble.dataset.content = accumulatedContent;
                         aiMessageDiv.dataset.content = accumulatedContent;
                         
                         const processingTimeDiv = document.createElement('div');
                         processingTimeDiv.style.cssText = 'font-size: 0.75rem; color: #999; margin-top: 4px;';
-                        processingTimeDiv.textContent = '处理耗时: ' + result.processingTimeMs + 'ms';
+                        processingTimeDiv.textContent = '处理耗时: ' + (result.processingTimeMs || 0) + 'ms';
                         aiMessageDiv.appendChild(processingTimeDiv);
                         
                         updateConnectionStatus('connected', '已完成');
@@ -662,6 +712,7 @@
                 } catch (error) {
                     console.error('解析结果失败:', error);
                     isStreaming = false;
+                    streamingIndicator.style.display = 'none';
                     showError('解析结果失败');
                     resetState();
                 }
@@ -671,11 +722,23 @@
                 console.log('SSE流完成');
                 closeEventSource();
                 isStreaming = false;
+                streamingIndicator.style.display = 'none';
+            });
+            
+            eventSource.addEventListener('warning', (e) => {
+                console.log('SSE警告:', e.data);
+                try {
+                    const data = JSON.parse(e.data);
+                    showError(data.message || '警告');
+                } catch (error) {
+                    console.error('解析警告失败:', error);
+                }
             });
             
             eventSource.addEventListener('error', (e) => {
                 console.error('SSE错误事件:', e);
                 isStreaming = false;
+                streamingIndicator.style.display = 'none';
                 
                 if (e.data) {
                     try {
@@ -694,6 +757,7 @@
             eventSource.addEventListener('timeout', (e) => {
                 console.warn('SSE超时');
                 isStreaming = false;
+                streamingIndicator.style.display = 'none';
                 showError('处理超时，请稍后重试');
                 closeEventSource();
                 resetState();
@@ -702,6 +766,7 @@
             eventSource.onerror = (error) => {
                 console.error('SSE底层错误:', error);
                 isStreaming = false;
+                streamingIndicator.style.display = 'none';
                 showError('连接错误，请检查网络后重试');
                 closeEventSource();
                 resetState();
