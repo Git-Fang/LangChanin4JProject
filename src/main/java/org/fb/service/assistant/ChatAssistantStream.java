@@ -15,11 +15,14 @@ import reactor.core.publisher.Flux;
  * */
 @AiService(wiringMode = AiServiceWiringMode.EXPLICIT,
         streamingChatModel = "streamingChatModel",
-        chatMemoryProvider = "chatMemoryProvider"
+        chatMemoryProvider = "chatMemoryProvider",
+        contentRetriever = "contentRetriever"
 )
 public interface ChatAssistantStream {
 
+    @SystemMessage(fromResource = "default-prompt.txt")
     public Flux<String> chat(@MemoryId long memoryId, @UserMessage String userMessage);
 
+    @SystemMessage(fromResource = "default-prompt.txt")
     public Flux<String> chat( String userMessage);
 }
