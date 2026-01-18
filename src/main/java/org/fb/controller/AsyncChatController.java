@@ -1,6 +1,7 @@
 package org.fb.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.swagger.v3.oas.annotations.Operation;
 import lombok.extern.slf4j.Slf4j;
 import org.fb.bean.ChatForm;
 import org.fb.bean.kafka.ChatRequestMessage;
@@ -792,9 +793,9 @@ public class AsyncChatController implements EnvironmentAware {
                 
                 if (result.getErrorMessage() != null) {
                     response.put("error", result.getErrorMessage());
-                }
-                
-            } catch (Exception e) {
+            }
+
+        } catch (Exception e) {
                 log.error("解析结果失败, requestId: {}", requestId, e);
                 response.put("status", "ERROR");
                 response.put("error", "解析结果失败");
@@ -813,5 +814,258 @@ public class AsyncChatController implements EnvironmentAware {
         Map<String, Object> response = new HashMap<>();
         response.put("activeConnections", sseConnections.size());
         return response;
+    }
+    
+    @PostMapping("/chat/http-stream")
+    @Operation(summary = "HTTP流式聊天", description = "通过POST发送消息，SSE流式返回结果")
+    public Map<String, Object> startHttpStreamChat(@RequestBody ChatForm chatForm) {
+        Long memoryId = chatForm.getMemoryId();
+        String userMessage = chatForm.getMessage();
+        
+        log.info("收到HTTP流式聊天请求, memoryId: {}, message: {}", memoryId, userMessage);
+        
+        String requestId = "http_" + System.currentTimeMillis() + "_" + Thread.currentThread().getId();
+        
+        try {
+            String requestJson = objectMapper.writeValueAsString(
+                ChatRequestMessage.create(memoryId, userMessage)
+            );
+            redisTemplate.opsForValue().set("chat:request:" + requestId, requestJson, RESULT_TTL);
+            redisTemplate.opsForValue().set(STREAM_CACHE_PREFIX + requestId, "", RESULT_TTL);
+        } catch (Exception e) {
+            log.error("保存请求数据失败, requestId: {}", requestId, e);
+        }
+        
+        Map<String, Object> response = new HashMap<>();
+        response.put("requestId", requestId);
+        response.put("streamUrl", "/xiaozhi/chat/http-stream/" + requestId);
+        
+        return response;
+    }
+    
+    @GetMapping(value = "/chat/http-stream/{requestId}", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter streamHttpChat(@PathVariable String requestId) {
+        log.info("HTTP流式聊天SSE连接, requestId: {}", requestId);
+        
+        SseEmitter emitter = new SseEmitter(SSE_TIMEOUT);
+        sseConnections.put(requestId, emitter);
+        
+        try {
+            sendSseEvent(emitter, "connected", Map.of(
+                "status", "connected",
+                "requestId", requestId,
+                "timestamp", System.currentTimeMillis(),
+                "mode", "http-stream"
+            ));
+            
+            log.info("HTTP流式连接已建立, requestId: {}", requestId);
+            
+            String requestJson = redisTemplate.opsForValue().get("chat:request:" + requestId);
+            if (requestJson == null) {
+                log.warn("请求数据不存在, requestId: {}", requestId);
+                sendSseEvent(emitter, "error", Map.of(
+                    "status", "error",
+                    "message", "请求数据不存在"
+                ));
+                emitter.complete();
+                sseConnections.remove(requestId);
+                return emitter;
+            }
+            
+            ChatRequestMessage request = objectMapper.readValue(requestJson, ChatRequestMessage.class);
+            Long memoryId = request.getMemoryId();
+            String message = request.getMessage();
+            
+            if (streamingChatService != null) {
+                log.info("使用流式服务处理HTTP请求, requestId: {}", requestId);
+                
+                redisTemplate.opsForValue().set(STREAM_CACHE_PREFIX + requestId, "", RESULT_TTL);
+                
+                Flux<String> flux = streamingChatService.chat(memoryId, message);
+                
+                AtomicReference<String> accumulated = new AtomicReference<>("");
+                AtomicReference<Long> startTime = new AtomicReference<>(System.currentTimeMillis());
+                
+                flux.publishOn(Schedulers.boundedElastic())
+                    .doOnNext(chunk -> {
+                        try {
+                            String current = accumulated.get();
+                            String updated = current + chunk;
+                            accumulated.set(updated);
+                            
+                            redisTemplate.opsForValue().set(
+                                STREAM_CACHE_PREFIX + requestId, 
+                                updated, 
+                                RESULT_TTL
+                            );
+                            
+                            sendSseEvent(emitter, "chunk", Map.of(
+                                "content", chunk,
+                                "status", "streaming",
+                                "fullContent", updated,
+                                "progress", 50
+                            ));
+                            
+                            log.debug("HTTP流式内容块, requestId: {}, chunk长度: {}, 累计长度: {}", 
+                                requestId, chunk.length(), updated.length());
+                        } catch (Exception ex) {
+                            log.error("发送HTTP流式内容块失败, requestId: {}", requestId, ex);
+                        }
+                    })
+                    .doOnComplete(() -> {
+                        long processingTime = System.currentTimeMillis() - startTime.get();
+                        log.info("HTTP流式处理完成, requestId: {}, 总长度: {}, 耗时: {}ms", 
+                            requestId, accumulated.get().length(), processingTime);
+                        
+                        String finalContent = accumulated.get();
+                        
+                        ChatResultMessage finalResult = ChatResultMessage.builder()
+                            .requestId(requestId)
+                            .memoryId(memoryId)
+                            .result(finalContent)
+                            .status(ChatResultMessage.ResultStatus.SUCCESS)
+                            .processingTimeMs(processingTime)
+                            .build();
+                        
+                        try {
+                            String jsonResult = objectMapper.writeValueAsString(finalResult);
+                            redisTemplate.opsForValue().set(RESULT_CACHE_PREFIX + requestId, jsonResult, RESULT_TTL);
+                            
+                            sendSseEvent(emitter, "result", Map.of(
+                                "requestId", requestId,
+                                "memoryId", memoryId,
+                                "status", "SUCCESS",
+                                "result", finalContent,
+                                "processingTimeMs", processingTime
+                            ));
+                            sendSseEvent(emitter, "complete", Map.of("event", "complete"));
+                            emitter.complete();
+                        } catch (Exception ex) {
+                            log.error("完成HTTP流式处理失败, requestId: {}", requestId, ex);
+                            emitter.completeWithError(ex);
+                        }
+                        sseConnections.remove(requestId);
+                    })
+                    .doOnError(error -> {
+                        log.error("HTTP流式处理错误, requestId: {}", requestId, error);
+                        try {
+                            sendSseEvent(emitter, "error", Map.of(
+                                "status", "error",
+                                "message", error.getMessage()
+                            ));
+                        } catch (IOException ex) {
+                            log.error("发送错误事件失败", ex);
+                        }
+                        emitter.completeWithError(error);
+                        sseConnections.remove(requestId);
+                    })
+                    .subscribe();
+            } else {
+                log.warn("流式服务不可用，requestId: {}", requestId);
+                
+                ChatResultMessage processingResult = ChatResultMessage.builder()
+                        .requestId(requestId)
+                        .memoryId(memoryId)
+                        .status(ChatResultMessage.ResultStatus.PROCESSING)
+                        .build();
+                cacheResult(requestId, processingResult);
+                
+                CompletableFuture.runAsync(() -> {
+                    try {
+                        long startTimeMs = System.currentTimeMillis();
+                        String result = chatService.chat(memoryId, message);
+                        long processingTime = System.currentTimeMillis() - startTimeMs;
+                        
+                        updateStreamContent(requestId, result);
+                        
+                        ChatResultMessage finalResult = ChatResultMessage.builder()
+                                .requestId(requestId)
+                                .memoryId(memoryId)
+                                .result(result)
+                                .status(ChatResultMessage.ResultStatus.SUCCESS)
+                                .processingTimeMs(processingTime)
+                                .build();
+                        
+                        cacheResult(requestId, finalResult);
+                        
+                        sendSseEvent(emitter, "chunk", Map.of(
+                            "content", result,
+                            "status", "streaming",
+                            "fullContent", result,
+                            "progress", 100
+                        ));
+                        
+                        sendSseEvent(emitter, "result", Map.of(
+                            "requestId", requestId,
+                            "memoryId", memoryId,
+                            "status", "SUCCESS",
+                            "result", result,
+                            "processingTimeMs", processingTime
+                        ));
+                        sendSseEvent(emitter, "complete", Map.of("event", "complete"));
+                        emitter.complete();
+                        sseConnections.remove(requestId);
+                        
+                        log.info("HTTP普通模式处理完成, requestId: {}, 耗时: {}ms", requestId, processingTime);
+                    } catch (Exception ex) {
+                        log.error("HTTP普通模式处理失败, requestId: {}", requestId, ex);
+                        try {
+                            ChatResultMessage failedResult = ChatResultMessage.builder()
+                                    .requestId(requestId)
+                                    .memoryId(memoryId)
+                                    .status(ChatResultMessage.ResultStatus.FAILED)
+                                    .errorMessage(ex.getMessage())
+                                    .build();
+                            cacheResult(requestId, failedResult);
+                            
+                            sendSseEvent(emitter, "error", Map.of(
+                                "status", "error",
+                                "message", ex.getMessage()
+                            ));
+                        } catch (IOException ioException) {
+                            log.error("发送错误事件失败", ioException);
+                        }
+                        emitter.completeWithError(ex);
+                        sseConnections.remove(requestId);
+                    }
+                });
+            }
+            
+        } catch (Exception e) {
+            log.error("HTTP流式初始化异常, requestId: {}", requestId, e);
+            try {
+                sendSseEvent(emitter, "error", Map.of(
+                    "status", "error",
+                    "message", e.getMessage()
+                ));
+            } catch (IOException ioException) {
+                log.error("发送错误事件失败", ioException);
+            }
+            emitter.completeWithError(e);
+            sseConnections.remove(requestId);
+        }
+        
+        emitter.onTimeout(() -> {
+            log.warn("HTTP流式超时, requestId: {}", requestId);
+            try {
+                sendSseEvent(emitter, "timeout", Map.of("status", "timeout", "message", "处理超时"));
+            } catch (Exception ex) {
+                log.error("发送超时事件失败", ex);
+            }
+            emitter.complete();
+            sseConnections.remove(requestId);
+        });
+        
+        emitter.onCompletion(() -> {
+            log.info("HTTP流式连接完成, requestId: {}", requestId);
+            sseConnections.remove(requestId);
+        });
+        
+        emitter.onError(e -> {
+            log.error("HTTP流式连接错误, requestId: {}", requestId, e);
+            sseConnections.remove(requestId);
+        });
+        
+        return emitter;
     }
 }

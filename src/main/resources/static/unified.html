@@ -1605,12 +1605,11 @@
                 let replyText = '';
 
                 if (currentMode === 'http') {
-                    // HTTP 模式 - 使用 /xiaozhi/chat 接口，支持 memoryId
-                    // 设置300秒超时，与后端处理时间对齐
+                    // HTTP 模式 - 使用 POST + SSE 流式接口
                     const controller = new AbortController();
                     const timeoutId = setTimeout(() => controller.abort(), 300000);
 
-                    const response = await fetch(`${API_BASE_URL}/xiaozhi/chat`, {
+                    const initResponse = await fetch(`${API_BASE_URL}/xiaozhi/chat/http-stream`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -1624,13 +1623,109 @@
 
                     clearTimeout(timeoutId);
 
-                    if (!response.ok) {
-                        const errorText = await response.text();
-                        console.error('HTTP Error:', response.status, errorText);
-                        throw new Error(errorText || `HTTP error! status: ${response.status}`);
+                    if (!initResponse.ok) {
+                        const errorText = await initResponse.text();
+                        console.error('HTTP Error:', initResponse.status, errorText);
+                        throw new Error(errorText || `HTTP error! status: ${initResponse.status}`);
                     }
 
-                    replyText = await response.text();
+                    const { requestId: streamRequestId, streamUrl } = await initResponse.json();
+                    
+                    const streamUrlFull = `${API_BASE_URL}${streamUrl}`;
+                    console.log('HTTP流式请求ID:', streamRequestId, 'URL:', streamUrlFull);
+                    
+                    const httpEventSource = new EventSource(streamUrlFull);
+                    let accumulatedContent = '';
+                    let httpStreamComplete = false;
+                    
+                    httpEventSource.addEventListener('connected', async (e) => {
+                        console.log('HTTP SSE 连接已建立');
+                        addLog('INFO', 'HTTP流式连接已建立');
+                    });
+                    
+                    httpEventSource.addEventListener('chunk', async (e) => {
+                        try {
+                            const data = JSON.parse(e.data);
+                            console.log('收到HTTP流式内容块:', data);
+                            
+                            if (data.content) {
+                                accumulatedContent += data.content;
+                                contentDiv.textContent = accumulatedContent;
+                                
+                                const container = document.getElementById('messagesContainer');
+                                container.scrollTop = container.scrollHeight;
+                            }
+                            
+                            if (data.progress !== undefined) {
+                                contentDiv.dataset.progress = data.progress;
+                            }
+                        } catch (error) {
+                            console.error('解析HTTP流式内容块失败:', error);
+                        }
+                    });
+                    
+                    httpEventSource.addEventListener('result', async (e) => {
+                        try {
+                            const result = JSON.parse(e.data);
+                            console.log('收到HTTP流式结果:', result);
+                            
+                            httpStreamComplete = true;
+                            
+                            if (result.status === 'SUCCESS' || result.status === 'success') {
+                                if (result.result && accumulatedContent !== result.result) {
+                                    accumulatedContent = result.result;
+                                }
+                                
+                                contentDiv.innerHTML = marked.parse(accumulatedContent);
+                                contentDiv.dataset.content = accumulatedContent;
+                                
+                                const processingTimeDiv = document.createElement('div');
+                                processingTimeDiv.style.cssText = 'font-size: 0.75rem; color: #999; margin-top: 4px;';
+                                processingTimeDiv.textContent = '处理耗时: ' + (result.processingTimeMs || 0) + 'ms';
+                                contentDiv.appendChild(processingTimeDiv);
+                                
+                                lastMessage = null;
+                            } else {
+                                addMessage('处理失败: ' + (result.error || '未知错误'), false);
+                            }
+                            
+                            httpEventSource.close();
+                            httpEventSource = null;
+                            
+                            loadHistorySessions();
+                        } catch (error) {
+                            console.error('解析HTTP流式结果失败:', error);
+                        }
+                    });
+                    
+                    httpEventSource.addEventListener('complete', (e) => {
+                        console.log('HTTP SSE 流完成');
+                        if (!httpStreamComplete) {
+                            if (accumulatedContent) {
+                                contentDiv.innerHTML = marked.parse(accumulatedContent);
+                            }
+                            httpEventSource.close();
+                            httpEventSource = null;
+                        }
+                    });
+                    
+                    httpEventSource.addEventListener('error', (error) => {
+                        console.error('HTTP SSE 错误:', error);
+                        httpStreamComplete = true;
+                        httpEventSource.close();
+                        httpEventSource = null;
+                        
+                        if (loadingDiv && loadingDiv.parentNode) {
+                            loadingDiv.remove();
+                        }
+                        addMessage('抱歉，服务暂时不可用，请稍后重试。', false);
+                    });
+                    
+                    httpEventSource.onerror = (error) => {
+                        console.error('HTTP SSE 底层错误:', error);
+                    };
+                    
+                    return;
                 } else {
                     // SSE 模式
                     const sseMessage = {
@@ -1651,22 +1746,7 @@
                     
                     await sendSseMessage(sseMessage);
                 }
-                
-                // 移除加载消息
-                if (loadingDiv && loadingDiv.parentNode) {
-                    loadingDiv.remove();
-                }
-                
-                // 显示回复消息
-                if (replyText) {
-                    addMessage(replyText, false);
-                    lastMessage = null; // 发送成功后清除重试消息
-                }
-
-                // 刷新历史会话列表
-                loadHistorySessions();
-                
-                } catch (error) {
+            } catch (error) {
                 console.error('Error:', error);
                 console.error('Error stack:', error.stack);
                 
