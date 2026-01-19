@@ -1,5 +1,5 @@
 server:
-  port: 8010
+  port: 8020
   servlet:
     encoding:
       charset: utf-8
@@ -12,9 +12,29 @@ spring:
   config:
     import:
       - optional:nacos:application-standalone.yml
+  autoconfigure:
+    exclude:
+      - org.springframework.cloud.alibaba.nacos.discovery.NacosDiscoveryAutoConfiguration
+      - org.springframework.cloud.alibaba.nacos.registry.NacosServiceRegistryAutoConfiguration
   cloud:
     compatibility-verifier:
       enabled: false
+    nacos:
+      config:
+        server-addr: ${NACOS_SERVER_ADDR:localhost:8848}
+        namespace: ${NACOS_NAMESPACE:}
+        group: DEFAULT_GROUP
+        data-id: application-standalone.yml
+        type: yaml
+        auto-refresh: true
+
+      # Nacos Discovery 服务注册 - 本地开发时禁用
+      discovery:
+        enabled: false
+        server-addr: ${NACOS_SERVER_ADDR:localhost:8848}
+        namespace: ${NACOS_NAMESPACE:}
+        group: DEFAULT_GROUP
+        service: ${spring.application.name}
   main:
     allow-bean-definition-overriding: true
   datasource:
@@ -84,24 +104,6 @@ ai:
   mcp:
     baiduMap:
       apiKey: ${BAIDU_MAP_API_KEY:}
-
-  # Nacos 配置中心和服务注册
-  cloud:
-    nacos:
-      config:
-        server-addr: ${NACOS_SERVER_ADDR:localhost:8848}
-        namespace: ${NACOS_NAMESPACE:}
-        group: DEFAULT_GROUP
-        data-id: application-standalone.yml
-        type: yaml
-        auto-refresh: true
-
-      # Nacos Discovery 服务注册
-      discovery:
-        server-addr: ${NACOS_SERVER_ADDR:localhost:8848}
-        namespace: ${NACOS_NAMESPACE:}
-        group: DEFAULT_GROUP
-        service: ${spring.application.name}
 
 # 禁用其他AI模型以测试基础功能
 # 仅测试基本HTTP服务功能
