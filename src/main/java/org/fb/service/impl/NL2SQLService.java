@@ -76,7 +76,7 @@ public class NL2SQLService {
             重要注意事项：
             1. 只生成SELECT查询语句，不要生成INSERT、UPDATE、DELETE等修改数据的语句
             2. 确保SQL语句中的所有字段和表名都存在于提供的数据库结构中
-            3. 如果用户查询的内容在数据库中不存在，返回一个简单的SELECT 1语句
+            3. 对于统计查询（如查询表数量、数据数量等），使用正确的聚合函数和统计方法
             4. 绝对不要使用'default'、'null'、'DEFAULT'、'NULL'等作为字符串字面值
             5. 对于字符串字段，使用单引号包裹值，但值必须是实际的数据内容，不能是关键字
             6. 对于数值字段，不要使用引号，直接使用数字
@@ -84,6 +84,8 @@ public class NL2SQLService {
             8. 如果不确定如何转换，返回SELECT 1语句
             9. 检查生成的SQL，确保WHERE条件中的值与字段类型匹配
             10. 如果字段类型是BIGINT、INT等数值类型，不要使用字符串比较
+            11. 查询表数量时，使用: SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE()
+            12. 查询数据行数时，使用: SELECT COUNT(*) FROM 表名
             
             数据库结构：
             %s
