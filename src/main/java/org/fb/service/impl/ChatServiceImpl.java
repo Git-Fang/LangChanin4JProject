@@ -1,6 +1,7 @@
 package org.fb.service.impl;
 
 import org.fb.constant.BusinessConstant;
+import org.fb.service.ChatSaveService;
 import org.fb.service.ChatService;
 import org.fb.service.assistant.*;
 import org.slf4j.Logger;
@@ -9,8 +10,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
-import java.text.SimpleDateFormat;
-import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
@@ -40,6 +39,9 @@ public class ChatServiceImpl implements ChatService {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private ChatSaveService chatSaveService;
 
     @Override
     public String chat(Long memoryId, String message) {
@@ -198,39 +200,17 @@ public class ChatServiceImpl implements ChatService {
         return BusinessConstant.DEFAULT_TYPE;
     }
 
-    /**
+/**
      * 保存聊天信息到数据库
      * @param memoryId 对话对应的memoryId
      * @param userMessage 用户消息
      * @param chatType 聊天类型
      */
     private void saveChatInfo(Long memoryId, String userMessage, String chatType) {
-        // 直接输出到控制台，绕过日志系统
         log.info("\n=== 开始保存聊天信息 ===");
-        log.info("memoryId：" + memoryId + "；聊天类型：" + chatType);
-        try {
-            // 设置创建时间
-            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-            String currentTime = sdf.format(new Date());
-            
-            log.info("准备插入数据库："+ String.valueOf(memoryId) + ", " + userMessage + ", " + chatType + ", " + currentTime);
-
-            // 使用JdbcTemplate直接插入数据
-            String sql = "INSERT INTO chatInfo (chat_memory_id, chat_info, chat_type, create_time) VALUES (?, ?, ?, ?)";
-            log.info("执行SQL：" + sql);
-            int result = jdbcTemplate.update(sql, String.valueOf(memoryId), userMessage, chatType, currentTime);
-            
-            log.info("JdbcTemplate.update返回结果：" + result);
-            log.info("聊天信息保存成功，memoryId：" + memoryId + "，聊天类型：" + chatType);
-            log.info("=== 聊天信息保存完成 ===\n");
-        } catch (Exception e) {
-            log.info("\n=== 保存聊天信息失败 ===");
-            log.info("异常类型：" + e.getClass().getName());
-            log.info("异常消息：" + e.getMessage());
-            log.info("异常栈：");
-            e.printStackTrace();
-            log.info("=== 保存聊天信息失败完成 ===\n");
-        }
+        log.info("memoryId: {}; 聊天类型: {}", memoryId, chatType);
+        chatSaveService.saveChatInfo(memoryId, userMessage, chatType);
+        log.info("=== 聊天信息保存完成 ===\n");
     }
 
     /**

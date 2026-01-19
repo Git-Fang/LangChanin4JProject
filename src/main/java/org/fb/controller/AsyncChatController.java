@@ -6,15 +6,15 @@ import lombok.extern.slf4j.Slf4j;
 import org.fb.bean.ChatForm;
 import org.fb.bean.kafka.ChatRequestMessage;
 import org.fb.bean.kafka.ChatResultMessage;
+import org.fb.service.ChatSaveService;
 import org.fb.service.ChatService;
 import org.fb.service.StreamingChatService;
 import org.fb.service.StreamingDispatchService;
 import org.fb.service.kafka.ChatRequestProducer;
 import org.fb.service.kafka.StandaloneChatRequestProducer;
-import org.reactivestreams.Publisher;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.context.EnvironmentAware;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.core.env.Environment;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.MediaType;
@@ -43,6 +43,7 @@ public class AsyncChatController implements EnvironmentAware {
     private final ChatService chatService;
     private final StreamingChatService streamingChatService;
     private final StreamingDispatchService streamingDispatchService;
+    private final ChatSaveService chatSaveService;
 
     private Environment environment;
 
@@ -54,7 +55,8 @@ public class AsyncChatController implements EnvironmentAware {
             ObjectMapper objectMapper,
             ChatService chatService,
             @Autowired(required = false) StreamingChatService streamingChatService,
-            @Autowired(required = false) StreamingDispatchService streamingDispatchService) {
+            @Autowired(required = false) StreamingDispatchService streamingDispatchService,
+            @Autowired(required = false) ChatSaveService chatSaveService) {
         this.requestProducer = requestProducer;
         this.standaloneRequestProducer = standaloneRequestProducer;
         this.redisTemplate = redisTemplate;
@@ -62,6 +64,7 @@ public class AsyncChatController implements EnvironmentAware {
         this.chatService = chatService;
         this.streamingChatService = streamingChatService;
         this.streamingDispatchService = streamingDispatchService;
+        this.chatSaveService = chatSaveService;
     }
 
     @Override
@@ -525,7 +528,7 @@ public class AsyncChatController implements EnvironmentAware {
                 AtomicReference<String> accumulated = new AtomicReference<>("");
                 AtomicReference<Long> startTime = new AtomicReference<>(System.currentTimeMillis());
 
-                flux.publishOn(Schedulers.boundedElastic())
+flux.publishOn(Schedulers.boundedElastic())
                     .doOnNext(chunk -> {
                         try {
                             String current = accumulated.get();
@@ -557,6 +560,9 @@ public class AsyncChatController implements EnvironmentAware {
                             requestId, accumulated.get().length(), processingTime);
 
                         String finalContent = accumulated.get();
+
+                        // 保存聊天信息到数据库
+                        saveChatToDatabase(request.getMemoryId(), request.getMessage(), finalContent);
 
                         ChatResultMessage finalResult = ChatResultMessage.builder()
                             .requestId(requestId)
@@ -601,7 +607,7 @@ public class AsyncChatController implements EnvironmentAware {
                 AtomicReference<String> accumulated = new AtomicReference<>("");
                 AtomicReference<Long> startTime = new AtomicReference<>(System.currentTimeMillis());
 
-                flux.publishOn(Schedulers.boundedElastic())
+flux.publishOn(Schedulers.boundedElastic())
                     .doOnNext(chunk -> {
                         try {
                             String current = accumulated.get();
@@ -633,6 +639,9 @@ public class AsyncChatController implements EnvironmentAware {
                             requestId, accumulated.get().length(), processingTime);
 
                         String finalContent = accumulated.get();
+
+                        // 保存聊天信息到数据库
+                        saveChatToDatabase(request.getMemoryId(), request.getMessage(), finalContent);
 
                         ChatResultMessage finalResult = ChatResultMessage.builder()
                             .requestId(requestId)
@@ -1020,7 +1029,7 @@ public class AsyncChatController implements EnvironmentAware {
             Long memoryId = request.getMemoryId();
             String message = request.getMessage();
 
-            if (streamingDispatchService != null) {
+if (streamingDispatchService != null) {
                 log.info("使用流式分发服务(意图识别+业务分发)处理HTTP请求, requestId: {}", requestId);
 
                 redisTemplate.opsForValue().set(STREAM_CACHE_PREFIX + requestId, "", RESULT_TTL);
@@ -1063,6 +1072,9 @@ public class AsyncChatController implements EnvironmentAware {
 
                         String finalContent = accumulated.get();
 
+                        // 保存聊天信息到数据库
+                        saveChatToDatabase(memoryId, message, finalContent);
+
                         ChatResultMessage finalResult = ChatResultMessage.builder()
                             .requestId(requestId)
                             .memoryId(memoryId)
@@ -1104,7 +1116,7 @@ public class AsyncChatController implements EnvironmentAware {
                         sseConnections.remove(requestId);
                     })
                     .subscribe();
-            } else if (streamingChatService != null) {
+} else if (streamingChatService != null) {
                 log.info("使用原始流式服务处理HTTP请求(无意图识别), requestId: {}", requestId);
 
                 redisTemplate.opsForValue().set(STREAM_CACHE_PREFIX + requestId, "", RESULT_TTL);
@@ -1146,6 +1158,9 @@ public class AsyncChatController implements EnvironmentAware {
                             requestId, accumulated.get().length(), processingTime);
 
                         String finalContent = accumulated.get();
+
+                        // 保存聊天信息到数据库
+                        saveChatToDatabase(memoryId, message, finalContent);
 
                         ChatResultMessage finalResult = ChatResultMessage.builder()
                             .requestId(requestId)
@@ -1289,11 +1304,31 @@ public class AsyncChatController implements EnvironmentAware {
             sseConnections.remove(requestId);
         });
         
-        emitter.onError(e -> {
+emitter.onError(e -> {
             log.error("HTTP流式连接错误, requestId: {}", requestId, e);
             sseConnections.remove(requestId);
         });
         
         return emitter;
+    }
+    
+    /**
+     * 保存聊天信息到数据库
+     * @param memoryId 对话对应的memoryId
+     * @param userMessage 用户消息
+     * @param aiResponse AI回复内容
+     */
+    private void saveChatToDatabase(Long memoryId, String userMessage, String aiResponse) {
+        if (chatSaveService == null) {
+            log.warn("ChatSaveService未注入，跳过数据库保存");
+            return;
+        }
+        
+        try {
+            chatSaveService.saveChatInfo(memoryId, userMessage, "general", aiResponse);
+            log.info("流式聊天记录已保存到数据库, memoryId: {}", memoryId);
+        } catch (Exception e) {
+            log.error("保存流式聊天记录失败, memoryId: {}", memoryId, e);
+        }
     }
 }
