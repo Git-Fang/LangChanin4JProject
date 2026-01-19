@@ -3,6 +3,9 @@ package org.fb.controller;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.fb.service.DocumentService;
+import org.fb.service.assistant.TermExtractionAgent;
+import org.fb.tools.QdrantOperationTools;
+import org.fb.util.BatchPathProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -43,20 +46,15 @@ public class PersonalDataController {
 
     @PostMapping("/upload/batch")
     @Operation(summary = "批量上传个人相关文件")
-    public Map<String, Object> uploadResumeBatch(@RequestParam("files") MultipartFile[] files) {
-        Map<String, Object> result = new HashMap<>();
-        try {
-            Integer count = documentService.saveAndEmbedding(files);
-            
-            result.put("success", true);
-            result.put("message", "批量上传成功，已向量化存储到qdrant数据库");
-            result.put("count", count);
-            log.info("批量上传个人简历文件成功，共{}个文件", count);
-        } catch (Exception e) {
-            log.error("批量上传个人简历文件失败", e);
+    public Map<String, Object> uploadResumeBatch(@RequestParam("files") MultipartFile[] files,
+                                                @RequestParam(value = "operation", defaultValue = "VECTORIZE") String operation) {
+        if (files != null && files.length > 5) {
+            Map<String, Object> result = new HashMap<>();
             result.put("success", false);
-            result.put("message", "批量上传失败: " + e.getMessage());
+            result.put("message", "最多支持上传 5 个文件");
+            return result;
         }
+        Map<String, Object> result = documentService.processBatchFiles(files, operation);
         return result;
     }
 

@@ -31,8 +31,10 @@ public class McpSseService {
         this.objectMapper = objectMapper;
     }
 
+    private static final long SSE_TIMEOUT = 300000L; // 5分钟
+
     public SseEmitter createEmitter(String sessionId) {
-        SseEmitter emitter = new SseEmitter(0L);
+        SseEmitter emitter = new SseEmitter(SSE_TIMEOUT);
 
         emitter.onCompletion(() -> {
             emitters.remove(sessionId);

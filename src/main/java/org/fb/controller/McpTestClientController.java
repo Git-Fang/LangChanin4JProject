@@ -2,6 +2,8 @@ package org.fb.controller;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.BufferedReader;
@@ -14,13 +16,14 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 @RestController
 @Tag(name = "MCP测试客户端")
 @RequestMapping("/mcp/test")
 public class McpTestClientController {
-    private final ExecutorService executorService = Executors.newCachedThreadPool();
+    @Autowired
+    @Qualifier("mdcExecutorService")
+    private ExecutorService mdcExecutorService;
 
     @GetMapping("/sse-demo")
     @Operation(summary = "SSE MCP服务演示")
@@ -115,7 +118,7 @@ public class McpTestClientController {
                     "error", e.getMessage()
                 );
             }
-        }, executorService);
+        }, mdcExecutorService);
     }
 
     private String createInitializeRequest() {

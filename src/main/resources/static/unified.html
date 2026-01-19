@@ -4,7 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>小智Agent - 统一客户端</title>
+    <link rel="icon" type="image/png" href="/icon.png">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="js/text-to-speech.js"></script>
     <style>
         * {
             margin: 0;
@@ -32,6 +34,8 @@
             display: flex;
             flex-direction: column;
             padding: 20px;
+            overflow-y: auto;
+            max-height: 100vh;
         }
 
         .avatar-container {
@@ -124,8 +128,9 @@
         /* 历史会话列表 */
         .history-container {
             margin-top: 20px;
-            flex: 1;
+            flex-shrink: 0;
             overflow-y: auto;
+            max-height: 224px;
         }
 
         .history-container.hidden {
@@ -290,7 +295,7 @@
             top: 20px;
             left: 50%;
             transform: translateX(-50%);
-            background-color: #4caf50;
+            background-color: #f44336;
             color: white;
             padding: 10px 20px;
             border-radius: 6px;
@@ -302,14 +307,25 @@
             gap: 8px;
         }
 
-        .error-message::before {
-            content: '🤖';
-            font-size: 16px;
-        }
-
         .error-message.show {
             display: flex;
             animation: slideDown 0.3s ease;
+        }
+
+        .retry-btn {
+            padding: 6px 16px;
+            background-color: white;
+            color: #f44336;
+            border: none;
+            border-radius: 4px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-weight: 500;
+        }
+
+        .retry-btn:hover {
+            background-color: #f5f5f5;
         }
 
         @keyframes slideDown {
@@ -381,6 +397,42 @@
             color: white;
         }
 
+        .message-actions {
+            display: inline-flex;
+            gap: 6px;
+            margin-top: 8px;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        .message:hover .message-actions {
+            opacity: 1;
+        }
+
+        .message.assistant .message-actions {
+            clear: both;
+        }
+
+        .message-actions-http {
+            display: flex;
+            gap: 4px;
+            margin-top: 4px;
+            width: auto;
+        }
+
+        .message-http-wrapper {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .message-http-user {
+            align-items: flex-end;
+        }
+
+        .message-http-user .message-actions-http {
+            justify-content: flex-end;
+        }
+
         .message-content {
             background-color: #f5f5f5;
             padding: 12px 16px;
@@ -388,6 +440,7 @@
             line-height: 1.6;
             color: #333;
             word-wrap: break-word;
+            display: inline-block;
         }
 
         .message.user .message-content {
@@ -800,6 +853,90 @@
             line-height: 1.6;
             color: #333;
         }
+
+        .message-actions {
+            display: inline-flex;
+            gap: 6px;
+            margin-top: 8px;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        .message:hover .message-actions {
+            opacity: 1;
+        }
+
+        .message-action-btn {
+            padding: 2px 8px;
+            font-size: 0.7rem;
+            border: 1px solid #ddd;
+            background: white;
+            border-radius: 4px;
+            cursor: pointer;
+            color: #666;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 2px;
+        }
+
+        .message-action-btn:hover {
+            background: #f0f0f0;
+            border-color: #ccc;
+        }
+
+        .message-action-btn.copied {
+            background: #4caf50;
+            color: white;
+            border-color: #4caf50;
+        }
+
+        .message.user .message-action-btn {
+            border-color: rgba(255,255,255,0.3);
+            background: rgba(255,255,255,0.15);
+            color: white;
+        }
+
+        .message.user .message-action-btn:hover {
+            background: rgba(255,255,255,0.25);
+        }
+
+        .message.user .message-action-btn.copied {
+            background: #81c784;
+            border-color: #81c784;
+        }
+
+        .message.assistant .message-action-btn {
+            border-color: #ddd;
+            background: white;
+            color: #666;
+        }
+
+        .message.assistant .message-action-btn:hover {
+            background: #f0f0f0;
+            border-color: #ccc;
+        }
+
+        .message-action-btn.tts-btn {
+            border-color: #667eea;
+            color: #667eea;
+        }
+
+        .message-action-btn.tts-btn:hover {
+            background: #667eea;
+            color: white;
+        }
+
+        .message-action-btn.tts-btn.speaking {
+            background: #667eea;
+            color: white;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
     </style>
 </head>
 <body>
@@ -827,11 +964,38 @@
                 </div>
             </div>
 
+            <!-- SSE交流功能区域 -->
+            <div class="upload-section" id="sseChatSection">
+                <h3 class="upload-title">实时交流</h3>
+                <button class="upload-btn" id="sseChatBtn" onclick="window.open('/chat-sse.html', '_blank')">SSE实时聊天</button>
+            </div>
+
+            <!-- 图文功能区域 -->
+            <div class="upload-section" id="imageChatSection">
+                <h3 class="upload-title">图文功能</h3>
+                <button class="upload-btn" id="imageChatBtn" onclick="openImageChatModal()">图文交互</button>
+            </div>
+
             <!-- 文件上传区域 -->
-            <div class="upload-section">
+            <div class="upload-section" id="fileUploadSection">
                 <h3 class="upload-title">文件管理</h3>
-                <button class="upload-btn" onclick="document.getElementById('fileInput').click()">上传文件</button>
-                <input type="file" id="fileInput" class="file-input" accept=".pdf,.txt,.doc,.docx" onchange="uploadFile(this)">
+                <button class="upload-btn" onclick="const modal=document.getElementById('batchModal');if(modal)modal.style.display='flex'">批量上传文件</button>
+            </div>
+
+            <!-- 上传文档历史区域 -->
+            <div class="upload-section" id="documentHistorySection">
+                <h3 class="upload-title">文档查询</h3>
+                <button class="upload-btn" onclick="window.open('/document-history.html', '_blank')">上传文档历史</button>
+            </div>
+
+            <!-- 配置更新区域 -->
+            <div class="upload-section" id="configRefreshSection" style="margin-top: auto; padding-top: 20px; border-top: 1px solid #e0e0e0;">
+                <h3 class="upload-title">配置更新</h3>
+                <button class="upload-btn" id="configRefreshBtn" onclick="refreshConfig()">
+                    <span id="refreshBtnIcon">🔄</span>
+                    <span id="refreshBtnText">手动刷新配置</span>
+                </button>
+                <div id="configRefreshResult" style="margin-top: 8px; font-size: 12px; color: #666; display: none; word-break: break-all;"></div>
             </div>
         </div>
 
@@ -843,7 +1007,10 @@
                 </div>
             </div>
             
-            <div class="error-message" id="errorMessage">请求失败,请重试</div>
+            <div class="error-message" id="errorMessage">
+                <span id="errorText">请求失败,请重试</span>
+                <button class="retry-btn" id="retryBtn" onclick="retryLastMessage()">重试</button>
+            </div>
             
             <div class="messages-container" id="messagesContainer">
                 <div class="empty-state">开始新的对话吧</div>
@@ -920,10 +1087,19 @@
         let sessionId = null;
         let messageId = 1;
         let tools = [];
+        let lastMessage = null; // 保存最后发送的消息用于重试
+        let lastUserMessage = null; // 保存最后一条用户消息用于AI重试
 
-        // API 配置
-        const HTTP_API_BASE_URL = 'http://localhost:8000/mcp/exec';
-        const SSE_BASE_URL = 'http://localhost:8000/mcp';
+        // API 配置 - 使用动态地址以支持手机端和不同网络环境访问
+        const getApiBaseUrl = () => {
+            const protocol = window.location.protocol;
+            const hostname = window.location.hostname;
+            const port = window.location.port || (protocol === 'https:' ? '443' : '80');
+            return `${protocol}//${hostname}:${port}`;
+        };
+        const API_BASE_URL = getApiBaseUrl();
+        const HTTP_API_BASE_URL = `${API_BASE_URL}/mcp/exec`;
+        const SSE_BASE_URL = `${API_BASE_URL}/mcp`;
 
         // 切换模式
         function switchMode(mode) {
@@ -941,15 +1117,7 @@
             // 显示/隐藏 SSE 面板
             const ssePanel = document.getElementById('ssePanel');
             ssePanel.classList.toggle('active', mode === 'sse');
-            
-            // 显示/隐藏 历史会话区域
-            const historyContainer = document.querySelector('.history-container');
-            if (mode === 'http') {
-                historyContainer.classList.add('hidden');
-            } else {
-                historyContainer.classList.remove('hidden');
-            }
-            
+
             // 如果切换到 SSE 模式，自动建立连接
             if (mode === 'sse' && !eventSource) {
                 connectSse();
@@ -1243,13 +1411,18 @@
         }
 
         // 显示错误消息
-        function showError(message) {
+        function showError(message, showRetry = true) {
             const errorEl = document.getElementById('errorMessage');
-            errorEl.textContent = message || '请求失败,请重试';
+            const errorText = document.getElementById('errorText');
+            const retryBtn = document.getElementById('retryBtn');
+            
+            errorText.textContent = message || '请求失败,请重试';
             errorEl.classList.add('show');
+            retryBtn.style.display = showRetry ? 'inline-block' : 'none';
+            
             setTimeout(() => {
                 errorEl.classList.remove('show');
-            }, 3000);
+            }, 5000);
         }
 
         // 添加日志
@@ -1291,29 +1464,168 @@
 
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${isUser ? 'user' : 'assistant'}`;
-            
+            messageDiv.dataset.content = content;
+
             const avatar = document.createElement('div');
             avatar.className = 'message-avatar';
             avatar.textContent = isUser ? '我' : '智';
-            
+
             const contentDiv = document.createElement('div');
             contentDiv.className = 'message-content';
-            
+
             // 如果是助手消息，使用markdown解析
             if (!isUser) {
                 contentDiv.innerHTML = marked.parse(content);
             } else {
                 contentDiv.textContent = content;
             }
-            
-            messageDiv.appendChild(avatar);
-            messageDiv.appendChild(contentDiv);
+
+            const actionsDiv = document.createElement('div');
+            actionsDiv.className = 'message-actions';
+            if (!isUser && currentMode === 'http') {
+                actionsDiv.classList.add('message-actions-http');
+            }
+
+            const copyBtn = document.createElement('button');
+            copyBtn.className = 'message-action-btn copy-btn';
+            copyBtn.innerHTML = '<span>📋</span> 复制';
+            copyBtn.onclick = () => copyMessage(content, copyBtn);
+
+            actionsDiv.appendChild(copyBtn);
+
+            if (isUser) {
+                const editRetryBtn = document.createElement('button');
+                editRetryBtn.className = 'message-action-btn retry-btn';
+                editRetryBtn.innerHTML = '<span>🔄</span> 编辑重试';
+                editRetryBtn.onclick = () => retryWithEdit(content);
+                actionsDiv.appendChild(editRetryBtn);
+            } else {
+                const retryBtn = document.createElement('button');
+                retryBtn.className = 'message-action-btn retry-btn';
+                retryBtn.innerHTML = '<span>🔄</span> 重试';
+                retryBtn.onclick = () => retryWithSameQuestion();
+                actionsDiv.appendChild(retryBtn);
+
+                const ttsBtn = document.createElement('button');
+                ttsBtn.className = 'message-action-btn tts-btn';
+                ttsBtn.innerHTML = '<span>🔊</span> 播报';
+                ttsBtn.onclick = () => toggleSpeech(messageDiv, ttsBtn);
+                actionsDiv.appendChild(ttsBtn);
+            }
+
+            if (isUser) {
+                const wrapperDiv = document.createElement('div');
+                wrapperDiv.className = 'message-http-wrapper message-http-user';
+                
+                const userContentDiv = document.createElement('div');
+                userContentDiv.className = 'message-content';
+                userContentDiv.textContent = content;
+                
+                const userActionsDiv = document.createElement('div');
+                userActionsDiv.className = 'message-actions message-actions-http';
+                
+                const userCopyBtn = document.createElement('button');
+                userCopyBtn.className = 'message-action-btn copy-btn';
+                userCopyBtn.innerHTML = '<span>📋</span> 复制';
+                userCopyBtn.onclick = () => copyMessage(content, userCopyBtn);
+                
+                const userRetryBtn = document.createElement('button');
+                userRetryBtn.className = 'message-action-btn retry-btn';
+                userRetryBtn.innerHTML = '<span>🔄</span> 编辑重试';
+                userRetryBtn.onclick = () => retryWithEdit(content);
+                
+                userActionsDiv.appendChild(userCopyBtn);
+                userActionsDiv.appendChild(userRetryBtn);
+                
+                wrapperDiv.appendChild(userContentDiv);
+                wrapperDiv.appendChild(userActionsDiv);
+                messageDiv.appendChild(avatar);
+                messageDiv.appendChild(wrapperDiv);
+            } else if (!isUser && currentMode === 'http') {
+                const wrapperDiv = document.createElement('div');
+                wrapperDiv.className = 'message-http-wrapper';
+                wrapperDiv.appendChild(contentDiv);
+                wrapperDiv.appendChild(actionsDiv);
+                messageDiv.appendChild(avatar);
+                messageDiv.appendChild(wrapperDiv);
+            } else {
+                messageDiv.appendChild(avatar);
+                messageDiv.appendChild(contentDiv);
+                messageDiv.appendChild(actionsDiv);
+            }
             container.appendChild(messageDiv);
-            
+
             // 滚动到底部
             container.scrollTop = container.scrollHeight;
-            
+
             return messageDiv;
+        }
+
+        function copyMessage(content, btn) {
+            navigator.clipboard.writeText(content).then(() => {
+                btn.classList.add('copied');
+                btn.innerHTML = '<span>✓</span> 已复制';
+                setTimeout(() => {
+                    btn.classList.remove('copied');
+                    btn.innerHTML = '<span>📋</span> 复制';
+                }, 2000);
+            }).catch(err => {
+                console.error('复制失败:', err);
+                alert('复制失败，请手动选择文本复制');
+            });
+        }
+
+        function toggleSpeech(messageElement, button) {
+            const contentDiv = messageElement.querySelector('.message-content');
+            const content = contentDiv ? contentDiv.textContent : '';
+
+            if (TextToSpeech.isSpeaking()) {
+                TextToSpeech.stop();
+                button.classList.remove('speaking');
+                button.innerHTML = '<span>🔊</span> 播报';
+            } else {
+                TextToSpeech.speak(content, {
+                    lang: 'zh-CN',
+                    rate: 1,
+                    pitch: 1,
+                    volume: 1
+                });
+                button.classList.add('speaking');
+                button.innerHTML = '<span>🔊</span> 停止';
+            }
+
+            const originalOnEnd = TextToSpeech.currentUtterance?.onend;
+            if (TextToSpeech.currentUtterance) {
+                TextToSpeech.currentUtterance.onend = function() {
+                    button.classList.remove('speaking');
+                    button.innerHTML = '<span>🔊</span> 播报';
+                    if (originalOnEnd) originalOnEnd.call(this);
+                };
+            }
+        }
+
+        function retryWithEdit(content) {
+            const input = document.getElementById('messageInput');
+            input.value = content;
+            input.focus();
+        }
+
+        function retryWithSameQuestion() {
+            if (lastUserMessage) {
+                const input = document.getElementById('messageInput');
+                input.value = lastUserMessage;
+                sendMessage();
+            } else {
+                alert('没有可重试的请求');
+            }
+        }
+
+        // 重试最后一次发送的消息
+        function retryLastMessage() {
+            if (lastMessage) {
+                document.getElementById('messageInput').value = lastMessage;
+                sendMessage();
+            }
         }
 
         // 发送消息
@@ -1325,6 +1637,10 @@
             if (!message) {
                 return;
             }
+
+            // 保存最后发送的消息用于重试
+            lastMessage = message;
+            lastUserMessage = message;
 
             // 禁用输入和按钮
             input.disabled = true;
@@ -1346,47 +1662,127 @@
                 let replyText = '';
 
                 if (currentMode === 'http') {
-                    // HTTP 模式 - 不使用历史会话
+                    // HTTP 模式 - 使用 POST + SSE 流式接口
                     const controller = new AbortController();
-                    const timeoutId = setTimeout(() => controller.abort(), 180000);
-                    
-                    const response = await fetch(HTTP_API_BASE_URL, {
+                    const timeoutId = setTimeout(() => controller.abort(), 300000);
+
+                    const initResponse = await fetch(`${API_BASE_URL}/xiaozhi/chat/http-stream`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
                         },
                         body: JSON.stringify({
-                            jsonrpc: '2.0',
-                            id: Date.now().toString(),
-                            method: 'composite_intelligent_agent',
-                            params: {
-                                userMessage: message
-                            }
+                            memoryId: memoryId,
+                            message: message
                         }),
                         signal: controller.signal
                     });
-                    
+
                     clearTimeout(timeoutId);
 
-                    if (!response.ok) {
-                        const errorText = await response.text();
-                        console.error('HTTP Error:', response.status, errorText);
-                        throw new Error(errorText || `HTTP error! status: ${response.status}`);
+                    if (!initResponse.ok) {
+                        const errorText = await initResponse.text();
+                        console.error('HTTP Error:', initResponse.status, errorText);
+                        throw new Error(errorText || `HTTP error! status: ${initResponse.status}`);
                     }
 
-                    const data = await response.json();
-                    console.log('Response data:', data);
+                    const { requestId: streamRequestId, streamUrl } = await initResponse.json();
                     
-                    // 解析JSON-RPC响应
-                    if (data.result && data.result.chatResult) {
-                        replyText = data.result.chatResult;
-                    } else if (data.result) {
-                        replyText = typeof data.result === 'string' ? data.result : JSON.stringify(data.result);
-                    } else if (data.error) {
-                        replyText = `错误: ${data.error.message || data.error}`;
-                    } else {
-                        replyText = '抱歉，我没有理解您的问题。';
-                    }
+                    const streamUrlFull = `${API_BASE_URL}${streamUrl}`;
+                    console.log('HTTP流式请求ID:', streamRequestId, 'URL:', streamUrlFull);
+                    
+                    const httpEventSource = new EventSource(streamUrlFull);
+                    let accumulatedContent = '';
+                    let httpStreamComplete = false;
+                    
+                    httpEventSource.addEventListener('connected', async (e) => {
+                        console.log('HTTP SSE 连接已建立');
+                        addLog('INFO', 'HTTP流式连接已建立');
+                    });
+                    
+                    httpEventSource.addEventListener('chunk', async (e) => {
+                        try {
+                            const data = JSON.parse(e.data);
+                            console.log('收到HTTP流式内容块:', data);
+                            
+                            if (data.content) {
+                                accumulatedContent += data.content;
+                                contentDiv.textContent = accumulatedContent;
+                                
+                                const container = document.getElementById('messagesContainer');
+                                container.scrollTop = container.scrollHeight;
+                            }
+                            
+                            if (data.progress !== undefined) {
+                                contentDiv.dataset.progress = data.progress;
+                            }
+                        } catch (error) {
+                            console.error('解析HTTP流式内容块失败:', error);
+                        }
+                    });
+                    
+                    httpEventSource.addEventListener('result', async (e) => {
+                        try {
+                            const result = JSON.parse(e.data);
+                            console.log('收到HTTP流式结果:', result);
+                            
+                            httpStreamComplete = true;
+                            
+                            if (result.status === 'SUCCESS' || result.status === 'success') {
+                                if (result.result && accumulatedContent !== result.result) {
+                                    accumulatedContent = result.result;
+                                }
+                                
+                                contentDiv.innerHTML = marked.parse(accumulatedContent);
+                                contentDiv.dataset.content = accumulatedContent;
+                                
+                                const processingTimeDiv = document.createElement('div');
+                                processingTimeDiv.style.cssText = 'font-size: 0.75rem; color: #999; margin-top: 4px;';
+                                processingTimeDiv.textContent = '处理耗时: ' + (result.processingTimeMs || 0) + 'ms';
+                                contentDiv.appendChild(processingTimeDiv);
+                                
+                                lastMessage = null;
+                            } else {
+                                addMessage('处理失败: ' + (result.error || '未知错误'), false);
+                            }
+                            
+                            httpEventSource.close();
+                            httpEventSource = null;
+                            
+                            loadHistorySessions();
+                        } catch (error) {
+                            console.error('解析HTTP流式结果失败:', error);
+                        }
+                    });
+                    
+                    httpEventSource.addEventListener('complete', (e) => {
+                        console.log('HTTP SSE 流完成');
+                        if (!httpStreamComplete) {
+                            if (accumulatedContent) {
+                                contentDiv.innerHTML = marked.parse(accumulatedContent);
+                            }
+                            httpEventSource.close();
+                            httpEventSource = null;
+                        }
+                    });
+                    
+                    httpEventSource.addEventListener('error', (error) => {
+                        console.error('HTTP SSE 错误:', error);
+                        httpStreamComplete = true;
+                        httpEventSource.close();
+                        httpEventSource = null;
+                        
+                        if (loadingDiv && loadingDiv.parentNode) {
+                            loadingDiv.remove();
+                        }
+                        addMessage('抱歉，服务暂时不可用，请稍后重试。', false);
+                    });
+                    
+                    httpEventSource.onerror = (error) => {
+                        console.error('HTTP SSE 底层错误:', error);
+                    };
+                    
+                    return;
                 } else {
                     // SSE 模式
                     const sseMessage = {
@@ -1407,34 +1803,24 @@
                     
                     await sendSseMessage(sseMessage);
                 }
-                
-                // 移除加载消息
-                if (loadingDiv && loadingDiv.parentNode) {
-                    loadingDiv.remove();
-                }
-                
-                // 显示回复消息
-                if (replyText) {
-                    addMessage(replyText, false);
-                }
-                
-                // 仅在SSE模式下刷新历史会话列表
-                if (currentMode === 'sse') {
-                    loadHistorySessions();
-                }
-                
             } catch (error) {
                 console.error('Error:', error);
                 console.error('Error stack:', error.stack);
                 
                 let errorMsg = '请求失败,请重试';
+                let showRetry = true;
                 if (error.name === 'AbortError') {
                     errorMsg = '请求超时，请稍后重试';
                 } else if (error.message) {
                     errorMsg = error.message.length > 50 ? '请求失败,请重试' : error.message;
                 }
                 
-                showError(errorMsg);
+                // SSE模式错误时也显示重试按钮
+                if (currentMode === 'sse') {
+                    showError(errorMsg, showRetry);
+                } else {
+                    showError(errorMsg, showRetry);
+                }
                 
                 // 移除加载消息
                 if (loadingDiv && loadingDiv.parentNode) {
@@ -1463,14 +1849,17 @@
         // 新会话
         function newChat() {
             memoryId = Date.now();
+            lastMessage = null;
             const container = document.getElementById('messagesContainer');
             container.innerHTML = '<div class="empty-state">开始新的对话吧</div>';
+            // 刷新历史会话列表
+            loadHistorySessions();
         }
 
         // 加载历史会话列表
         async function loadHistorySessions() {
             try {
-                const response = await fetch('http://localhost:8000/xiaozhi/history');
+                const response = await fetch(`${API_BASE_URL}/xiaozhi/history`);
                 if (!response.ok) {
                     throw new Error('Failed to load history sessions');
                 }
@@ -1553,7 +1942,7 @@
             container.innerHTML = '';
             
             try {
-                const response = await fetch(`http://localhost:8000/xiaozhi/history/${sessionId}`);
+                const response = await fetch(`${API_BASE_URL}/xiaozhi/history/${sessionId}`);
                 if (!response.ok) {
                     throw new Error('Failed to load history messages');
                 }
@@ -1588,7 +1977,7 @@
             formData.append('file', file);
 
             try {
-                const response = await fetch('http://localhost:8000/xiaozhi/personal/upload', {
+                const response = await fetch(`${API_BASE_URL}/xiaozhi/personal/upload`, {
                     method: 'POST',
                     body: formData
                 });
@@ -1644,10 +2033,548 @@
         // 页面加载完成后初始化
         window.addEventListener('load', () => {
             document.getElementById('messageInput').focus();
-            // 仅在SSE模式下加载历史会话
-            if (currentMode === 'sse') {
-                loadHistorySessions();
+            // 加载历史会话列表
+            loadHistorySessions();
+        });
+
+        // 配置刷新功能
+        async function refreshConfig() {
+            const refreshBtn = document.getElementById('configRefreshBtn');
+            const refreshBtnIcon = document.getElementById('refreshBtnIcon');
+            const refreshBtnText = document.getElementById('refreshBtnText');
+            const resultDiv = document.getElementById('configRefreshResult');
+
+            // 禁用按钮并显示加载状态
+            refreshBtn.disabled = true;
+            refreshBtnIcon.textContent = '⏳';
+            refreshBtnText.textContent = '刷新中...';
+            resultDiv.style.display = 'none';
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/config/refresh`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const result = await response.json();
+
+                resultDiv.style.display = 'block';
+
+                if (result.success) {
+                    resultDiv.innerHTML = `<span style="color: #4caf50;">✓ ${result.message}</span>`;
+                } else {
+                    resultDiv.innerHTML = `<span style="color: #f44336;">✗ ${result.message}</span>`;
+                }
+            } catch (error) {
+                resultDiv.style.display = 'block';
+                resultDiv.innerHTML = `<span style="color: #f44336;">✗ 请求失败: ${error.message}</span>`;
+            } finally {
+                // 恢复按钮状态
+                refreshBtn.disabled = false;
+                refreshBtnIcon.textContent = '🔄';
+                refreshBtnText.textContent = '手动刷新配置';
+
+                // 3秒后隐藏结果
+                setTimeout(() => {
+                    resultDiv.style.display = 'none';
+                }, 3000);
             }
+        }
+    </script>
+    <script src="/js/batch-ui.js"></script>
+    
+    <!-- 图文交互弹窗 -->
+    <div id="imageChatModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>图文交互</h3>
+                <span class="close-btn" onclick="closeImageChatModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="function-tabs">
+                    <button class="tab-btn active" onclick="switchImageTab('understand')" id="tabUnderstand">图文理解</button>
+                    <button class="tab-btn" onclick="switchImageTab('generate')" id="tabGenerate">文生图</button>
+                </div>
+                
+                <div id="uploadArea" class="upload-area">
+                    <input type="file" id="imageInput" accept="image/*" onchange="handleImageSelect(event)" style="display: none;">
+                    <div id="imagePreview" class="image-preview" onclick="document.getElementById('imageInput').click()">
+                        <span class="upload-icon">+</span>
+                        <span class="upload-text">点击上传图片</span>
+                    </div>
+                </div>
+                
+                <div class="prompt-area">
+                    <textarea id="promptInput" class="prompt-input" placeholder="请输入您的问题或描述..."></textarea>
+                </div>
+                
+                <div class="result-area">
+                    <div id="resultTitle" class="result-title" style="display: none;">结果:</div>
+                    <div id="resultContent" class="result-content"></div>
+                </div>
+                
+                <div class="modal-actions">
+                    <button class="action-btn" id="saveImageChatBtn" onclick="saveImageChatData()" style="background-color: #4caf50; color: white; display: none;">保存数据</button>
+                    <button class="action-btn primary" id="sendBtn" onclick="sendImageChat()">发送</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <style>
+        /* 弹窗样式 */
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+        }
+        
+        .modal.show {
+            display: flex;
+        }
+        
+        .modal-content {
+            background-color: white;
+            border-radius: 12px;
+            width: 500px;
+            max-width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+        }
+        
+        .modal-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid #e0e0e0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .modal-header h3 {
+            margin: 0;
+            font-size: 16px;
+            color: #333;
+        }
+        
+        .close-btn {
+            font-size: 24px;
+            cursor: pointer;
+            color: #999;
+            line-height: 1;
+        }
+        
+        .close-btn:hover {
+            color: #666;
+        }
+        
+        .modal-body {
+            padding: 20px;
+        }
+        
+        .function-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        
+        .tab-btn {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            background-color: white;
+            cursor: pointer;
+            font-size: 14px;
+            color: #666;
+            transition: all 0.2s;
+        }
+        
+        .tab-btn:hover {
+            background-color: #f5f5f5;
+        }
+        
+        .tab-btn.active {
+            background-color: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+        
+        .upload-area {
+            margin-bottom: 15px;
+        }
+        
+        .image-preview {
+            border: 2px dashed #e0e0e0;
+            border-radius: 8px;
+            padding: 30px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .image-preview:hover {
+            border-color: #667eea;
+            background-color: #f8f9ff;
+        }
+        
+        .image-preview.has-image {
+            padding: 10px;
+        }
+        
+        .image-preview img {
+            max-width: 100%;
+            max-height: 200px;
+            border-radius: 4px;
+        }
+        
+        .upload-icon {
+            font-size: 32px;
+            color: #999;
+            display: block;
+            margin-bottom: 8px;
+        }
+        
+        .upload-text {
+            color: #999;
+            font-size: 14px;
+        }
+        
+        .prompt-area {
+            margin-bottom: 15px;
+        }
+        
+        .prompt-input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            resize: vertical;
+            min-height: 80px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        
+        .prompt-input:focus {
+            border-color: #667eea;
+        }
+        
+        .result-area {
+            margin-bottom: 15px;
+            min-height: 60px;
+        }
+        
+        .result-title {
+            font-size: 14px;
+            font-weight: 500;
+            color: #333;
+            margin-bottom: 8px;
+        }
+        
+        .result-content {
+            background-color: #f9f9f9;
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 14px;
+            line-height: 1.6;
+            color: #333;
+            word-wrap: break-word;
+        }
+        
+        .result-content img {
+            max-width: 100%;
+            border-radius: 4px;
+            margin-top: 10px;
+        }
+        
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+        
+        .action-btn {
+            padding: 10px 24px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .action-btn.primary {
+            background-color: #667eea;
+            color: white;
+        }
+        
+        .action-btn.primary:hover:not(:disabled) {
+            background-color: #5568d3;
+        }
+        
+        .action-btn:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+    </style>
+    
+    <script>
+        let currentImageTab = 'understand';
+        let selectedImageBase64 = null;
+        let selectedImageType = null;
+        let currentImageChatResult = null;
+        let currentImageChatPrompt = null;
+        
+        function openImageChatModal() {
+            document.getElementById('imageChatModal').style.display = 'flex';
+            resetImageChatModal();
+        }
+        
+        function closeImageChatModal() {
+            document.getElementById('imageChatModal').style.display = 'none';
+            resetImageChatModal();
+        }
+        
+        function resetImageChatModal() {
+            currentImageTab = 'understand';
+            selectedImageBase64 = null;
+            selectedImageType = null;
+            currentImageChatResult = null;
+            currentImageChatPrompt = null;
+
+            document.getElementById('tabUnderstand').classList.add('active');
+            document.getElementById('tabGenerate').classList.remove('active');
+
+            document.getElementById('imageInput').value = '';
+            document.getElementById('promptInput').value = '';
+            document.getElementById('resultTitle').style.display = 'none';
+            document.getElementById('resultContent').innerHTML = '';
+
+            const imagePreview = document.getElementById('imagePreview');
+            imagePreview.classList.remove('has-image');
+            imagePreview.innerHTML = `
+                <span class="upload-icon">+</span>
+                <span class="upload-text">点击上传图片</span>
+            `;
+
+            document.getElementById('sendBtn').disabled = false;
+            document.getElementById('saveImageChatBtn').style.display = 'none';
+        }
+        
+        function switchImageTab(tab) {
+            currentImageTab = tab;
+
+            document.getElementById('tabUnderstand').classList.toggle('active', tab === 'understand');
+            document.getElementById('tabGenerate').classList.toggle('active', tab === 'generate');
+
+            document.getElementById('resultTitle').style.display = 'none';
+            document.getElementById('resultContent').innerHTML = '';
+
+            if (tab !== 'understand') {
+                document.getElementById('saveImageChatBtn').style.display = 'none';
+                currentImageChatResult = null;
+                currentImageChatPrompt = null;
+            }
+        }
+        
+        function handleImageSelect(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                selectedImageBase64 = e.target.result.split(',')[1];
+                
+                const imageType = file.type.split('/')[1];
+                selectedImageType = imageType || 'png';
+                
+                const imagePreview = document.getElementById('imagePreview');
+                imagePreview.classList.add('has-image');
+                imagePreview.innerHTML = `<img src="${e.target.result}" alt="预览图">`;
+            };
+            reader.readAsDataURL(file);
+        }
+        
+        async function sendImageChat() {
+            const prompt = document.getElementById('promptInput').value.trim();
+            const sendBtn = document.getElementById('sendBtn');
+            const resultContent = document.getElementById('resultContent');
+            const resultTitle = document.getElementById('resultTitle');
+            
+            if (currentImageTab === 'understand') {
+                if (!selectedImageBase64) {
+                    alert('请先上传图片');
+                    return;
+                }
+                
+                sendBtn.disabled = true;
+                sendBtn.textContent = '处理中...';
+                resultTitle.style.display = 'block';
+                resultContent.innerHTML = '<span class="loading"></span> 正在理解图片...';
+                
+                try {
+                    const formData = new FormData();
+                    formData.append('base64Data', selectedImageBase64);
+                    formData.append('imageType', selectedImageType);
+                    formData.append('prompt', prompt);
+                    
+                    const response = await fetch('/xiaozhi/chatImage', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error('请求失败');
+                    }
+                    
+                    const resultText = await response.text();
+                    resultContent.innerHTML = marked.parse(resultText);
+                    currentImageChatPrompt = prompt;
+                    currentImageChatResult = resultText;
+                    document.getElementById('saveImageChatBtn').style.display = 'block';
+                } catch (error) {
+                    console.error('图文理解失败:', error);
+                    resultContent.innerHTML = '处理失败: ' + error.message;
+                } finally {
+                    sendBtn.disabled = false;
+                    sendBtn.textContent = '发送';
+                }
+            } else {
+                if (!prompt) {
+                    alert('请输入图片描述');
+                    return;
+                }
+                
+                sendBtn.disabled = true;
+                sendBtn.textContent = '生成中...';
+                resultTitle.style.display = 'block';
+                resultContent.innerHTML = '<span class="loading"></span> 正在生成图片...';
+                
+                try {
+                    const formData = new FormData();
+                    formData.append('prompt', prompt);
+                    
+                    const response = await fetch('/xiaozhi/wanxImage', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error('请求失败');
+                    }
+                    
+                    const resultText = await response.text();
+                    
+                    let imageUrl = resultText.trim();
+                    
+                    // 尝试解析JSON格式
+                    if (resultText.startsWith('{') || resultText.startsWith('[')) {
+                        try {
+                            const parsed = JSON.parse(resultText);
+                            if (parsed.url) {
+                                imageUrl = parsed.url;
+                            } else if (parsed.imageUri) {
+                                imageUrl = parsed.imageUri;
+                            } else if (parsed.output) {
+                                imageUrl = parsed.output;
+                            }
+                        } catch (e) {
+                        }
+                    }
+                    
+                    // 显示图片链接
+                    if (imageUrl && imageUrl.startsWith('http')) {
+                        resultContent.innerHTML = `
+                            <div style="word-break: break-all; color: #333; font-size: 13px;">
+                                <div style="margin-bottom: 8px; color: #666;">生成图片链接:</div>
+                                <a href="${imageUrl}" target="_blank" style="color: #667eea; text-decoration: none; word-break: break-all;">${imageUrl}</a>
+                            </div>
+                        `;
+                    } else {
+                        resultContent.innerHTML = '生成失败: 无效的图片地址';
+                    }
+                } catch (error) {
+                    console.error('文生图失败:', error);
+                    resultContent.innerHTML = '生成失败: ' + error.message;
+                } finally {
+                    sendBtn.disabled = false;
+                    sendBtn.textContent = '发送';
+                }
+            }
+        }
+        
+        async function saveImageChatData() {
+            if (!currentImageChatResult) {
+                alert('没有可保存的数据，请先进行图文理解');
+                return;
+            }
+
+            const saveBtn = document.getElementById('saveImageChatBtn');
+            saveBtn.disabled = true;
+            saveBtn.textContent = '保存中...';
+
+            try {
+                const imageChatMemoryId = Date.now();
+
+                const messages = [
+                    {
+                        role: 'user',
+                        content: '[图文理解] ' + (currentImageChatPrompt || '请描述这张图片')
+                    },
+                    {
+                        role: 'ai',
+                        content: currentImageChatResult
+                    }
+                ];
+
+                const response = await fetch(`${API_BASE_URL}/xiaozhi/chat/saveHistory`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        memoryId: imageChatMemoryId,
+                        messages: messages
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error('保存失败');
+                }
+
+                const result = await response.json();
+                if (result) {
+                    alert('数据已保存，可在历史会话中查看');
+                    loadHistorySessions();
+                } else {
+                    throw new Error('保存失败');
+                }
+            } catch (error) {
+                console.error('保存图文理解数据失败:', error);
+                alert('保存失败: ' + error.message);
+            } finally {
+                saveBtn.disabled = false;
+                saveBtn.textContent = '保存数据';
+            }
+        }
+
+        document.getElementById('imageChatModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeImageChatModal();
+            }
+        });
+
+        window.addEventListener('beforeunload', () => {
+            TextToSpeech.stop();
         });
     </script>
 </body>

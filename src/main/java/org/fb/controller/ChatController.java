@@ -1,9 +1,13 @@
 package org.fb.controller;
 
 import dev.langchain4j.data.message.ChatMessage;
+import dev.langchain4j.data.message.AiMessage;
+import dev.langchain4j.data.message.UserMessage;
+import dev.langchain4j.data.message.SystemMessage;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.fb.bean.ChatForm;
+import org.fb.bean.MessageDTO;
 import org.fb.service.ChatService;
 import org.fb.tools.MongoChatMemoryStore;
 import org.slf4j.Logger;
@@ -13,9 +17,11 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
+import java.util.stream.Collectors;
 
-@Tag(name = "智能对话")
+@Tag(name = "智能对话", description = "提供同步和异步两种对话方式")
 @RestController
 @RequestMapping("/xiaozhi")
 public class ChatController {
@@ -27,7 +33,7 @@ public class ChatController {
     @Autowired
     private MongoChatMemoryStore mongoChatMemoryStore;
 
-    @Operation(summary = "智能对话")
+    @Operation(summary = "智能对话（同步）", description = "传统的同步对话方式，请求后会阻塞等待AI响应(2-5秒)")
     @PostMapping("/chat")
     public String chat(@RequestBody ChatForm chatForm) {
         Long memoryId = chatForm.getMemoryId();
@@ -73,7 +79,8 @@ public class ChatController {
                 try {
                     longIds.add(Long.parseLong(id));
                 } catch (NumberFormatException e) {
-                    log.warn("无法转换memoryId: {}", id);
+                    // 忽略非数字的memoryId（如"default"等系统内部使用的值）
+                    log.debug("跳过非数字memoryId: {}", id);
                 }
             }
             return longIds;
@@ -85,13 +92,40 @@ public class ChatController {
 
     @GetMapping("/history/{memoryId}")
     @Operation(summary = "获取指定会话的历史消息")
-    public List<ChatMessage> getHistoryMessages(@PathVariable Long memoryId) {
+    public List<MessageDTO> getHistoryMessages(@PathVariable Long memoryId) {
         try {
-            return mongoChatMemoryStore.getMessages(memoryId);
+            List<ChatMessage> messages = mongoChatMemoryStore.getMessages(memoryId);
+            return messages.stream()
+                    .map(this::convertToDTO)
+                    .collect(Collectors.toList());
         } catch (Exception e) {
             log.error("获取历史消息异常, memoryId={}, error={}", memoryId, e.getMessage(), e);
             return new ArrayList<>();
         }
+    }
+
+    /**
+     * 将ChatMessage转换为MessageDTO
+     */
+    private MessageDTO convertToDTO(ChatMessage message) {
+        String type;
+        String text;
+
+        if (message instanceof UserMessage) {
+            type = "USER_MESSAGE";
+            text = ((UserMessage) message).singleText();
+        } else if (message instanceof AiMessage) {
+            type = "AI_MESSAGE";
+            text = ((AiMessage) message).text();
+        } else if (message instanceof SystemMessage) {
+            type = "SYSTEM_MESSAGE";
+            text = ((SystemMessage) message).text();
+        } else {
+            type = "UNKNOWN";
+            text = message.toString();
+        }
+
+        return new MessageDTO(type, text);
     }
 
     @DeleteMapping("/history/{memoryId}")
@@ -102,6 +136,39 @@ public class ChatController {
             return true;
         } catch (Exception e) {
             log.error("删除会话异常, memoryId={}, error={}", memoryId, e.getMessage(), e);
+            return false;
+        }
+    }
+
+    @PostMapping("/chat/saveHistory")
+    @Operation(summary = "保存对话到历史会话")
+    public Boolean saveHistory(@RequestBody Map<String, Object> request) {
+        try {
+            Long memoryId = Long.valueOf(request.get("memoryId").toString());
+            @SuppressWarnings("unchecked")
+            List<Map<String, String>> messages = (List<Map<String, String>>) request.get("messages");
+
+            if (messages == null || messages.isEmpty()) {
+                log.warn("保存历史会话失败: 消息列表为空, memoryId={}", memoryId);
+                return false;
+            }
+
+            List<ChatMessage> chatMessages = new ArrayList<>();
+            for (Map<String, String> msg : messages) {
+                String role = msg.get("role");
+                String content = msg.get("content");
+                if ("user".equals(role)) {
+                    chatMessages.add(UserMessage.from(content));
+                } else if ("ai".equals(role)) {
+                    chatMessages.add(AiMessage.from(content));
+                }
+            }
+
+            mongoChatMemoryStore.updateMessages(memoryId, chatMessages);
+            log.info("保存历史会话成功, memoryId={}, 消息数量={}", memoryId, chatMessages.size());
+            return true;
+        } catch (Exception e) {
+            log.error("保存历史会话异常, error={}", e.getMessage(), e);
             return false;
         }
     }

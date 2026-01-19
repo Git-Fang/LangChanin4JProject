@@ -21,6 +21,7 @@ import org.fb.service.assistant.BaiduMapMcpAssistant;
 import org.fb.service.assistant.BaiduMapMcpStreamAssistant;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -33,31 +34,44 @@ import java.util.Map;
 public class AiConf {
 
     @Autowired
+    @Qualifier("allMiniLmL6V2EmbeddingModel")
     private EmbeddingModel embeddedModel;
 
     @Autowired
     private QdrantClient qdrantClient;
 
     @Autowired
-    private EnvConf envConf;
-
-    @Autowired
+    @Qualifier("qdrantEmbeddingStore")
     private EmbeddingStore<TextSegment> embeddingStore;
 
-    @Autowired
+    @Autowired(required = false)
     private StreamingChatModel streamingChatModel;
 
     @Autowired
     @Qualifier("chatModel")
     private ChatModel chatModel;
 
+    @Value("${ai.embeddingStore.qdrant.collectionName:ragTranslation-1226}")
+    private String collectionName;
+
+    @Value("${ai.mcp.baiduMap.apiKey:}")
+    private String baiduMapApiKey;
+
     @PostConstruct
     public void createCollection() throws IOException {
-        Collections.VectorParams vectorParams = Collections.VectorParams.newBuilder()
-                .setDistance(Collections.Distance.Cosine)
-                .setSize(embeddedModel.dimension())
-                .build();
-        qdrantClient.createCollectionAsync(envConf.collectionName, vectorParams);
+        if (collectionName == null || collectionName.isEmpty()) {
+            collectionName = "ragTranslation-1226";
+        }
+        try {
+            Collections.VectorParams vectorParams = Collections.VectorParams.newBuilder()
+                    .setDistance(Collections.Distance.Cosine)
+                    .setSize(embeddedModel.dimension())
+                    .build();
+            qdrantClient.createCollectionAsync(collectionName, vectorParams);
+        } catch (Exception e) {
+            // 集合可能已存在，忽略错误
+            System.out.println("Qdrant集合创建完成或已存在: " + e.getMessage());
+        }
     }
 
 
@@ -69,8 +83,8 @@ public class AiConf {
         return EmbeddingStoreContentRetriever.builder()
                 .embeddingModel(embeddedModel)
                 .embeddingStore(embeddingStore)
-                .maxResults(5)
-                .minScore(0.6)
+                .maxResults(30)
+                .minScore(0.1)
                 .build();
     }
 
@@ -82,7 +96,9 @@ public class AiConf {
     @Bean
     @ConditionalOnProperty(name = "mcp.enabled", havingValue = "true", matchIfMissing = false)
     BaiduMapMcpStreamAssistant baiduMapMcpStreamAssistant() {
-
+        if (streamingChatModel == null) {
+            return null;
+        }
         return buildGenericMcpAssistant(BaiduMapMcpStreamAssistant.class, streamingChatModel);
     }
 
@@ -112,27 +128,15 @@ public class AiConf {
      */
     private <T> T buildGenericMcpAssistant(Class<T> assistantClass, Object model) {
         // 1.启动百度地图MCP服务
-        // 根据操作系统选择命令：Windows使用cmd，Linux/Mac使用bash
-        String osName = System.getProperty("os.name").toLowerCase();
-        List<String> command;
-        if (osName.contains("win")) {
-            command = List.of("cmd", "/c", "npx", "-y", BusinessConstant.BAIDU_MAP_MCP_SERVER);
-        } else {
-            // Docker环境使用bash，设置更长的超时时间
-            command = List.of("/bin/bash", "-c", "npx -y " + BusinessConstant.BAIDU_MAP_MCP_SERVER);
-        }
-        
         McpTransport transport = new StdioMcpTransport.Builder()
-                .command(command)
-                .environment(Map.of("BAIDU_MAP_API_KEY", envConf.baiduMapApiKey))
+                .command(List.of("cmd", "/c", "npx", "-y", BusinessConstant.BAIDU_MAP_MCP_SERVER))
+                .environment(Map.of("BAIDU_MAP_API_KEY", baiduMapApiKey))
                 .logEvents(true) // only if you want to see the traffic in the log
                 .build();
 
         // 2.初始化MCP client、实例MCP工具提供者对象
-        // 增加初始化超时时间到120秒，适应Docker环境中Node.js MCP服务的启动
         McpClient mcpClient = new DefaultMcpClient.Builder()
                 .transport(transport)
-                .pingTimeout(java.time.Duration.ofSeconds(120))
                 .build();
         McpToolProvider toolProvider = McpToolProvider.builder()
                 .mcpClients(mcpClient)
