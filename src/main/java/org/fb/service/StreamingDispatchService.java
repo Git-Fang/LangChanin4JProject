@@ -1,16 +1,16 @@
 package org.fb.service;
 
-import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.memory.chat.ChatMemoryProvider;
 import lombok.extern.slf4j.Slf4j;
-import org.fb.bean.kafka.ChatRequestMessage;
-import org.fb.bean.kafka.ChatResultMessage;
 import org.fb.constant.BusinessConstant;
 import org.fb.service.assistant.*;
+import org.fb.service.impl.NL2SQLService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 
+import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -39,7 +39,7 @@ public class StreamingDispatchService {
     private TermExtractionAgent termExtractionAgent;
 
     @Autowired
-    private NaturalLanguageSQLAgent naturalLanguageSQLAgent;
+    private NL2SQLService nl2SQLService;
 
     @Autowired
     private ChatMemoryProvider chatMemoryProvider;
@@ -142,18 +142,67 @@ public class StreamingDispatchService {
     }
 
     /**
-     * 使用自然语言SQL Agent处理（非流式，转Flux）
+     * 使用自然语言SQL Agent处理SQL查询（非流式，转Flux）
+     * 使用NL2SQLService执行SQL查询并返回结果
      */
     private Flux<String> processWithNaturalLanguageSQLAgent(String userMessage) {
-        log.info("调用NaturalLanguageSQLAgent.convertToSQL, message: {}", userMessage);
+        log.info("调用NL2SQLService.executeNaturalLanguageQuery, message: {}", userMessage);
         try {
-            String result = naturalLanguageSQLAgent.convertToSQL(userMessage);
-            log.info("NaturalLanguageSQLAgent返回结果长度: {}", result != null ? result.length() : 0);
+            List<Map<String, Object>> sqlResult = nl2SQLService.executeNaturalLanguageQuery(userMessage);
+            String result;
+            if (sqlResult == null || sqlResult.isEmpty()) {
+                result = "查询结果为空，请检查查询条件或数据库中是否有相关数据";
+            } else {
+                result = formatQueryResult(sqlResult);
+            }
+            log.info("NL2SQLService返回结果长度: {}", result != null ? result.length() : 0);
             return Flux.just(result != null ? result : "");
         } catch (Exception e) {
-            log.error("NaturalLanguageSQLAgent处理失败", e);
-            return Flux.just("抱歉，SQL查询时出现错误: " + e.getMessage());
+            log.error("NL2SQLService处理失败", e);
+            String errorMsg = e.getMessage();
+            String friendlyError;
+            if (errorMsg != null && errorMsg.contains("Failed to convert from type")) {
+                friendlyError = "抱歉，SQL查询时出现类型转换错误。这可能是AI生成的SQL中字段类型不匹配导致的。\n\n" +
+                        "建议：\n" +
+                        "1. 请尝试更具体地描述您的查询需求\n" +
+                        "2. 如果查询涉及数值字段，请明确说明数值范围\n" +
+                        "3. 错误详情：" + errorMsg;
+            } else if (errorMsg != null && errorMsg.contains("不合理的字符串字面量")) {
+                friendlyError = "抱歉，AI生成的SQL包含不合理的值。请尝试用不同的方式描述您的查询需求。\n\n" +
+                        "建议：\n" +
+                        "1. 避免使用\"default\"、\"null\"等关键字作为查询值\n" +
+                        "2. 使用具体的数值或文本进行查询";
+            } else {
+                friendlyError = "抱歉，执行SQL查询时出错：" + errorMsg + "。\n\n" +
+                        "建议：请尝试用更清晰、更具体的方式描述您的查询需求。";
+            }
+            return Flux.just(friendlyError);
         }
+    }
+
+    /**
+     * 格式化查询结果
+     * @param result 查询结果列表
+     * @return 格式化后的字符串
+     */
+    private String formatQueryResult(List<Map<String, Object>> result) {
+        if (result == null || result.isEmpty()) {
+            return "查询结果为空";
+        }
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("查询成功，共找到").append(result.size()).append("条记录：\n\n");
+
+        int count = 1;
+        for (Map<String, Object> row : result) {
+            sb.append("记录").append(count++).append(":\n");
+            for (Map.Entry<String, Object> entry : row.entrySet()) {
+                sb.append("  ").append(entry.getKey()).append(": ").append(entry.getValue()).append("\n");
+            }
+            sb.append("\n");
+        }
+
+        return sb.toString();
     }
 
     /**

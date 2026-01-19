@@ -114,16 +114,16 @@ public class LLMConfig {
     }
 
     private void refreshStreamingChatModel() {
-        if (dashscopeApiKey == null || dashscopeApiKey.isEmpty() || dashscopeApiKey.equals("demo")) {
-            log.warn("DashScope API Key未配置，Streaming模型不可用");
+        if (deepSeekApiKey == null || deepSeekApiKey.isEmpty()) {
+            log.warn("DeepSeek API Key未配置，Streaming模型不可用");
             this.streamingChatModel = null;
         } else {
             this.streamingChatModel = OpenAiStreamingChatModel.builder()
-                    .apiKey(dashscopeApiKey)
-                    .modelName(dashscopeModel)
+                    .apiKey(deepSeekApiKey)
+                    .modelName(deepSeekModel)
                     .logRequests(true)
                     .logResponses(true)
-                    .baseUrl(dashscopeUrl)
+                    .baseUrl(deepSeekUrl)
                     .build();
         }
     }
