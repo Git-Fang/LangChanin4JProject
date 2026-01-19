@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Chat - SSE实时推送</title>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="js/text-to-speech.js"></script>
     <style>
         * { box-sizing: border-box; }
         body { 
@@ -263,6 +264,27 @@
             text-decoration: none;
         }
         .back-link:hover { text-decoration: underline; }
+
+        .action-btn.tts-btn {
+            border-color: #667eea;
+            color: #667eea;
+        }
+
+        .action-btn.tts-btn:hover {
+            background: #667eea;
+            color: white;
+        }
+
+        .action-btn.tts-btn.speaking {
+            background: #667eea;
+            color: white;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
     </style>
 </head>
 <body>
@@ -365,6 +387,12 @@
                 retryBtn.innerHTML = '<span>🔄</span> 重试';
                 retryBtn.onclick = () => retryLastRequest();
                 actionsDiv.appendChild(retryBtn);
+
+                const ttsBtn = document.createElement('button');
+                ttsBtn.className = 'action-btn tts-btn';
+                ttsBtn.innerHTML = '<span>🔊</span> 播报';
+                ttsBtn.onclick = () => toggleSpeech(messageDiv, ttsBtn);
+                actionsDiv.appendChild(ttsBtn);
             }
 
             if (role === 'user') {
@@ -435,6 +463,35 @@
                 console.error('复制失败:', err);
                 alert('复制失败，请手动选择文本复制');
             });
+        }
+
+        function toggleSpeech(messageElement, button) {
+            const bubble = messageElement.querySelector('.bubble');
+            const content = bubble ? bubble.textContent : '';
+
+            if (TextToSpeech.isSpeaking()) {
+                TextToSpeech.stop();
+                button.classList.remove('speaking');
+                button.innerHTML = '<span>🔊</span> 播报';
+            } else {
+                TextToSpeech.speak(content, {
+                    lang: 'zh-CN',
+                    rate: 1,
+                    pitch: 1,
+                    volume: 1
+                });
+                button.classList.add('speaking');
+                button.innerHTML = '<span>🔊</span> 停止';
+            }
+
+            const originalOnEnd = TextToSpeech.currentUtterance?.onend;
+            if (TextToSpeech.currentUtterance) {
+                TextToSpeech.currentUtterance.onend = function() {
+                    button.classList.remove('speaking');
+                    button.innerHTML = '<span>🔊</span> 播报';
+                    if (originalOnEnd) originalOnEnd.call(this);
+                };
+            }
         }
 
         function retryWithEdit(content) {
@@ -602,7 +659,13 @@
             retryBtn.innerHTML = '<span>🔄</span> 重试';
             retryBtn.onclick = () => retryLastRequest();
             actionsDiv.appendChild(retryBtn);
-            
+
+            const ttsBtn = document.createElement('button');
+            ttsBtn.className = 'action-btn tts-btn';
+            ttsBtn.innerHTML = '<span>🔊</span> 播报';
+            ttsBtn.onclick = () => toggleSpeech(aiMessageDiv, ttsBtn);
+            actionsDiv.appendChild(ttsBtn);
+
             aiMessageDiv.appendChild(bubble);
             aiMessageDiv.appendChild(streamingIndicator);
             aiMessageDiv.appendChild(actionsDiv);
@@ -828,6 +891,7 @@
         
         window.addEventListener('beforeunload', () => {
             closeEventSource();
+            TextToSpeech.stop();
         });
         
         addMessage('ai', '你好！我是AI智能助手（SSE实时版）。使用Kafka异步处理+SSE实时推送，为您带来更快的响应体验！\n\n输入您的问题开始对话吧~');

@@ -6,6 +6,7 @@
     <title>小智Agent - 统一客户端</title>
     <link rel="icon" type="image/png" href="/icon.png">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="js/text-to-speech.js"></script>
     <style>
         * {
             margin: 0;
@@ -915,6 +916,27 @@
             background: #f0f0f0;
             border-color: #ccc;
         }
+
+        .message-action-btn.tts-btn {
+            border-color: #667eea;
+            color: #667eea;
+        }
+
+        .message-action-btn.tts-btn:hover {
+            background: #667eea;
+            color: white;
+        }
+
+        .message-action-btn.tts-btn.speaking {
+            background: #667eea;
+            color: white;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
     </style>
 </head>
 <body>
@@ -1483,6 +1505,12 @@
                 retryBtn.innerHTML = '<span>🔄</span> 重试';
                 retryBtn.onclick = () => retryWithSameQuestion();
                 actionsDiv.appendChild(retryBtn);
+
+                const ttsBtn = document.createElement('button');
+                ttsBtn.className = 'message-action-btn tts-btn';
+                ttsBtn.innerHTML = '<span>🔊</span> 播报';
+                ttsBtn.onclick = () => toggleSpeech(messageDiv, ttsBtn);
+                actionsDiv.appendChild(ttsBtn);
             }
 
             if (isUser) {
@@ -1545,6 +1573,35 @@
                 console.error('复制失败:', err);
                 alert('复制失败，请手动选择文本复制');
             });
+        }
+
+        function toggleSpeech(messageElement, button) {
+            const contentDiv = messageElement.querySelector('.message-content');
+            const content = contentDiv ? contentDiv.textContent : '';
+
+            if (TextToSpeech.isSpeaking()) {
+                TextToSpeech.stop();
+                button.classList.remove('speaking');
+                button.innerHTML = '<span>🔊</span> 播报';
+            } else {
+                TextToSpeech.speak(content, {
+                    lang: 'zh-CN',
+                    rate: 1,
+                    pitch: 1,
+                    volume: 1
+                });
+                button.classList.add('speaking');
+                button.innerHTML = '<span>🔊</span> 停止';
+            }
+
+            const originalOnEnd = TextToSpeech.currentUtterance?.onend;
+            if (TextToSpeech.currentUtterance) {
+                TextToSpeech.currentUtterance.onend = function() {
+                    button.classList.remove('speaking');
+                    button.innerHTML = '<span>🔊</span> 播报';
+                    if (originalOnEnd) originalOnEnd.call(this);
+                };
+            }
         }
 
         function retryWithEdit(content) {
@@ -2444,6 +2501,10 @@
             if (e.target === this) {
                 closeImageChatModal();
             }
+        });
+
+        window.addEventListener('beforeunload', () => {
+            TextToSpeech.stop();
         });
     </script>
 </body>
