@@ -19,6 +19,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.context.config.annotation.RefreshScope;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -180,12 +181,14 @@ public class LLMConfig {
     }
 
     @Bean
+    @ConditionalOnProperty(name = "ai.embeddingStore.qdrant.enabled", havingValue = "true", matchIfMissing = true)
     public QdrantClient qdrantClient() {
         QdrantGrpcClient grpcClient = QdrantGrpcClient.newBuilder(qdrantHost, qdrantPort, false).build();
         return new QdrantClient(grpcClient);
     }
 
     @Bean(name = "qdrantEmbeddingStore")
+    @ConditionalOnProperty(name = "ai.embeddingStore.qdrant.enabled", havingValue = "true", matchIfMissing = true)
     public EmbeddingStore<TextSegment> qdrantEmbeddingStore() {
         return QdrantEmbeddingStore.builder()
                 .host(qdrantHost)

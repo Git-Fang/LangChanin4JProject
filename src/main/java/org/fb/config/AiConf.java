@@ -37,10 +37,10 @@ public class AiConf {
     @Qualifier("allMiniLmL6V2EmbeddingModel")
     private EmbeddingModel embeddedModel;
 
-    @Autowired
+    @Autowired(required = false)
     private QdrantClient qdrantClient;
 
-    @Autowired
+    @Autowired(required = false)
     @Qualifier("qdrantEmbeddingStore")
     private EmbeddingStore<TextSegment> embeddingStore;
 
@@ -59,6 +59,10 @@ public class AiConf {
 
     @PostConstruct
     public void createCollection() throws IOException {
+        if (qdrantClient == null) {
+            System.out.println("Qdrant客户端未初始化，跳过集合创建");
+            return;
+        }
         if (collectionName == null || collectionName.isEmpty()) {
             collectionName = "ragTranslation-1226";
         }
@@ -69,7 +73,6 @@ public class AiConf {
                     .build();
             qdrantClient.createCollectionAsync(collectionName, vectorParams);
         } catch (Exception e) {
-            // 集合可能已存在，忽略错误
             System.out.println("Qdrant集合创建完成或已存在: " + e.getMessage());
         }
     }
@@ -77,15 +80,30 @@ public class AiConf {
 
     /**
      * 定义向量数据库操作信息：指定嵌入模型、存储工具、查询结果数、最小得分阈值等信息
+     * 非standalone模式使用
      * */
     @Bean
+    @ConditionalOnProperty(name = "ai.embeddingStore.qdrant.enabled", havingValue = "true", matchIfMissing = true)
     ContentRetriever contentRetriever() {
+        if (embeddingStore == null) {
+            return null;
+        }
         return EmbeddingStoreContentRetriever.builder()
                 .embeddingModel(embeddedModel)
                 .embeddingStore(embeddingStore)
                 .maxResults(30)
                 .minScore(0.1)
                 .build();
+    }
+
+    /**
+     * standalone模式下使用的空ContentRetriever
+     * */
+    @Bean(name = "contentRetriever")
+    @ConditionalOnProperty(name = "ai.embeddingStore.qdrant.enabled", havingValue = "false", matchIfMissing = false)
+    ContentRetriever standaloneContentRetriever() {
+        System.out.println("Standalone模式：使用空ContentRetriever。RAG功能将不可用。");
+        return query -> java.util.Collections.emptyList();
     }
 
 

@@ -1,5 +1,5 @@
 server:
-  port: 8020
+  port: ${SERVER_PORT:8020}
   servlet:
     encoding:
       charset: utf-8
@@ -9,32 +9,20 @@ server:
 spring:
   application:
     name: RAGTranslationApplication
-  config:
-    import:
-      - optional:nacos:application-standalone.yml
+  cloud:
+    nacos:
+      config:
+        import-check:
+          enabled: false
+      compatibility-verifier:
+        enabled: false
+    compatibility-verifier:
+      enabled: false
   autoconfigure:
     exclude:
       - org.springframework.cloud.alibaba.nacos.discovery.NacosDiscoveryAutoConfiguration
       - org.springframework.cloud.alibaba.nacos.registry.NacosServiceRegistryAutoConfiguration
-  cloud:
-    compatibility-verifier:
-      enabled: false
-    nacos:
-      config:
-        server-addr: ${NACOS_SERVER_ADDR:localhost:8848}
-        namespace: ${NACOS_NAMESPACE:}
-        group: DEFAULT_GROUP
-        data-id: application-standalone.yml
-        type: yaml
-        auto-refresh: true
-
-      # Nacos Discovery 服务注册 - 本地开发时禁用
-      discovery:
-        enabled: false
-        server-addr: ${NACOS_SERVER_ADDR:localhost:8848}
-        namespace: ${NACOS_NAMESPACE:}
-        group: DEFAULT_GROUP
-        service: ${spring.application.name}
+      - org.springframework.cloud.alibaba.nacos.config.NacosConfigAutoConfiguration
   main:
     allow-bean-definition-overriding: true
   datasource:
@@ -91,6 +79,7 @@ ai:
       collectionName: ragTranslation-1226
       host: localhost
       port: 6334
+      enabled: false
 
   dashscope:
     apiKey: ${DASHSCOPE_API_KEY:demo}
@@ -104,6 +93,11 @@ ai:
   mcp:
     baiduMap:
       apiKey: ${BAIDU_MAP_API_KEY:}
+
+# 本地standalone模式配置
+app:
+  standalone:
+    local: true
 
 # 禁用其他AI模型以测试基础功能
 # 仅测试基本HTTP服务功能
