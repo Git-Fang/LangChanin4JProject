@@ -2116,7 +2116,8 @@
                 </div>
                 
                 <div class="modal-actions">
-                    <button class="action-btn" id="sendBtn" onclick="sendImageChat()">发送</button>
+                    <button class="action-btn" id="saveImageChatBtn" onclick="saveImageChatData()" style="background-color: #4caf50; color: white; display: none;">保存数据</button>
+                    <button class="action-btn primary" id="sendBtn" onclick="sendImageChat()">发送</button>
                 </div>
             </div>
         </div>
@@ -2330,6 +2331,8 @@
         let currentImageTab = 'understand';
         let selectedImageBase64 = null;
         let selectedImageType = null;
+        let currentImageChatResult = null;
+        let currentImageChatPrompt = null;
         
         function openImageChatModal() {
             document.getElementById('imageChatModal').style.display = 'flex';
@@ -2345,33 +2348,42 @@
             currentImageTab = 'understand';
             selectedImageBase64 = null;
             selectedImageType = null;
-            
+            currentImageChatResult = null;
+            currentImageChatPrompt = null;
+
             document.getElementById('tabUnderstand').classList.add('active');
             document.getElementById('tabGenerate').classList.remove('active');
-            
+
             document.getElementById('imageInput').value = '';
             document.getElementById('promptInput').value = '';
             document.getElementById('resultTitle').style.display = 'none';
             document.getElementById('resultContent').innerHTML = '';
-            
+
             const imagePreview = document.getElementById('imagePreview');
             imagePreview.classList.remove('has-image');
             imagePreview.innerHTML = `
                 <span class="upload-icon">+</span>
                 <span class="upload-text">点击上传图片</span>
             `;
-            
+
             document.getElementById('sendBtn').disabled = false;
+            document.getElementById('saveImageChatBtn').style.display = 'none';
         }
         
         function switchImageTab(tab) {
             currentImageTab = tab;
-            
+
             document.getElementById('tabUnderstand').classList.toggle('active', tab === 'understand');
             document.getElementById('tabGenerate').classList.toggle('active', tab === 'generate');
-            
+
             document.getElementById('resultTitle').style.display = 'none';
             document.getElementById('resultContent').innerHTML = '';
+
+            if (tab !== 'understand') {
+                document.getElementById('saveImageChatBtn').style.display = 'none';
+                currentImageChatResult = null;
+                currentImageChatPrompt = null;
+            }
         }
         
         function handleImageSelect(event) {
@@ -2426,6 +2438,9 @@
                     
                     const resultText = await response.text();
                     resultContent.innerHTML = marked.parse(resultText);
+                    currentImageChatPrompt = prompt;
+                    currentImageChatResult = resultText;
+                    document.getElementById('saveImageChatBtn').style.display = 'block';
                 } catch (error) {
                     console.error('图文理解失败:', error);
                     resultContent.innerHTML = '处理失败: ' + error.message;
@@ -2497,6 +2512,61 @@
             }
         }
         
+        async function saveImageChatData() {
+            if (!currentImageChatResult) {
+                alert('没有可保存的数据，请先进行图文理解');
+                return;
+            }
+
+            const saveBtn = document.getElementById('saveImageChatBtn');
+            saveBtn.disabled = true;
+            saveBtn.textContent = '保存中...';
+
+            try {
+                const imageChatMemoryId = Date.now();
+
+                const messages = [
+                    {
+                        role: 'user',
+                        content: '[图文理解] ' + (currentImageChatPrompt || '请描述这张图片')
+                    },
+                    {
+                        role: 'ai',
+                        content: currentImageChatResult
+                    }
+                ];
+
+                const response = await fetch(`${API_BASE_URL}/xiaozhi/chat/saveHistory`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        memoryId: imageChatMemoryId,
+                        messages: messages
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error('保存失败');
+                }
+
+                const result = await response.json();
+                if (result) {
+                    alert('数据已保存，可在历史会话中查看');
+                    loadHistorySessions();
+                } else {
+                    throw new Error('保存失败');
+                }
+            } catch (error) {
+                console.error('保存图文理解数据失败:', error);
+                alert('保存失败: ' + error.message);
+            } finally {
+                saveBtn.disabled = false;
+                saveBtn.textContent = '保存数据';
+            }
+        }
+
         document.getElementById('imageChatModal').addEventListener('click', function(e) {
             if (e.target === this) {
                 closeImageChatModal();
