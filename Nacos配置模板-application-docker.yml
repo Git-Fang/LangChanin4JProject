@@ -49,14 +49,14 @@ spring:
 
   data:
     mongodb:
-      uri: mongodb://host.docker.internal:27017/chat_db
+      uri: mongodb://mongo:27017/chat_db
 
   redis:
     host: redis
     port: 6379
 
   rabbitmq:
-    host: localhost
+    host: rabbitmq
     port: 5672
     username: admin
     password: admin
@@ -123,26 +123,26 @@ ai:
   deepSeek:
     base-url: https://api.deepseek.com/v1
     model: deepseek-chat
-    apiKey: ${DeepSeek_API_KEY:}
+    apiKey: sk-3077c6547df74bd6bcb66d4ea4a2589e
   ollama:
     base-url: http://localhost:11434
     model: deepseek-r1:8b
   kimi:
     base-url: https://api.moonshot.cn/v1
     model: kimi-k2-turbo-preview
-    apiKey: ${KIMI_API_KEY:}
+    apiKey: sk-iHnlk244Ic6mia74KyVl8r4dxuymAeWP6sKk2xiPj4BYSRAx
   embeddingStore:
     qdrant:
       collectionName: ragTranslation-1226
-      host: host.docker.internal
+      host: qdrant
       port: 6334
   dashscope:
-    apiKey: ${DASHSCOPE_API_KEY:}
+    apiKey: sk-ca175397022a41a9926ffe30b1faac81
     model: qwen-vl-max
     base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
   mcp:
     baiduMap:
-      apiKey: ${BAIDU_MAP_API_KEY:}
+      apiKey: 8qM3bsI6oakw1ICy1g1T9Vo0peSP90of
 
 logging:
   level:
