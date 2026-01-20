@@ -3,6 +3,9 @@ package org.fb.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.swagger.v3.oas.annotations.Operation;
 import lombok.extern.slf4j.Slf4j;
+import dev.langchain4j.data.message.AiMessage;
+import dev.langchain4j.data.message.ChatMessage;
+import dev.langchain4j.data.message.UserMessage;
 import org.fb.bean.ChatForm;
 import org.fb.bean.kafka.ChatRequestMessage;
 import org.fb.bean.kafka.ChatResultMessage;
@@ -12,6 +15,7 @@ import org.fb.service.StreamingChatService;
 import org.fb.service.StreamingDispatchService;
 import org.fb.service.kafka.ChatRequestProducer;
 import org.fb.service.kafka.StandaloneChatRequestProducer;
+import org.fb.tools.MongoChatMemoryStore;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.EnvironmentAware;
 import org.springframework.context.annotation.Lazy;
@@ -26,6 +30,7 @@ import reactor.core.scheduler.Schedulers;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -44,6 +49,7 @@ public class AsyncChatController implements EnvironmentAware {
     private final StreamingChatService streamingChatService;
     private final StreamingDispatchService streamingDispatchService;
     private final ChatSaveService chatSaveService;
+    private final MongoChatMemoryStore mongoChatMemoryStore;
 
     private Environment environment;
 
@@ -56,7 +62,8 @@ public class AsyncChatController implements EnvironmentAware {
             ChatService chatService,
             @Autowired(required = false) StreamingChatService streamingChatService,
             @Autowired(required = false) StreamingDispatchService streamingDispatchService,
-            @Autowired(required = false) ChatSaveService chatSaveService) {
+            @Autowired(required = false) ChatSaveService chatSaveService,
+            MongoChatMemoryStore mongoChatMemoryStore) {
         this.requestProducer = requestProducer;
         this.standaloneRequestProducer = standaloneRequestProducer;
         this.redisTemplate = redisTemplate;
@@ -65,6 +72,7 @@ public class AsyncChatController implements EnvironmentAware {
         this.streamingChatService = streamingChatService;
         this.streamingDispatchService = streamingDispatchService;
         this.chatSaveService = chatSaveService;
+        this.mongoChatMemoryStore = mongoChatMemoryStore;
     }
 
     @Override
@@ -1321,7 +1329,6 @@ emitter.onError(e -> {
     private void saveChatToDatabase(Long memoryId, String userMessage, String aiResponse) {
         if (chatSaveService == null) {
             log.warn("ChatSaveService未注入，跳过数据库保存");
-            return;
         }
         
         try {
@@ -1329,6 +1336,21 @@ emitter.onError(e -> {
             log.info("流式聊天记录已保存到数据库, memoryId: {}", memoryId);
         } catch (Exception e) {
             log.error("保存流式聊天记录失败, memoryId: {}", memoryId, e);
+        }
+        
+        if (mongoChatMemoryStore == null) {
+            log.warn("MongoChatMemoryStore未注入，跳过MongoDB保存");
+            return;
+        }
+        
+        try {
+            List<ChatMessage> messages = new java.util.ArrayList<>();
+            messages.add(UserMessage.from(userMessage));
+            messages.add(AiMessage.from(aiResponse));
+            mongoChatMemoryStore.updateMessages(memoryId, messages);
+            log.info("流式聊天记录已保存到MongoDB, memoryId: {}", memoryId);
+        } catch (Exception e) {
+            log.error("保存流式聊天记录到MongoDB失败, memoryId: {}", memoryId, e);
         }
     }
 }
