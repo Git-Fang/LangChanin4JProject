@@ -1,5 +1,6 @@
 package org.fb.config;
 
+import dev.langchain4j.community.model.dashscope.WanxImageModel;
 import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.memory.chat.ChatMemoryProvider;
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
@@ -197,5 +198,16 @@ public class LLMConfig {
     @Bean(name = "chatMemoryProvider")
     public ChatMemoryProvider chatMemoryProvider() {
         return memoryId -> MessageWindowChatMemory.withMaxMessages(10);
+    }
+
+    @Bean
+    public WanxImageModel wanxImageModel() {
+        if (dashscopeApiKey == null || dashscopeApiKey.isEmpty() || dashscopeApiKey.equals("demo")) {
+            log.warn("DashScope API Key未配置，WanxImageModel不可用");
+            return null;
+        }
+        return WanxImageModel.builder()
+                .apiKey(dashscopeApiKey)
+                .build();
     }
 }
