@@ -106,6 +106,11 @@ public class GlobalExceptionHandler {
     
     private boolean isSseRequest(WebRequest request) {
         String description = request.getDescription(false);
-        return description != null && description.contains("uri=/xiaozhi/chat/stream");
+        if (description == null) {
+            return false;
+        }
+        return description.contains("uri=/xiaozhi/chat/stream") ||
+               description.contains("uri=/xiaozhi/chat/streaming") ||
+               description.contains("uri=/xiaozhi/chat/http-stream");
     }
 }
