@@ -518,6 +518,79 @@
             cursor: not-allowed;
         }
 
+        .chat-file-input {
+            display: none;
+        }
+
+        .chat-file-btn {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            border: none;
+            background-color: #f5f5f5;
+            color: #666;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            flex-shrink: 0;
+        }
+
+        .chat-file-btn:hover {
+            background-color: #e0e0e0;
+            color: #333;
+        }
+
+        .chat-file-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .chat-file-btn.has-files {
+            background-color: #667eea;
+            color: white;
+        }
+
+        .attached-files-preview {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            padding: 8px 20px;
+            background-color: #f9f9f9;
+            border-top: 1px solid #e0e0e0;
+        }
+
+        .attached-file-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            background-color: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 16px;
+            font-size: 12px;
+            color: #666;
+        }
+
+        .attached-file-item .file-name {
+            max-width: 120px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .attached-file-item .remove-file {
+            cursor: pointer;
+            color: #999;
+            font-size: 14px;
+            line-height: 1;
+        }
+
+        .attached-file-item .remove-file:hover {
+            color: #f44336;
+        }
+
         .empty-state {
             flex: 1;
             display: flex;
@@ -1067,13 +1140,21 @@
             </div>
 
             <div class="input-area">
-                <input 
-                    type="text" 
-                    class="input-field" 
-                    id="messageInput" 
+                <input
+                    type="text"
+                    class="input-field"
+                    id="messageInput"
                     placeholder="请输入消息"
                     onkeypress="handleKeyPress(event)"
                 >
+                <input type="file" id="chatFileInput" class="chat-file-input" multiple
+                       accept=".jpg,.jpeg,.png,.md,.doc,.docx,.pptx,.xlsx,.txt,.pdf"
+                       onchange="handleChatFileSelect(event)">
+                <button class="chat-file-btn" id="chatFileBtn" onclick="document.getElementById('chatFileInput').click()" title="上传附件">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path>
+                    </svg>
+                </button>
                 <button class="send-btn" id="sendBtn" onclick="sendMessage()">发送</button>
             </div>
         </div>
@@ -1089,6 +1170,8 @@
         let tools = [];
         let lastMessage = null; // 保存最后发送的消息用于重试
         let lastUserMessage = null; // 保存最后一条用户消息用于AI重试
+        let attachedFiles = []; // 附件文件列表
+        let extractedTexts = []; // 提取的文件内容
 
         // API 配置 - 使用动态地址以支持手机端和不同网络环境访问
         const getApiBaseUrl = () => {
@@ -1632,26 +1715,40 @@
         async function sendMessage() {
             const input = document.getElementById('messageInput');
             const sendBtn = document.getElementById('sendBtn');
-            const message = input.value.trim();
-            
-            if (!message) {
+            let message = input.value.trim();
+
+            if (!message && attachedFiles.length === 0) {
                 return;
             }
 
-            // 保存最后发送的消息用于重试
-            lastMessage = message;
-            lastUserMessage = message;
+            if (!message) {
+                alert('请输入消息内容');
+                return;
+            }
 
-            // 禁用输入和按钮
+            if (attachedFiles.length > 0 && extractedTexts.length === 0) {
+                const extractSuccess = await extractFileContent();
+                if (!extractSuccess) {
+                    return;
+                }
+            }
+
+            if (attachedFiles.length > 0 && extractedTexts.length > 0) {
+                message = `用户问题：${message}\n\n附件内容：\n${extractedTexts.map((text, i) => `--- 文件 ${i + 1} ---\n${text}`).join('\n\n')}`;
+            }
+
+            lastMessage = message;
+            lastUserMessage = input.value.trim();
+
             input.disabled = true;
             sendBtn.disabled = true;
             sendBtn.textContent = '发送中...';
 
-            // 添加用户消息
-            addMessage(message, true);
+            addMessage(lastUserMessage, true);
             input.value = '';
 
-            // 添加加载中的助手消息，并保存引用以便后续移除
+            clearAttachedFiles();
+
             const loadingDiv = addMessage('正在思考...', false);
             const contentDiv = loadingDiv.querySelector('.message-content');
             const loadingIndicator = document.createElement('span');
@@ -1673,7 +1770,8 @@
                         },
                         body: JSON.stringify({
                             memoryId: memoryId,
-                            message: message
+                            message: message,
+                            extractedTexts: extractedTexts.length > 0 ? extractedTexts : null
                         }),
                         signal: controller.signal
                     });
@@ -1844,6 +1942,118 @@
                 event.preventDefault();
                 sendMessage();
             }
+        }
+
+        // 处理聊天页面文件选择
+        async function handleChatFileSelect(event) {
+            const files = event.target.files;
+            if (!files || files.length === 0) return;
+
+            const validFiles = Array.from(files).filter(file => {
+                const ext = file.name.split('.').pop().toLowerCase();
+                const validExts = ['jpg', 'jpeg', 'png', 'md', 'doc', 'docx', 'pptx', 'xlsx', 'txt', 'pdf'];
+                return validExts.includes(ext) && file.size <= 2 * 1024 * 1024;
+            });
+
+            if (validFiles.length === 0) {
+                alert('请选择有效的文件（支持 jpg/jpeg/png/md/doc/docx/pptx/xlsx/txt/pdf，单文件不大于2MB）');
+                event.target.value = '';
+                return;
+            }
+
+            if (validFiles.length > 3) {
+                alert('最多支持上传 3 个文件');
+                validFiles.splice(3);
+            }
+
+            attachedFiles = [...attachedFiles, ...validFiles];
+            updateAttachedFilesPreview();
+
+            document.getElementById('chatFileBtn').classList.add('has-files');
+            event.target.value = '';
+        }
+
+        // 更新附件预览显示
+        function updateAttachedFilesPreview() {
+            let previewContainer = document.getElementById('attachedFilesPreview');
+            if (!previewContainer) {
+                previewContainer = document.createElement('div');
+                previewContainer.id = 'attachedFilesPreview';
+                previewContainer.className = 'attached-files-preview';
+                const inputArea = document.querySelector('.input-area');
+                inputArea.parentNode.insertBefore(previewContainer, inputArea.nextSibling);
+            }
+
+            if (attachedFiles.length === 0) {
+                previewContainer.remove();
+                document.getElementById('chatFileBtn').classList.remove('has-files');
+                return;
+            }
+
+            previewContainer.innerHTML = attachedFiles.map((file, index) => `
+                <div class="attached-file-item">
+                    <span class="file-name" title="${file.name}">${file.name}</span>
+                    <span class="remove-file" onclick="removeAttachedFile(${index})">×</span>
+                </div>
+            `).join('');
+        }
+
+        // 移除附件
+        function removeAttachedFile(index) {
+            attachedFiles.splice(index, 1);
+            extractedTexts.splice(index, 1);
+            updateAttachedFilesPreview();
+        }
+
+        // 提取文件内容
+        async function extractFileContent() {
+            if (attachedFiles.length === 0) return true;
+
+            const fileCount = attachedFiles.length;
+            let allSuccess = true;
+            extractedTexts = [];
+
+            try {
+                const formData = new FormData();
+                attachedFiles.forEach(file => {
+                    formData.append('files', file);
+                });
+
+                document.getElementById('sendBtn').disabled = true;
+                document.getElementById('sendBtn').textContent = '提取中...';
+
+                const response = await fetch('/xiaozhi/chat/extract', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (result.success && result.extractedTexts) {
+                    extractedTexts = result.extractedTexts;
+                    console.log('文件内容提取成功，共提取 ' + extractedTexts.length + ' 个文件');
+                } else {
+                    console.error('文件提取失败:', result.message);
+                    alert('文件提取失败: ' + (result.message || '未知错误'));
+                    allSuccess = false;
+                }
+            } catch (error) {
+                console.error('文件提取异常:', error);
+                alert('文件提取失败: ' + error.message);
+                allSuccess = false;
+            } finally {
+                document.getElementById('sendBtn').disabled = false;
+                document.getElementById('sendBtn').textContent = '发送';
+            }
+
+            return allSuccess;
+        }
+
+        // 清除附件
+        function clearAttachedFiles() {
+            attachedFiles = [];
+            extractedTexts = [];
+            updateAttachedFilesPreview();
         }
 
         // 新会话

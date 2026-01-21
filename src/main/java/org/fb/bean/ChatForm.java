@@ -1,10 +1,14 @@
 package org.fb.bean;
 
+import java.util.List;
+
 public class ChatForm {
 
    private Long memoryId;
 
    private String message;
+
+   private List<String> extractedTexts;
 
    public Long getMemoryId() {
        return memoryId;
@@ -20,5 +24,13 @@ public class ChatForm {
 
    public void setMessage(String message) {
        this.message = message;
+   }
+
+   public List<String> getExtractedTexts() {
+       return extractedTexts;
+   }
+
+   public void setExtractedTexts(List<String> extractedTexts) {
+       this.extractedTexts = extractedTexts;
    }
 }

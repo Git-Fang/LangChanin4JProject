@@ -38,14 +38,19 @@ public class ChatController {
     public String chat(@RequestBody ChatForm chatForm) {
         Long memoryId = chatForm.getMemoryId();
         String userMessage = chatForm.getMessage();
+        java.util.List<String> extractedTexts = chatForm.getExtractedTexts();
 
         log.info("收到聊天请求，memoryId：{}，用户消息：{}", memoryId, userMessage);
+        if (extractedTexts != null && !extractedTexts.isEmpty()) {
+            log.info("附带文件提取内容数量: {}", extractedTexts.size());
+        }
+
         try {
-            // 使用AI理解用户意图后执行业务
+            String fullMessage = buildFullMessage(userMessage, extractedTexts);
             System.out.println("\n=== ChatController.chat 开始调用 chatService.chat ===");
             System.out.println("memoryId：" + memoryId);
-            System.out.println("userMessage：" + userMessage);
-            String result = chatService.chat(memoryId, userMessage);
+            System.out.println("userMessage：" + fullMessage);
+            String result = chatService.chat(memoryId, fullMessage);
             System.out.println("chatService.chat 返回结果：" + result);
             System.out.println("=== ChatController.chat 调用 chatService.chat 完成 ===\n");
             return result;
@@ -53,6 +58,25 @@ public class ChatController {
             log.error("对话处理异常, memoryId={}, message={}, error={}", memoryId, userMessage, e.getMessage(), e);
             return "抱歉，处理您的请求时出现了异常，请稍后重试。";
         }
+    }
+
+    private String buildFullMessage(String userMessage, java.util.List<String> extractedTexts) {
+        if (extractedTexts == null || extractedTexts.isEmpty()) {
+            return userMessage;
+        }
+
+        StringBuilder fullMessage = new StringBuilder();
+        fullMessage.append("用户问题：").append(userMessage).append("\n\n");
+
+        fullMessage.append("附件内容：");
+        for (int i = 0; i < extractedTexts.size(); i++) {
+            if (i > 0) {
+                fullMessage.append("\n\n--- 文件 ").append(i + 1).append(" ---\n");
+            }
+            fullMessage.append(extractedTexts.get(i));
+        }
+
+        return fullMessage.toString();
     }
 
 

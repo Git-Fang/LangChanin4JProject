@@ -105,33 +105,56 @@ public class AsyncChatController implements EnvironmentAware {
     public Map<String, Object> asyncChat(@RequestBody ChatForm chatForm) {
         Long memoryId = chatForm.getMemoryId();
         String userMessage = chatForm.getMessage();
-        
+        java.util.List<String> extractedTexts = chatForm.getExtractedTexts();
+
         log.info("收到异步聊天请求, memoryId: {}, message: {}", memoryId, userMessage);
-        
-        ChatRequestMessage request = ChatRequestMessage.create(memoryId, userMessage);
-        
+        if (extractedTexts != null && !extractedTexts.isEmpty()) {
+            log.info("附带文件提取内容数量: {}", extractedTexts.size());
+        }
+
+        String fullMessage = buildFullMessage(userMessage, extractedTexts);
+        ChatRequestMessage request = ChatRequestMessage.create(memoryId, fullMessage);
+
         try {
             String requestJson = objectMapper.writeValueAsString(request);
             redisTemplate.opsForValue().set("chat:request:" + request.getRequestId(), requestJson, RESULT_TTL);
         } catch (Exception e) {
             log.error("保存请求数据失败, requestId: {}", request.getRequestId(), e);
         }
-        
+
         if (isStandalone()) {
             log.info("[Standalone模式] 同步处理请求");
             processSynchronously(request);
         } else {
             ((ChatRequestProducer) getProducer()).sendRequest(request);
         }
-        
+
         Map<String, Object> response = new HashMap<>();
         response.put("requestId", request.getRequestId());
         response.put("status", "PROCESSING");
         response.put("message", "请求已提交");
         response.put("resultUrl", "/xiaozhi/result/" + request.getRequestId());
         response.put("streamUrl", "/xiaozhi/chat/stream/" + request.getRequestId());
-        
+
         return response;
+    }
+
+    private String buildFullMessage(String userMessage, java.util.List<String> extractedTexts) {
+        if (extractedTexts == null || extractedTexts.isEmpty()) {
+            return userMessage;
+        }
+
+        StringBuilder fullMessage = new StringBuilder();
+        fullMessage.append("用户问题：").append(userMessage).append("\n\n");
+        fullMessage.append("附件内容：");
+        for (int i = 0; i < extractedTexts.size(); i++) {
+            if (i > 0) {
+                fullMessage.append("\n\n--- 文件 ").append(i + 1).append(" ---\n");
+            }
+            fullMessage.append(extractedTexts.get(i));
+        }
+
+        return fullMessage.toString();
     }
     
     private void processSynchronously(ChatRequestMessage request) {
@@ -982,25 +1005,29 @@ flux.publishOn(Schedulers.boundedElastic())
     public Map<String, Object> startHttpStreamChat(@RequestBody ChatForm chatForm) {
         Long memoryId = chatForm.getMemoryId();
         String userMessage = chatForm.getMessage();
-        
+        java.util.List<String> extractedTexts = chatForm.getExtractedTexts();
+
         log.info("收到HTTP流式聊天请求, memoryId: {}, message: {}", memoryId, userMessage);
-        
+        if (extractedTexts != null && !extractedTexts.isEmpty()) {
+            log.info("附带文件提取内容数量: {}", extractedTexts.size());
+        }
+
+        String fullMessage = buildFullMessage(userMessage, extractedTexts);
         String requestId = "http_" + System.currentTimeMillis() + "_" + Thread.currentThread().getId();
-        
+
         try {
-            String requestJson = objectMapper.writeValueAsString(
-                ChatRequestMessage.create(memoryId, userMessage)
-            );
+            ChatRequestMessage request = ChatRequestMessage.create(memoryId, fullMessage);
+            String requestJson = objectMapper.writeValueAsString(request);
             redisTemplate.opsForValue().set("chat:request:" + requestId, requestJson, RESULT_TTL);
             redisTemplate.opsForValue().set(STREAM_CACHE_PREFIX + requestId, "", RESULT_TTL);
         } catch (Exception e) {
             log.error("保存请求数据失败, requestId: {}", requestId, e);
         }
-        
+
         Map<String, Object> response = new HashMap<>();
         response.put("requestId", requestId);
         response.put("streamUrl", "/xiaozhi/chat/http-stream/" + requestId);
-        
+
         return response;
     }
     
