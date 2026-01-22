@@ -115,16 +115,16 @@ public class LLMConfig {
     }
 
     private void refreshStreamingChatModel() {
-        if (deepSeekApiKey == null || deepSeekApiKey.isEmpty()) {
-            log.warn("DeepSeek API Key未配置，Streaming模型不可用");
+        if (dashscopeApiKey == null || dashscopeApiKey.isEmpty() || dashscopeApiKey.equals("demo")) {
+            log.warn("DashScope API Key未配置，Streaming模型不可用");
             this.streamingChatModel = null;
         } else {
             this.streamingChatModel = OpenAiStreamingChatModel.builder()
-                    .apiKey(deepSeekApiKey)
-                    .modelName(deepSeekModel)
+                    .apiKey(dashscopeApiKey)
+                    .modelName(dashscopeModel)
                     .logRequests(true)
                     .logResponses(true)
-                    .baseUrl(deepSeekUrl)
+                    .baseUrl(dashscopeUrl)
                     .build();
         }
     }
@@ -152,7 +152,7 @@ public class LLMConfig {
 
     @Bean
     public ChatModel chatModel() {
-        return deepSeekChatModel;
+        return qwenChatModel;
     }
 
     @Bean
