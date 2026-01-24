@@ -160,11 +160,16 @@ if errorlevel 1 (
 
 echo.
 echo [6/8] Check Java base image...
-docker images eclipse-temurin:17-jre-alpine --format "{{.ID}}" | findstr /r "." >nul 2>&1
+docker images maven:3.9-eclipse-temurin-17 --format "{{.ID}}" | findstr /r "." >nul 2>&1
 if errorlevel 1 (
-    echo [ERROR] Base image not found: eclipse-temurin:17-jre-alpine
-    pause
-    exit /b 1
+    echo [ERROR] Base image not found: maven:3.9-eclipse-temurin-17
+    echo       Pulling Maven base image...
+    docker pull maven:3.9-eclipse-temurin-17
+    if errorlevel 1 (
+        echo [ERROR] Failed to pull Maven base image
+        pause
+        exit /b 1
+    )
 )
 echo       Base image is ready
 
