@@ -40,7 +40,8 @@
       "Bash(docker port:*)",
       "Bash(docker inspect:*)",
       "Bash(dir /s /b *.log)",
-      "Bash(docker network:*)"
+      "Bash(docker network:*)",
+      "Bash(mvn:*)"
     ]
   }
 }

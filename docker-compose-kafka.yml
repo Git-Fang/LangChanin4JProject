@@ -18,7 +18,7 @@ services:
 
   # Kafka单节点
   kafka:
-    image: bitnami/kafka:3.8
+    image: confluentinc/cp-kafka:7.5.0
     container_name: kafka
     ports:
       - "9092:9092"
@@ -28,7 +28,7 @@ services:
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_LISTENERS: PLAINTEXT://:9092
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
@@ -38,7 +38,7 @@ services:
     networks:
       - ai-network
     healthcheck:
-      test: ["CMD", "kafka-topics.sh", "--bootstrap-server", "kafka:9092", "--list"]
+      test: ["CMD", "kafka-topics", "--bootstrap-server", "kafka:9092", "--list"]
       interval: 10s
       timeout: 10s
       retries: 10
@@ -73,13 +73,12 @@ services:
       nacos:
         condition: service_healthy
     environment:
-      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATA_MONGODB_URI: mongodb://mongo:27017/chat_db
       SPRING_REDIS_HOST: redis
       AI_EMBEDDINGSTORE_QDRANT_HOST: qdrant
       # Nacos配置中心地址
       NACOS_SERVER_ADDR: nacos:8848
-      NACOS_NAMESPACE: ${NACOS_NAMESPACE:}
+      NACOS_NAMESPACE: ${NACOS_NAMESPACE:-}
     networks:
       - ai-network
 

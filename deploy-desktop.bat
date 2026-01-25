@@ -54,6 +54,21 @@ if errorlevel 1 (
 ) else (echo       Redis: Running)
 
 echo.
+echo       Checking Qdrant status...
+
+docker ps --format "{{.Names}}" | findstr /i "qdrant" >nul 2>&1
+if errorlevel 1 (
+    echo       Qdrant: Not running, starting...
+    docker rm -f qdrant >nul 2>&1
+    docker run -d --name qdrant --network ai-network -p 6333:6333 -p 6334:6334 -v qdrant-data:/qdrant/storage qdrant/qdrant:v1.12.0
+    if errorlevel 1 (
+        echo       Qdrant failed to start
+    ) else (
+        echo       Qdrant started successfully
+    )
+) else (echo       Qdrant: Running)
+
+echo.
 echo       Checking Zookeeper and Kafka status...
 
 set ZOOKEEPER_RUNNING=0
@@ -107,7 +122,7 @@ if "%KAFKA_RUNNING%"=="0" (
     echo.
     echo [4/8] Start Kafka...
     docker rm -f kafka >nul 2>&1
-    docker run -d --name kafka --network ai-network -p 9092:9092 -e KAFKA_BROKER_ID=1 -e KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181 -e KAFKA_LISTENERS=PLAINTEXT://:9092 -e KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://localhost:9092 -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1 -e KAFKA_AUTO_CREATE_TOPICS_ENABLE="true" confluentinc/cp-kafka:7.5.0
+    docker run -d --name kafka --network ai-network -p 9092:9092 -e KAFKA_BROKER_ID=1 -e KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181 -e KAFKA_LISTENERS=PLAINTEXT://:9092 -e KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092 -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1 -e KAFKA_AUTO_CREATE_TOPICS_ENABLE="true" confluentinc/cp-kafka:7.5.0
     if errorlevel 1 (
         echo [ERROR] Kafka failed to start
         pause
@@ -208,7 +223,7 @@ echo       Old container cleaned up
 echo.
 echo       Starting Docker container with environment variables from .env...
 
-docker run -d --name %CONTAINER_NAME% --network ai-network -p %APP_PORT%:%APP_PORT% --env-file .env -e SPRING_PROFILES_ACTIVE=docker -e NACOS_SERVER_ADDR=nacos:8848 -e SPRING_DATASOURCE_URL=jdbc:mysql://host.docker.internal:3306/mydocker?useUnicode=true^&characterEncoding=UTF-8^&serverTimezone=Asia/Shanghai^&useSSL=false^&allowPublicKeyRetrieval=true -e SPRING_DATA_MONGODB_URI=mongodb://host.docker.internal:27017/chat_db -e SPRING_REDIS_HOST=redis -e SPRING_REDIS_PORT=6379 -e AI_EMBEDDINGSTORE_QDRANT_HOST=host.docker.internal -e AI_EMBEDDINGSTORE_QDRANT_PORT=6334 -e spring.kafka.bootstrap-servers=kafka:9092 -e TZ=Asia/Shanghai %IMAGE_NAME%:latest
+docker run -d --name %CONTAINER_NAME% --network ai-network -p %APP_PORT%:%APP_PORT% --env-file .env -e SPRING_PROFILES_ACTIVE=docker -e NACOS_SERVER_ADDR=nacos:8848 -e SPRING_DATASOURCE_URL=jdbc:mysql://host.docker.internal:3306/mydocker?useUnicode=true^&characterEncoding=UTF-8^&serverTimezone=Asia/Shanghai^&useSSL=false^&allowPublicKeyRetrieval=true -e SPRING_DATA_MONGODB_URI=mongodb://host.docker.internal:27017/chat_db -e SPRING_REDIS_HOST=redis -e SPRING_REDIS_PORT=6379 -e AI_EMBEDDINGSTORE_QDRANT_HOST=qdrant -e AI_EMBEDDINGSTORE_QDRANT_PORT=6334 -e spring.kafka.bootstrap-servers=kafka:9092 -e TZ=Asia/Shanghai %IMAGE_NAME%:latest
 
 if errorlevel 1 (
     echo [ERROR] Container failed to start!
