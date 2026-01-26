@@ -44,6 +44,7 @@ public class DocumentImpl implements DocumentService {
     private EmbeddingModel embeddedModel;
 
     @Autowired
+    @Qualifier("qdrantEmbeddingStore")
     private EmbeddingStore<TextSegment> embeddingStore;
 
     @Autowired

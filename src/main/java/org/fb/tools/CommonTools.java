@@ -26,6 +26,7 @@ public class CommonTools {
     private EmbeddingModel embeddingModel;
 
     @Autowired
+    @Qualifier("qdrantEmbeddingStore")
     private EmbeddingStore<TextSegment> embeddingStore;
 
 

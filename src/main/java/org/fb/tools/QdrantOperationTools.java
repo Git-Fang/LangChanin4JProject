@@ -38,6 +38,7 @@ public class QdrantOperationTools {
     private QdrantClient qdrantClient;
 
     @Autowired
+    @Qualifier("qdrantEmbeddingStore")
     private EmbeddingStore<TextSegment> embeddingStore;
 
     @Autowired
