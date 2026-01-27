@@ -743,9 +743,14 @@
         }
         
         function closeEventSource() {
-            if (eventSource) {
-                eventSource.close();
-                eventSource = null;
+            if (eventSource && typeof eventSource.close === 'function') {
+                try {
+                    eventSource.close();
+                } catch (error) {
+                    console.warn('关闭SSE连接时出错:', error);
+                } finally {
+                    eventSource = null;
+                }
             }
         }
         
@@ -1027,7 +1032,11 @@
                 isStreaming = false;
                 streamingIndicator.style.display = 'none';
                 
-                if (e.data) {
+                // 处理服务器端关闭连接的情况
+                if (e.readyState === EventSource.CLOSED) {
+                    console.log('SSE连接已被服务器关闭');
+                    // 不显示错误消息，因为这可能是正常的连接关闭
+                } else if (e.data) {
                     try {
                         const data = JSON.parse(e.data);
                         showError(data.message || '连接错误');
@@ -1035,6 +1044,7 @@
                         showError('连接错误，请检查网络后重试');
                     }
                 } else {
+                    // 处理网络错误或其他连接问题
                     showError('连接错误，请检查网络后重试');
                 }
                 closeEventSource();

@@ -97,7 +97,7 @@ public class AsyncChatController implements EnvironmentAware {
     private static final String RESULT_CACHE_PREFIX = "chat:result:";
     private static final String STREAM_CACHE_PREFIX = "chat:stream:";
     private static final Duration RESULT_TTL = Duration.ofHours(24);
-    private static final long SSE_TIMEOUT = 300000L; // 5分钟
+    private static final long SSE_TIMEOUT = 600000L; // 10分钟
     
     private static final ConcurrentHashMap<String, SseEmitter> sseConnections = new ConcurrentHashMap<>();
     
@@ -460,25 +460,17 @@ public class AsyncChatController implements EnvironmentAware {
             
         } catch (Exception e) {
             log.error("SSE流异常, requestId: {}", requestId, e);
-            try {
-                sendSseEvent(emitter, "error", Map.of(
-                    "status", "error",
-                    "message", e.getMessage()
-                ));
-            } catch (IOException ioException) {
-                log.error("发送错误事件失败", ioException);
-            }
+            sendSseEvent(emitter, "error", Map.of(
+                "status", "error",
+                "message", e.getMessage()
+            ));
             emitter.completeWithError(e);
             sseConnections.remove(requestId);
         }
         
         emitter.onTimeout(() -> {
             log.warn("SSE超时回调, requestId: {}", requestId);
-            try {
-                sendSseEvent(emitter, "timeout", Map.of("status", "timeout"));
-            } catch (Exception e) {
-                log.error("发送超时事件失败", e);
-            }
+            sendSseEvent(emitter, "timeout", Map.of("status", "timeout"));
             emitter.complete();
             sseConnections.remove(requestId);
         });
@@ -617,14 +609,10 @@ flux.publishOn(Schedulers.boundedElastic())
                     })
                     .doOnError(error -> {
                         log.error("流式处理错误, requestId: {}", requestId, error);
-                        try {
-                            sendSseEvent(emitter, "error", Map.of(
-                                "status", "error",
-                                "message", error.getMessage()
-                            ));
-                        } catch (IOException ex) {
-                            log.error("发送错误事件失败", ex);
-                        }
+                        sendSseEvent(emitter, "error", Map.of(
+                            "status", "error",
+                            "message", error.getMessage()
+                        ));
                         emitter.completeWithError(error);
                         sseConnections.remove(requestId);
                     })
@@ -696,14 +684,10 @@ flux.publishOn(Schedulers.boundedElastic())
                     })
                     .doOnError(error -> {
                         log.error("流式处理错误, requestId: {}", requestId, error);
-                        try {
-                            sendSseEvent(emitter, "error", Map.of(
-                                "status", "error",
-                                "message", error.getMessage()
-                            ));
-                        } catch (IOException ex) {
-                            log.error("发送错误事件失败", ex);
-                        }
+                        sendSseEvent(emitter, "error", Map.of(
+                            "status", "error",
+                            "message", error.getMessage()
+                        ));
                         emitter.completeWithError(error);
                         sseConnections.remove(requestId);
                     })
@@ -755,22 +739,18 @@ flux.publishOn(Schedulers.boundedElastic())
                         log.info("普通模式处理完成, requestId: {}, 耗时: {}ms", requestId, processingTime);
                     } catch (Exception ex) {
                         log.error("普通模式处理失败, requestId: {}", requestId, ex);
-                        try {
-                            ChatResultMessage failedResult = ChatResultMessage.builder()
-                                    .requestId(requestId)
-                                    .memoryId(request.getMemoryId())
-                                    .status(ChatResultMessage.ResultStatus.FAILED)
-                                    .errorMessage(ex.getMessage())
-                                    .build();
-                            cacheResult(requestId, failedResult);
-                            
-                            sendSseEvent(emitter, "error", Map.of(
-                                "status", "error",
-                                "message", ex.getMessage()
-                            ));
-                        } catch (IOException ioException) {
-                            log.error("发送错误事件失败", ioException);
-                        }
+                        ChatResultMessage failedResult = ChatResultMessage.builder()
+                                .requestId(requestId)
+                                .memoryId(request.getMemoryId())
+                                .status(ChatResultMessage.ResultStatus.FAILED)
+                                .errorMessage(ex.getMessage())
+                                .build();
+                        cacheResult(requestId, failedResult);
+                        
+                        sendSseEvent(emitter, "error", Map.of(
+                            "status", "error",
+                            "message", ex.getMessage()
+                        ));
                         emitter.completeWithError(ex);
                         sseConnections.remove(requestId);
                     }
@@ -793,11 +773,7 @@ flux.publishOn(Schedulers.boundedElastic())
         
         emitter.onTimeout(() -> {
             log.warn("SSE流超时, requestId: {}", requestId);
-            try {
-                sendSseEvent(emitter, "timeout", Map.of("status", "timeout", "message", "处理超时"));
-            } catch (Exception ex) {
-                log.error("发送超时事件失败", ex);
-            }
+            sendSseEvent(emitter, "timeout", Map.of("status", "timeout", "message", "处理超时"));
             emitter.complete();
             sseConnections.remove(requestId);
         });
@@ -892,11 +868,7 @@ flux.publishOn(Schedulers.boundedElastic())
                     
                 } catch (Exception e) {
                     log.error("直接SSE流异常, requestId: {}", requestId, e);
-                    try {
-                        sendSseEvent(emitter, "error", Map.of("status", "error", "message", e.getMessage()));
-                    } catch (IOException ioException) {
-                        log.error("发送错误事件失败", ioException);
-                    }
+                    sendSseEvent(emitter, "error", Map.of("status", "error", "message", e.getMessage()));
                     emitter.completeWithError(e);
                     sseConnections.remove(requestId);
                 }
@@ -910,11 +882,7 @@ flux.publishOn(Schedulers.boundedElastic())
         
         emitter.onTimeout(() -> {
             log.warn("直接SSE超时, requestId: {}", requestId);
-            try {
-                sendSseEvent(emitter, "timeout", Map.of("status", "timeout"));
-            } catch (Exception ex) {
-                log.error("发送超时事件失败", ex);
-            }
+            sendSseEvent(emitter, "timeout", Map.of("status", "timeout"));
             emitter.complete();
             sseConnections.remove(requestId);
         });
@@ -928,7 +896,7 @@ flux.publishOn(Schedulers.boundedElastic())
         return emitter;
     }
     
-    private void processResultEvent(SseEmitter emitter, String requestId, ChatResultMessage result) throws IOException {
+    private void processResultEvent(SseEmitter emitter, String requestId, ChatResultMessage result) {
         if (result.getIntent() != null) {
             sendSseEvent(emitter, "progress", Map.of(
                 "status", "progress",
@@ -953,9 +921,15 @@ flux.publishOn(Schedulers.boundedElastic())
                 requestId, result.getProcessingTimeMs());
     }
     
-    private void sendSseEvent(SseEmitter emitter, String eventName, Object data) throws IOException {
-        String jsonData = objectMapper.writeValueAsString(data);
-        emitter.send(SseEmitter.event().name(eventName).data(jsonData));
+    private void sendSseEvent(SseEmitter emitter, String eventName, Object data) {
+        try {
+            if (emitter != null) {
+                String jsonData = objectMapper.writeValueAsString(data);
+                emitter.send(SseEmitter.event().name(eventName).data(jsonData));
+            }
+        } catch (Exception e) {
+            log.debug("发送SSE事件失败，连接可能已关闭", e);
+        }
     }
     
     @GetMapping("/result/{requestId}")
@@ -1139,14 +1113,10 @@ if (streamingDispatchService != null) {
                     })
                     .doOnError(error -> {
                         log.error("HTTP流式处理错误, requestId: {}", requestId, error);
-                        try {
-                            sendSseEvent(emitter, "error", Map.of(
-                                "status", "error",
-                                "message", error.getMessage()
-                            ));
-                        } catch (IOException ex) {
-                            log.error("发送错误事件失败", ex);
-                        }
+                        sendSseEvent(emitter, "error", Map.of(
+                            "status", "error",
+                            "message", error.getMessage()
+                        ));
                         emitter.completeWithError(error);
                         sseConnections.remove(requestId);
                     })
@@ -1226,14 +1196,10 @@ if (streamingDispatchService != null) {
                     })
                     .doOnError(error -> {
                         log.error("HTTP流式处理错误, requestId: {}", requestId, error);
-                        try {
-                            sendSseEvent(emitter, "error", Map.of(
-                                "status", "error",
-                                "message", error.getMessage()
-                            ));
-                        } catch (IOException ex) {
-                            log.error("发送错误事件失败", ex);
-                        }
+                        sendSseEvent(emitter, "error", Map.of(
+                            "status", "error",
+                            "message", error.getMessage()
+                        ));
                         emitter.completeWithError(error);
                         sseConnections.remove(requestId);
                     })
@@ -1287,22 +1253,18 @@ if (streamingDispatchService != null) {
                         log.info("HTTP普通模式处理完成, requestId: {}, 耗时: {}ms", requestId, processingTime);
                     } catch (Exception ex) {
                         log.error("HTTP普通模式处理失败, requestId: {}", requestId, ex);
-                        try {
-                            ChatResultMessage failedResult = ChatResultMessage.builder()
-                                    .requestId(requestId)
-                                    .memoryId(memoryId)
-                                    .status(ChatResultMessage.ResultStatus.FAILED)
-                                    .errorMessage(ex.getMessage())
-                                    .build();
-                            cacheResult(requestId, failedResult);
-                            
-                            sendSseEvent(emitter, "error", Map.of(
-                                "status", "error",
-                                "message", ex.getMessage()
-                            ));
-                        } catch (IOException ioException) {
-                            log.error("发送错误事件失败", ioException);
-                        }
+                        ChatResultMessage failedResult = ChatResultMessage.builder()
+                                .requestId(requestId)
+                                .memoryId(memoryId)
+                                .status(ChatResultMessage.ResultStatus.FAILED)
+                                .errorMessage(ex.getMessage())
+                                .build();
+                        cacheResult(requestId, failedResult);
+                        
+                        sendSseEvent(emitter, "error", Map.of(
+                            "status", "error",
+                            "message", ex.getMessage()
+                        ));
                         emitter.completeWithError(ex);
                         sseConnections.remove(requestId);
                     }
@@ -1311,25 +1273,17 @@ if (streamingDispatchService != null) {
             
         } catch (Exception e) {
             log.error("HTTP流式初始化异常, requestId: {}", requestId, e);
-            try {
-                sendSseEvent(emitter, "error", Map.of(
-                    "status", "error",
-                    "message", e.getMessage()
-                ));
-            } catch (IOException ioException) {
-                log.error("发送错误事件失败", ioException);
-            }
+            sendSseEvent(emitter, "error", Map.of(
+                "status", "error",
+                "message", e.getMessage()
+            ));
             emitter.completeWithError(e);
             sseConnections.remove(requestId);
         }
         
         emitter.onTimeout(() -> {
             log.warn("HTTP流式超时, requestId: {}", requestId);
-            try {
-                sendSseEvent(emitter, "timeout", Map.of("status", "timeout", "message", "处理超时"));
-            } catch (Exception ex) {
-                log.error("发送超时事件失败", ex);
-            }
+            sendSseEvent(emitter, "timeout", Map.of("status", "timeout", "message", "处理超时"));
             emitter.complete();
             sseConnections.remove(requestId);
         });
