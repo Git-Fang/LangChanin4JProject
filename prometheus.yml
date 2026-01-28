@@ -1,0 +1,36 @@
+# Prometheus配置文件
+global:
+  scrape_interval: 15s  # 抓取间隔
+  evaluation_interval: 15s  # 评估间隔
+
+# 抓取配置
+scrape_configs:
+  # 抓取Prometheus自身的指标
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # 抓取Kafka的指标
+  - job_name: 'kafka'
+    static_configs:
+      - targets: ['kafka:9308']
+
+  # 抓取应用程序的指标
+  - job_name: 'rag-translation'
+    static_configs:
+      - targets: ['rag-translation:8000']
+
+  # 抓取MongoDB的指标
+  - job_name: 'mongodb'
+    static_configs:
+      - targets: ['mongo:9216']
+
+  # 抓取Redis的指标
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis:9121']
+
+  # 抓取Qdrant的指标
+  - job_name: 'qdrant'
+    static_configs:
+      - targets: ['qdrant:6333']
