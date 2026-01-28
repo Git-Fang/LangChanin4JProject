@@ -601,11 +601,11 @@
             const validFiles = Array.from(files).filter(file => {
                 const ext = file.name.split('.').pop().toLowerCase();
                 const validExts = ['jpg', 'jpeg', 'png', 'md', 'doc', 'docx', 'pptx', 'xlsx', 'txt', 'pdf'];
-                return validExts.includes(ext) && file.size <= 2 * 1024 * 1024;
+                return validExts.includes(ext) && file.size <= 5 * 1024 * 1024;
             });
 
             if (validFiles.length === 0) {
-                alert('请选择有效的文件（支持 jpg/jpeg/png/md/doc/docx/pptx/xlsx/txt/pdf，单文件不大于2MB）');
+                alert('请选择有效的文件（支持 jpg/jpeg/png/md/doc/docx/pptx/xlsx/txt/pdf，单文件不大于5MB）');
                 event.target.value = '';
                 return;
             }

@@ -21,7 +21,7 @@ import java.util.Map;
 public class DocumentExtractController {
     private static final Logger log = LoggerFactory.getLogger(DocumentExtractController.class);
 
-    private static final long MAX_FILE_SIZE = 2 * 1024 * 1024;
+    private static final long MAX_FILE_SIZE = 5 * 1024 * 1024;
     private static final int MAX_FILES = 3;
 
     @Autowired
