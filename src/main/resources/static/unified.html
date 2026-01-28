@@ -2014,29 +2014,56 @@
             extractedTexts = [];
 
             try {
-                const formData = new FormData();
-                attachedFiles.forEach(file => {
-                    formData.append('files', file);
-                });
-
                 document.getElementById('sendBtn').disabled = true;
                 document.getElementById('sendBtn').textContent = '提取中...';
 
-                const response = await fetch('/xiaozhi/chat/extract', {
-                    method: 'POST',
-                    body: formData
+                // 分离图片文件和非图片文件
+                const imageFiles = attachedFiles.filter(file => {
+                    const ext = file.name.split('.').pop().toLowerCase();
+                    return ['jpg', 'jpeg', 'png'].includes(ext);
+                });
+                const nonImageFiles = attachedFiles.filter(file => {
+                    const ext = file.name.split('.').pop().toLowerCase();
+                    return !['jpg', 'jpeg', 'png'].includes(ext);
                 });
 
-                const result = await response.json();
+                // 处理非图片文件
+                if (nonImageFiles.length > 0) {
+                    const formData = new FormData();
+                    nonImageFiles.forEach(file => {
+                        formData.append('files', file);
+                    });
 
-                if (result.success && result.extractedTexts) {
-                    extractedTexts = result.extractedTexts;
-                    console.log('文件内容提取成功，共提取 ' + extractedTexts.length + ' 个文件');
-                } else {
-                    console.error('文件提取失败:', result.message);
-                    alert('文件提取失败: ' + (result.message || '未知错误'));
-                    allSuccess = false;
+                    const response = await fetch('/xiaozhi/chat/extract', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    const result = await response.json();
+
+                    if (result.success && result.extractedTexts) {
+                        extractedTexts = [...extractedTexts, ...result.extractedTexts];
+                        console.log('非图片文件内容提取成功，共提取 ' + result.extractedTexts.length + ' 个文件');
+                    } else {
+                        console.error('非图片文件提取失败:', result.message);
+                        alert('非图片文件提取失败: ' + (result.message || '未知错误'));
+                        allSuccess = false;
+                    }
                 }
+
+                // 处理图片文件
+                for (const file of imageFiles) {
+                    try {
+                        const imageText = await processImageFile(file);
+                        extractedTexts.push(imageText);
+                        console.log('图片文件处理成功: ' + file.name);
+                    } catch (error) {
+                        console.error('图片文件处理失败:', error);
+                        alert('图片文件处理失败: ' + error.message);
+                        allSuccess = false;
+                    }
+                }
+
             } catch (error) {
                 console.error('文件提取异常:', error);
                 alert('文件提取失败: ' + error.message);
@@ -2047,6 +2074,81 @@
             }
 
             return allSuccess;
+        }
+
+        // 处理图片文件，使用专门的图片理解接口
+        async function processImageFile(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = async function(e) {
+                    try {
+                        const base64Data = e.target.result.split(',')[1];
+                        const imageType = file.type.split('/')[1] || 'png';
+
+                        const formData = new FormData();
+                        formData.append('base64Data', base64Data);
+                        formData.append('imageType', imageType);
+                        formData.append('prompt', '请详细描述这张图片的内容，包括图片中的物体、场景、颜色、布局等所有可见信息。不要只检测文字内容，要描述整个图片的视觉内容。');
+
+                        console.log('发送图片处理请求:', {
+                            imageType: imageType,
+                            base64Length: base64Data.length,
+                            prompt: formData.get('prompt')
+                        });
+
+                        // 增加重试机制
+                        const maxRetries = 3;
+                        let retryCount = 0;
+                        let lastError = null;
+
+                        while (retryCount < maxRetries) {
+                            try {
+                                console.log(`图片处理尝试 ${retryCount + 1}/${maxRetries}`);
+                                
+                                const response = await fetch('/xiaozhi/chatImage', {
+                                    method: 'POST',
+                                    body: formData,
+                                    timeout: 120000 // 120秒超时
+                                });
+
+                                if (!response.ok) {
+                                    const errorText = await response.text();
+                                    console.error('图片处理失败:', response.status, errorText);
+                                    throw new Error('图片处理失败: ' + errorText);
+                                }
+
+                                const resultText = await response.text();
+                                console.log('图片处理结果:', resultText);
+                                resolve('[图片内容] ' + resultText);
+                                return;
+                            } catch (error) {
+                                console.error(`图片处理尝试 ${retryCount + 1} 失败:`, error);
+                                lastError = error;
+                                retryCount++;
+
+                                // 如果是超时错误，等待后重试
+                                if (retryCount < maxRetries) {
+                                    const delay = Math.pow(2, retryCount) * 1000; // 指数退避
+                                    console.log(`等待 ${delay}ms 后重试...`);
+                                    await new Promise(resolve => setTimeout(resolve, delay));
+                                }
+                            }
+                        }
+
+                        // 所有重试都失败
+                        console.error('所有图片处理尝试都失败');
+                        reject(lastError || new Error('图片处理失败: 所有尝试都失败'));
+                    } catch (error) {
+                        console.error('图片处理异常:', error);
+                        reject(error);
+                    }
+                };
+                reader.onerror = function(error) {
+                    console.error('文件读取失败:', error);
+                    reject(error);
+                };
+                reader.readAsDataURL(file);
+            });
         }
 
         // 清除附件

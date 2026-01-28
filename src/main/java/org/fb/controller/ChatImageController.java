@@ -47,21 +47,48 @@ public class ChatImageController {
 
     @PostMapping("/chatImage")
     @Operation(summary = "图生文接口测试")
-    public String chatImage(String base64Data, String imageType,
-                            @RequestParam(value = "prompt", defaultValue = "该图片讲述了什么内容？") String prompt) throws IOException {
+    public String chatImage(String base64Data, String imageType, String prompt) {
 
         if(StringUtils.isAnyBlank(base64Data, imageType)){
             return "请上传图片";
         }
 
+        // 如果prompt为空，使用默认值
+        if(StringUtils.isBlank(prompt)){
+            prompt = "该图片讲述了什么内容？";
+        }
+
         // 获取图片的MIME类型
         String mimeType = "image/" + imageType;
 
-        UserMessage userMessage = UserMessage.from(TextContent.from(prompt), ImageContent.from(base64Data, mimeType));
-        ChatResponse chatResponse = qwen.chat(userMessage);
-        String text = chatResponse.aiMessage().text();
-        log.info("text:{}", text);
-        return text;
+        log.info("收到图片处理请求: imageType={}, prompt={}, base64Length={}", imageType, prompt, base64Data.length());
+
+        try {
+            // 检查Qwen模型是否可用
+            if (qwen == null) {
+                log.error("Qwen模型不可用，请检查DashScope API Key配置");
+                return "图片处理失败: AI模型未配置，请联系管理员";
+            }
+
+            UserMessage userMessage = UserMessage.from(TextContent.from(prompt), ImageContent.from(base64Data, mimeType));
+            ChatResponse chatResponse = qwen.chat(userMessage);
+            String text = chatResponse.aiMessage().text();
+            log.info("图片处理结果: {}", text);
+            return text;
+        } catch (Exception e) {
+            log.error("图片处理失败: {}", e.getMessage(), e);
+            
+            // 处理不同类型的错误
+            if (e.getMessage().contains("timeout") || e.getMessage().contains("Timeout")) {
+                return "图片处理失败: 服务器响应超时，请稍后重试";
+            } else if (e.getMessage().contains("connect") || e.getMessage().contains("Connect")) {
+                return "图片处理失败: 网络连接失败，请检查网络设置";
+            } else if (e.getMessage().contains("API key") || e.getMessage().contains("apiKey")) {
+                return "图片处理失败: API密钥配置错误，请联系管理员";
+            } else {
+                return "图片处理失败: " + e.getMessage();
+            }
+        }
     }
 
 

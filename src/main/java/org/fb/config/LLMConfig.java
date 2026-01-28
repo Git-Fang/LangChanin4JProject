@@ -96,6 +96,7 @@ public class LLMConfig {
                 .logRequests(true)
                 .logResponses(true)
                 .baseUrl(deepSeekUrl)
+                .timeout(Duration.ofSeconds(150))
                 .build();
     }
 
@@ -110,6 +111,7 @@ public class LLMConfig {
                     .baseUrl(dashscopeUrl)
                     .logRequests(true)
                     .logResponses(true)
+                    .timeout(Duration.ofSeconds(150))
                     .build();
         }
     }
@@ -125,6 +127,7 @@ public class LLMConfig {
                     .logRequests(true)
                     .logResponses(true)
                     .baseUrl(dashscopeUrl)
+                    .timeout(Duration.ofSeconds(150))
                     .build();
         }
     }
@@ -134,7 +137,7 @@ public class LLMConfig {
                 .baseUrl(ollamaUrl)
                 .modelName(ollamaModel)
                 .temperature(0.8)
-                .timeout(Duration.ofSeconds(60))
+                .timeout(Duration.ofSeconds(150))
                 .logRequests(true)
                 .logResponses(true)
                 .build();
@@ -147,6 +150,7 @@ public class LLMConfig {
                 .logRequests(true)
                 .logResponses(true)
                 .baseUrl(kimiUrl)
+                .timeout(Duration.ofSeconds(150))
                 .build();
     }
 
