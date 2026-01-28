@@ -19,19 +19,19 @@ import java.util.regex.Pattern;
 public class ChatServiceImpl implements ChatService {
     private static final Logger log = LoggerFactory.getLogger(ChatServiceImpl.class);
 
-    @Autowired
+    @Autowired(required = false)
     private ChatAssistant chatAssistant;
 
-    @Autowired
+    @Autowired(required = false)
     private DoctorAgent doctorAgent;
 
-    @Autowired
+    @Autowired(required = false)
     private TranslaterService translaterService;
 
-    @Autowired
+    @Autowired(required = false)
     private ChatTypeAssistant chatTypeAssistant;
 
-    @Autowired
+    @Autowired(required = false)
     private TermExtractionAgent termExtractionAgent;
 
     @Autowired
@@ -63,6 +63,16 @@ public class ChatServiceImpl implements ChatService {
     private String processByUserMeanings(Long memoryId, String userMessage) {
         log.info("\n=== processByUserMeanings 方法开始 ===");
         log.info("memoryId：" + memoryId + "; userMessage：" + userMessage);
+
+        // 检查是否配置了LLM模型
+        if (chatTypeAssistant == null || chatAssistant == null) {
+            log.info("未配置 LLM 模型，使用默认响应");
+            
+            // 保存聊天信息到数据库
+            saveChatInfo(memoryId, userMessage, BusinessConstant.DEFAULT_TYPE);
+            
+            return "抱歉，聊天服务暂时不可用，请配置 LLM 模型后重试。";
+        }
 
         // 为意图识别创建临时memoryId，确保意图识别不受之前会话的影响
         Long tempMemoryId = System.currentTimeMillis();
@@ -103,15 +113,15 @@ public class ChatServiceImpl implements ChatService {
         // 根据解析后的意图，选择不同的业务处理服务
         log.info("开始根据意图选择业务处理服务");
         String result;
-        if (BusinessConstant.MEDICAL_TYPE.equals(intent)) {
+        if (BusinessConstant.MEDICAL_TYPE.equals(intent) && doctorAgent != null) {
             // 医疗相关业务，使用医生助手
             log.info("选择业务处理服务：DoctorAgent");
             result = doctorAgent.chat(memoryId, userMessage);
-        } else if (BusinessConstant.TRANSLATION_TYPE.equals(intent)) {
+        } else if (BusinessConstant.TRANSLATION_TYPE.equals(intent) && translaterService != null) {
             // 翻译相关业务，使用翻译服务
             log.info("选择业务处理服务：TranslaterService");
             result = translaterService.translate(memoryId, userMessage);
-        } else if (BusinessConstant.TERM_EXTRACTION_TYPE.equals(intent)) {
+        } else if (BusinessConstant.TERM_EXTRACTION_TYPE.equals(intent) && termExtractionAgent != null) {
             // 术语提取相关业务，使用术语提取助手（不传递memoryId，避免上下文干扰）
             log.info("选择业务处理服务：TermExtractionAgent");
             result = termExtractionAgent.chat(userMessage);
@@ -148,10 +158,13 @@ public class ChatServiceImpl implements ChatService {
                            "建议：请尝试用更清晰、更具体的方式描述您的查询需求。";
                 }
             }
-        } else {
+        } else if (chatAssistant != null) {
             // 默认业务，使用普通聊天助手（个人助手），无论是否明确识别为general
             log.info("选择业务处理服务：ChatAssistant");
             result = chatAssistant.chat(memoryId, userMessage);
+        } else {
+            // 未配置聊天助手
+            result = "抱歉，聊天服务暂时不可用，请配置 LLM 模型后重试。";
         }
         log.info("业务处理服务返回结果：" + result);
         log.info("=== processByUserMeanings 方法完成 ===\n");

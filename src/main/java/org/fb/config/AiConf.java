@@ -47,7 +47,7 @@ public class AiConf {
     @Autowired(required = false)
     private StreamingChatModel streamingChatModel;
 
-    @Autowired
+    @Autowired(required = false)
     @Qualifier("chatModel")
     private ChatModel chatModel;
 
@@ -109,7 +109,9 @@ public class AiConf {
     @Bean
     @ConditionalOnProperty(name = "mcp.enabled", havingValue = "true", matchIfMissing = false)
     BaiduMapMcpAssistant baiduMapMcpAssistant() {
-
+        if (chatModel == null) {
+            return null;
+        }
         return  buildGenericMcpAssistant(BaiduMapMcpAssistant.class, chatModel);
     }
 

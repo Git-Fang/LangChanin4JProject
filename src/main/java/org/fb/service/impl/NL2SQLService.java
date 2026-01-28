@@ -4,6 +4,7 @@ import org.fb.service.assistant.NaturalLanguageSQLAgent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
@@ -18,6 +19,7 @@ public class NL2SQLService {
     private JdbcTemplate jdbcTemplate;
 
     @Autowired
+    @Qualifier("naturalLanguageSQLAgentFallback")
     private NaturalLanguageSQLAgent languageSQLService;
 
     public List<Map<String, Object>> executeNaturalLanguageQuery(String naturalLanguage) {
