@@ -16,6 +16,7 @@ import io.lettuce.core.SocketOptions;
 import io.lettuce.core.TimeoutOptions;
 import java.time.Duration;
 import org.apache.commons.pool2.impl.GenericObjectPoolConfig;
+import io.lettuce.core.api.StatefulConnection;
 
 @Configuration
 public class RedisConfig {
@@ -38,17 +39,11 @@ public class RedisConfig {
             .keepAlive(true)
             .build();
         
-        // 创建客户端资源
-        ClientResources clientResources = DefaultClientResources.builder()
-            .socketOptions(socketOptions)
-            .timeoutOptions(TimeoutOptions.builder().build())
-            .build();
-        
         // 配置连接池
-        LettucePoolingClientConfiguration.LettucePoolingClientConfigurationBuilder builder = 
+        LettucePoolingClientConfiguration.LettucePoolingClientConfigurationBuilder poolingBuilder = 
             LettucePoolingClientConfiguration.builder();
-        
-        GenericObjectPoolConfig<?> poolConfig = new GenericObjectPoolConfig<>();
+                
+        GenericObjectPoolConfig<StatefulConnection<?, ?>> poolConfig = new GenericObjectPoolConfig<>();
         poolConfig.setMaxTotal(200);                 // 最大连接数
         poolConfig.setMaxIdle(50);                  // 最大空闲连接数
         poolConfig.setMinIdle(10);                  // 最小空闲连接数
@@ -56,12 +51,10 @@ public class RedisConfig {
         poolConfig.setTestOnBorrow(true);           // 借用连接时检测
         poolConfig.setTestOnReturn(false);          // 归还连接时检测
         poolConfig.setTestWhileIdle(true);          // 空闲时检测
-        poolConfig.setTimeBetweenEvictionRunsMillis(30000); // 空闲连接检测周期
-        
-        LettuceClientConfiguration clientConfig = builder
+        poolConfig.setTimeBetweenEvictionRunsMillis(30000); // 空闲连接检测周期;
+                
+        LettuceClientConfiguration clientConfig = LettucePoolingClientConfiguration.builder()
             .poolConfig(poolConfig)
-            .clientResources(clientResources)
-            .commandTimeout(Duration.ofSeconds(10))
             .build();
         
         return new LettuceConnectionFactory(config, clientConfig);

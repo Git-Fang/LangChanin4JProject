@@ -88,7 +88,7 @@ public class RedisTemplateWrapper {
         
         // 尝试ping Redis服务器以检查是否已恢复
         try {
-            redisTemplate.ping();
+            redisTemplate.getConnectionFactory().getConnection().ping();
             redisAvailable.set(true);
             log.info("Redis连接已恢复");
             return true;
