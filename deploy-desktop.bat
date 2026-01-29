@@ -244,6 +244,26 @@ if errorlevel 1 (
 )
 
 echo.
+echo       Starting Kafka UI...
+rem Check if kafka-ui is already running
+docker ps --format "{{.Names}}" | findstr /i "kafka-ui" >nul 2>&1
+if not errorlevel 1 (
+    echo       Kafka UI: Already running
+) else (
+    rem Start Kafka UI with direct connection to existing Kafka/Zookeeper services
+    docker run -d --name kafka-ui --network ai-network -p 8081:8080 ^
+        -e KAFKA_CLUSTERS_0_NAME=local ^
+        -e KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafka:9092 ^
+        -e KAFKA_CLUSTERS_0_ZOOKEEPER=zookeeper:2181 ^
+        provectuslabs/kafka-ui:latest
+    if errorlevel 1 (
+        echo [WARNING] Failed to start Kafka UI
+    ) else (
+        echo       Kafka UI started successfully
+    )
+)
+
+echo.
 echo ============================================
 echo   Deployment completed!
 echo ============================================
