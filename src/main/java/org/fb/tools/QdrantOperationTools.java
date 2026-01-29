@@ -62,10 +62,11 @@ public class QdrantOperationTools {
         EmbeddingMatch<TextSegment> embeddingMatch = searchResult.matches().get(0);
         log.info("相似度得分：{}; 匹配结果：{}",embeddingMatch.score(),embeddingMatch.embedded().text());
 
-        if(embeddingMatch.score() < 0.85){
+        if(embeddingMatch.score() < 0.85){  // 降低相似度阈值，使新术语更容易被保存
             saveTerms(text);
+            log.info("相似度<0.85，已保存新术语数据");
         } else {
-            log.info("相似度>=0.85，不保存重复数据");
+            log.info("相似度>=0.85，不保存重复数据，相似度为: {}", embeddingMatch.score());
         }
     }
 

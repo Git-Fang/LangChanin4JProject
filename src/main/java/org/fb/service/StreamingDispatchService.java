@@ -134,6 +134,10 @@ public class StreamingDispatchService {
         try {
             String result = termExtractionAgent.chat(userMessage);
             log.info("TermExtractionAgent返回结果长度: {}", result != null ? result.length() : 0);
+            
+            // 记录术语提取操作，虽然流式服务中不直接保存到数据库
+            log.info("术语提取完成，结果: {}", result);
+            
             return Flux.just(result != null ? result : "");
         } catch (Exception e) {
             log.error("TermExtractionAgent处理失败", e);

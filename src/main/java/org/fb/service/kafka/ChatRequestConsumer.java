@@ -122,6 +122,7 @@ public class ChatRequestConsumer {
                     break;
                 case BusinessConstant.TERM_EXTRACTION_TYPE:
                     result = termExtractionAgent.chat(request.getMessage());
+                    // 在Kafka环境中，我们不直接访问数据库，但可以发送事件通知来记录chatType
                     break;
                 case BusinessConstant.SQL_OPERATION_TYPE:
                     result = nl2SQLService.executeNaturalLanguageQuery(request.getMessage()).toString();

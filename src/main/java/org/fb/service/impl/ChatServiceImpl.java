@@ -125,6 +125,10 @@ public class ChatServiceImpl implements ChatService {
             // 术语提取相关业务，使用术语提取助手（不传递memoryId，避免上下文干扰）
             log.info("选择业务处理服务：TermExtractionAgent");
             result = termExtractionAgent.chat(userMessage);
+            
+            // 特殊处理：术语提取后，确保chatType为term_extraction
+            log.info("术语提取完成，重新保存聊天信息，确保chatType为term_extraction");
+            saveChatInfo(memoryId, userMessage, BusinessConstant.TERM_EXTRACTION_TYPE);
         } else if (BusinessConstant.SQL_OPERATION_TYPE.equals(intent)) {
             // 自然语言转为sql
             log.info("选择业务处理服务：NL2SQLService");

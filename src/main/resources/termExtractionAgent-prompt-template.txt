@@ -24,7 +24,7 @@
     - 若相似度score<0.85，则调用【3.工具集 -方法2】将传入数据进行向量数据保存操作；
 
 3.工具集：
-    -方法1： CommonTools.embeddingSearch(): 根据输入信息从pinecone向量数据库中查询对应结果并返回。
+    -方法1： CommonTools.embeddingSearchForTerms(): 根据输入信息从qdrant向量数据库中【仅查询type为TERMS】的术语数据并返回。
     -方法2： QdrantOperationTools.embeddingTermAndSave(): 将传入的数据进行向量化并存入qdrant向量数据库。
 
 
