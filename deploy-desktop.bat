@@ -93,7 +93,7 @@ if not errorlevel 1 (
     echo       Kafka: Already running on port 9092
     set KAFKA_RUNNING=1
 ) else (
-    docker ps --format "{{.Names}}" | findstr /i "kafka" >nul 2>&1
+    docker ps --format "{{.Names}}" | findstr /i "^kafka$" >nul 2>&1
     if not errorlevel 1 (
         echo       Kafka: Container running
         set KAFKA_RUNNING=1
