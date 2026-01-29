@@ -175,11 +175,11 @@ if errorlevel 1 (
 
 echo.
 echo [6/8] Check Java base image...
-docker images maven:3.9-eclipse-temurin-17 --format "{{.ID}}" | findstr /r "." >nul 2>&1
+docker images maven:3.9.9-eclipse-temurin-17 --format "{{.ID}}" | findstr /r "." >nul 2>&1
 if errorlevel 1 (
-    echo [ERROR] Base image not found: maven:3.9-eclipse-temurin-17
+    echo [ERROR] Base image not found: maven:3.9.9-eclipse-temurin-17
     echo       Pulling Maven base image...
-    docker pull maven:3.9-eclipse-temurin-17
+    docker pull maven:3.9.9-eclipse-temurin-17
     if errorlevel 1 (
         echo [ERROR] Failed to pull Maven base image
         pause
@@ -199,7 +199,7 @@ if errorlevel 1 (
 echo       Java application built successfully
 
 echo.
-echo [8/8] Build Docker image...
+echo [8/9] Build Docker image...
 docker build -t %IMAGE_NAME%:latest .
 if errorlevel 1 (
     echo [ERROR] Docker image build failed!
@@ -209,7 +209,7 @@ if errorlevel 1 (
 echo       Image built: %IMAGE_NAME%:latest
 
 echo.
-echo       Check .env file for environment variables...
+echo [9/9] Check .env file for environment variables...
 if not exist ".env" (
     echo [WARNING] .env file not found, using default values
 )
@@ -233,6 +233,15 @@ if errorlevel 1 (
 
 echo       Container started, waiting for initialization...
 timeout /t 20 /nobreak >nul
+
+echo.
+echo       Starting monitoring services...
+docker-compose -f docker-compose-full.yml up -d prometheus grafana mongodb-exporter redis-exporter
+if errorlevel 1 (
+    echo [WARNING] Failed to start monitoring services
+) else (
+    echo       Monitoring services started successfully
+)
 
 echo.
 echo ============================================

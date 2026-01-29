@@ -1,5 +1,4 @@
 # 完整的Docker Compose配置，包含Kafka、监控和指标收集
-version: '3.8'
 
 services:
   # Zookeeper - Kafka依赖
@@ -79,6 +78,8 @@ services:
       - GF_SECURITY_ADMIN_PASSWORD=admin123
     volumes:
       - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana-provisioning/datasources:/etc/grafana/provisioning/datasources
+      - ./monitoring/grafana-provisioning/dashboards:/etc/grafana/provisioning/dashboards
     networks:
       - ai-network
 
@@ -95,12 +96,45 @@ services:
 
   # Redis
   redis:
-    image: redis:latest
+    image: redis:7-alpine
     container_name: redis
     ports:
       - "6379:6379"
     volumes:
       - redis-data:/data
+    networks:
+      - ai-network
+
+  # MongoDB Exporter
+  mongodb-exporter:
+    image: percona/mongodb_exporter:0.39.0
+    container_name: mongodb-exporter
+    ports:
+      - "9216:9216"
+    environment:
+      - MONGODB_URI=mongodb://mongo:27017/admin?directConnection=true
+      - MONGODB_EXPORTER_COLLECT_ALL=true
+      - MONGODB_EXPORTER_COMPATIBLE_MODE=true
+    command: [
+      "--mongodb.uri=mongodb://mongo:27017/admin?directConnection=true",
+      "--collect-all",
+      "--compatible-mode"
+    ]
+    depends_on:
+      - mongo
+    networks:
+      - ai-network
+
+  # Redis Exporter
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.52.0
+    container_name: redis-exporter
+    ports:
+      - "9121:9121"
+    environment:
+      - REDIS_ADDR=redis://redis:6379
+    depends_on:
+      - redis
     networks:
       - ai-network
 

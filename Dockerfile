@@ -1,6 +1,6 @@
 # RAGTranslation Docker镜像
 # 使用本地已有的Maven镜像（基于Ubuntu，兼容ONNX Runtime）
-FROM maven:3.9-eclipse-temurin-17
+FROM maven:3.9.9-eclipse-temurin-17
 
 # 设置时区
 ENV TZ=Asia/Shanghai
