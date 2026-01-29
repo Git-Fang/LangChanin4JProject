@@ -12,6 +12,11 @@ import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactor
 import org.springframework.data.redis.connection.lettuce.LettucePoolingClientConfiguration;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
+import io.lettuce.core.SocketOptions;
+import io.lettuce.core.TimeoutOptions;
+import java.time.Duration;
+import org.apache.commons.pool2.impl.GenericObjectPoolConfig;
+
 @Configuration
 public class RedisConfig {
 
@@ -27,12 +32,36 @@ public class RedisConfig {
         config.setHostName(redisHost);
         config.setPort(redisPort);
         
-        // 创建带监控的客户端资源
-        ClientResources clientResources = DefaultClientResources.builder()
+        // 设置连接超时和socket选项
+        SocketOptions socketOptions = SocketOptions.builder()
+            .connectTimeout(Duration.ofSeconds(10))
+            .keepAlive(true)
             .build();
         
-        LettuceClientConfiguration clientConfig = LettucePoolingClientConfiguration.builder()
+        // 创建客户端资源
+        ClientResources clientResources = DefaultClientResources.builder()
+            .socketOptions(socketOptions)
+            .timeoutOptions(TimeoutOptions.builder().build())
+            .build();
+        
+        // 配置连接池
+        LettucePoolingClientConfiguration.LettucePoolingClientConfigurationBuilder builder = 
+            LettucePoolingClientConfiguration.builder();
+        
+        GenericObjectPoolConfig<?> poolConfig = new GenericObjectPoolConfig<>();
+        poolConfig.setMaxTotal(200);                 // 最大连接数
+        poolConfig.setMaxIdle(50);                  // 最大空闲连接数
+        poolConfig.setMinIdle(10);                  // 最小空闲连接数
+        poolConfig.setMaxWaitMillis(10000);         // 最大等待时间
+        poolConfig.setTestOnBorrow(true);           // 借用连接时检测
+        poolConfig.setTestOnReturn(false);          // 归还连接时检测
+        poolConfig.setTestWhileIdle(true);          // 空闲时检测
+        poolConfig.setTimeBetweenEvictionRunsMillis(30000); // 空闲连接检测周期
+        
+        LettuceClientConfiguration clientConfig = builder
+            .poolConfig(poolConfig)
             .clientResources(clientResources)
+            .commandTimeout(Duration.ofSeconds(10))
             .build();
         
         return new LettuceConnectionFactory(config, clientConfig);
