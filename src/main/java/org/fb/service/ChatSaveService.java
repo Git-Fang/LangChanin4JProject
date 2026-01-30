@@ -24,8 +24,16 @@ public interface ChatSaveService {
     void saveChatInfo(Long memoryId, String userMessage, String chatType);
 
     /**
+     * 删除指定memoryId的所有聊天记录
+     * 用于在保存新记录前清理该memoryId对应的所有旧记录
+     * @param memoryId 对话对应的memoryId
+     * @return 删除的记录数量
+     */
+    int deleteChatInfoByMemoryId(Long memoryId);
+
+    /**
      * 删除指定memoryId和chatType的聊天记录
-     * 用于清理默认的general类型记录，保留意图匹配的类型
+     * 用于清理特定类型的记录
      * @param memoryId 对话对应的memoryId
      * @param chatType 聊天类型
      * @return 删除的记录数量

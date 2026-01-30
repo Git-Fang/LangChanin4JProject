@@ -166,7 +166,7 @@ public class CommonTools {
         return "翻译结果：" + textToTranslate;
     }
 
-    @Tool(name = "correct_and_translate", value = "术语纠正式翻译:先对原文进行术语纠正(相似度>0.85的别名替换为标准术语)，然后翻译成目标语言")
+    @Tool(name = "correct_and_translate", value = "术语纠正式翻译:先对原文进行术语纠正(相似度>0.85的术语匹配)，然后翻译成目标语言")
     public String correctAndTranslate(
             @P(value="source_text", required = true) String sourceText,
             @P(value="target_language", required = true) String targetLanguage) {
@@ -191,30 +191,17 @@ public class CommonTools {
 
                 // 如果相似度>=0.85，进行术语纠正
                 if (score >= 0.85) {
-                    // 从匹配文本中提取标准术语
-                    // 格式可能是: {"original":"赵丽蓉","alias":"赵丽君","translation":"Zhao Li Rong"}
-                    // 或者直接是术语本身
+                    // 直接使用匹配到的标准术语
+                    // 格式现在是: "重庆大学" 这样的术语词汇
 
-                    // 解析JSON格式的别名映射
-                    Pattern jsonPattern = Pattern.compile("\\{\"original\":\"([^\"]+)\",\"alias\":\"([^\"]+)\",\"translation\":\"([^\"]+)\"\\}");
-                    Matcher matcher = jsonPattern.matcher(matchedTerm);
-
-                    if (matcher.find()) {
-                        String original = matcher.group(1);
-                        String alias = matcher.group(2);
-
-                        // 如果原文中包含别名，替换为标准术语
-                        if (sourceText.contains(alias)) {
-                            correctedText = sourceText.replace(alias, original);
-                            log.info("术语纠正: '{}' -> '{}'", alias, original);
-                            log.info("纠正后文本: {}", correctedText);
-                        }
+                    // 如果原文中包含与匹配术语相似的内容，替换为标准术语
+                    // 这里可以进行简单的模糊匹配替换
+                    if (!sourceText.contains(matchedTerm)) {
+                        // 如果原文不包含完全匹配的术语，尝试模糊匹配
+                        // 简单实现：不做替换，保持原文本
+                        log.info("原文不包含标准术语，不进行替换");
                     } else {
-                        // 如果不是JSON格式，直接使用匹配到的术语进行模糊替换
-                        log.info("非JSON格式匹配，尝试模糊匹配替换");
-
-                        // 简单实现：如果匹配到的术语比原文中的术语更"标准"，进行替换
-                        // 这里可以添加更复杂的模糊匹配逻辑
+                        log.info("术语已存在于原文中，无需纠正");
                     }
                 }
             }

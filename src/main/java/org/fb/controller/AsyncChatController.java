@@ -1551,9 +1551,9 @@ emitter.onError(e -> {
         }
 
         try {
-            // 先删除该memoryId对应的默认general类型记录
-            log.info("清理默认general类型记录, memoryId: {}", memoryId);
-            chatSaveService.deleteChatInfoByMemoryIdAndType(memoryId, BusinessConstant.DEFAULT_TYPE);
+            // 先删除该memoryId对应的所有类型记录，避免重复
+            log.info("清理该memoryId的所有类型记录, memoryId: {}", memoryId);
+            chatSaveService.deleteChatInfoByMemoryId(memoryId);
 
             // 再保存新的记录
             chatSaveService.saveChatInfo(memoryId, userMessage, chatType, aiResponse);

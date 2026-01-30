@@ -29,10 +29,10 @@ public class ChatSaveServiceImpl implements ChatSaveService {
         log.info("memoryId: {}, chatType: {}", memoryId, chatType);
 
         try {
-            // 先删除该memoryId对应的默认general类型记录，避免重复
-            log.info("准备清理默认general类型记录, memoryId: {}", memoryId);
-            deleteChatInfoByMemoryIdAndType(memoryId, BusinessConstant.DEFAULT_TYPE);
-            log.info("默认general类型记录清理完成");
+            // 先删除该memoryId对应的所有类型记录，避免重复
+            log.info("准备清理该memoryId的所有类型记录, memoryId: {}", memoryId);
+            deleteChatInfoByMemoryId(memoryId);
+            log.info("该memoryId的所有类型记录清理完成");
 
             SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
             String currentTime = sdf.format(new Date());
@@ -57,6 +57,31 @@ public class ChatSaveServiceImpl implements ChatSaveService {
     @Override
     public void saveChatInfo(Long memoryId, String userMessage, String chatType) {
         saveChatInfo(memoryId, userMessage, chatType, null);
+    }
+
+    @Override
+    public int deleteChatInfoByMemoryId(Long memoryId) {
+        log.info("\n=== 开始删除聊天记录(按memoryId) ===");
+        log.info("memoryId: {}", memoryId);
+
+        try {
+            String sql = "DELETE FROM chatInfo WHERE chat_memory_id = ?";
+            log.info("执行SQL: {}", sql);
+
+            int result = jdbcTemplate.update(sql, String.valueOf(memoryId));
+
+            log.info("JdbcTemplate.update返回结果: {}", result);
+            log.info("聊天记录删除成功, memoryId: {}, 删除数量: {}", memoryId, result);
+            log.info("=== 聊天记录删除完成 ===\n");
+            return result;
+        } catch (Exception e) {
+            log.error("\n=== 删除聊天记录失败 ===");
+            log.error("异常类型: {}", e.getClass().getName());
+            log.error("异常消息: {}", e.getMessage());
+            log.error("异常栈: ", e);
+            log.error("=== 删除聊天记录失败完成 ===\n");
+            return 0;
+        }
     }
 
     @Override

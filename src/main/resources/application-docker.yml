@@ -193,3 +193,18 @@ management:
     export:
       prometheus:
         enabled: true
+
+# Netty DNS解析配置 - 解决Docker环境中的DNS SERVFAIL问题
+netty:
+  dns:
+    resolver:
+      # 使用系统DNS服务器
+      use-temporary-dns-server: true
+      # DNS服务器列表
+      dns-servers: 8.8.8.8,114.114.114.114
+      # 搜索域
+      search-domains: localdomain
+      # 超时时间（毫秒）
+      query-timeout: 5000
+      # 最大重试次数
+      max-retry: 3
