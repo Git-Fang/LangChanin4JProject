@@ -50,26 +50,43 @@ public class QdrantOperationTools {
 
     @Tool(name = "embedding_term_and_save", value = "文本内容向量化、查询与保存:将传入数据{{text}}先进行向量化然后进行查询；若相似度>=0.85则不保存，否则将内容保存写入qdrant向量数据库中。")
     public void embeddingTermAndSave(@P(value = "传入数据") String text) {
+        log.info("========== 开始术语保存流程 ==========");
         log.info("embedding_term_and_save被调用，传入数据：{}", text);
+        log.info("文本长度：{} 字符", text != null ? text.length() : 0);
 
-        EmbeddingSearchResult<TextSegment> searchResult = commonTools.getMatchWordsForTerms(text);
-        log.info("向量数据库查询完成，匹配数量：{}", searchResult.matches().size());
-
-        if (searchResult.matches().isEmpty()) {
-            log.info("未找到相似内容，开始保存新数据");
-            saveTerms(text);
+        if (text == null || text.trim().isEmpty()) {
+            log.warn("传入数据为空，跳过保存");
             return;
         }
 
-        EmbeddingMatch<TextSegment> embeddingMatch = searchResult.matches().get(0);
-        log.info("相似度得分：{}; 匹配结果：{}",embeddingMatch.score(),embeddingMatch.embedded().text());
+        try {
+            log.info("步骤1：开始查询向量数据库...");
+            EmbeddingSearchResult<TextSegment> searchResult = commonTools.getMatchWordsForTerms(text);
+            int matchCount = searchResult.matches().size();
+            log.info("步骤2：向量数据库查询完成，匹配数量：{}", matchCount);
 
-        if(embeddingMatch.score() < 0.85){  // 降低相似度阈值，使新术语更容易被保存
-            saveTerms(text);
-            log.info("相似度<0.85，已保存新术语数据");
-        } else {
-            log.info("相似度>=0.85，不保存重复数据，相似度为: {}", embeddingMatch.score());
+            if (matchCount == 0) {
+                log.info("步骤3：未找到相似内容，开始保存新数据");
+                saveTerms(text);
+                log.info("步骤4：新术语保存完成");
+            } else {
+                EmbeddingMatch<TextSegment> embeddingMatch = searchResult.matches().get(0);
+                double score = embeddingMatch.score();
+                log.info("步骤3：找到{}个相似内容，最高相似度：{}", matchCount, score);
+
+                if (score < 0.85) {
+                    log.info("步骤4：相似度<0.85，开始保存新术语数据");
+                    saveTerms(text);
+                    log.info("步骤5：新术语保存完成");
+                } else {
+                    log.info("步骤4：相似度>=0.85，不保存重复数据");
+                }
+            }
+        } catch (Exception e) {
+            log.error("术语保存过程中发生错误：{}", e.getMessage(), e);
         }
+
+        log.info("========== 术语保存流程结束 ==========");
     }
 
     private void saveTerms(String text) {
@@ -96,6 +113,14 @@ public class QdrantOperationTools {
         // 2. 按段落切分
         DocumentByParagraphSplitter splitter = new DocumentByParagraphSplitter(800, 80);
         List<TextSegment> segments = splitter.split(document);
+
+        // 确保每个segment都有正确的metadata
+        for (TextSegment segment : segments) {
+            segment.metadata().put("fileName", fileName);
+            segment.metadata().put("author", "fb");
+            segment.metadata().put("type", "TERMS");
+        }
+
         log.info("文档切分完成，共{}个段落", segments.size());
 
         // 3. 分批调用 embedding（一次最多 10 条）

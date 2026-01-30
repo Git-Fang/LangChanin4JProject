@@ -17,6 +17,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
+import java.util.List;
+
 @Component
 public class CommonTools {
     private static final Logger log = LoggerFactory.getLogger(CommonTools.class);
@@ -89,18 +92,30 @@ public class CommonTools {
     }
 
     public EmbeddingSearchResult<TextSegment> getMatchWordsForTerms(String question) {
-        Embedding queryEmbedding = embeddingModel.embed(question).content();
+        log.info("开始术语向量化查询。传入数据：{}", question);
 
-        Filter typeFilter = new MetadataFilterBuilder("type").isEqualTo("TERMS");
+        try {
+            Embedding queryEmbedding = embeddingModel.embed(question).content();
+            log.info("向量化完成，embedding维度：{}", queryEmbedding.dimension());
 
-        EmbeddingSearchRequest searchRequest = EmbeddingSearchRequest.builder()
-                .queryEmbedding(queryEmbedding)
-                .maxResults(30)
-                .minScore(0.1)
-                .filter(typeFilter)
-                .build();
+            Filter typeFilter = new MetadataFilterBuilder("type").isEqualTo("TERMS");
+            log.info("创建filter：type = TERMS");
 
-        return embeddingStore.search(searchRequest);
+            EmbeddingSearchRequest searchRequest = EmbeddingSearchRequest.builder()
+                    .queryEmbedding(queryEmbedding)
+                    .maxResults(30)
+                    .minScore(0.1)
+                    .filter(typeFilter)
+                    .build();
+
+            EmbeddingSearchResult<TextSegment> result = embeddingStore.search(searchRequest);
+            log.info("术语查询完成，匹配数量：{}", result.matches().size());
+
+            return result;
+        } catch (Exception e) {
+            log.error("术语查询失败：{}", e.getMessage(), e);
+            return new EmbeddingSearchResult<>(new ArrayList<>());
+        }
     }
 
 

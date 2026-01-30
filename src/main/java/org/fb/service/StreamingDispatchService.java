@@ -54,27 +54,37 @@ public class StreamingDispatchService {
      * @param memoryId 会话ID
      * @param userMessage 用户消息
      * @return 内容块的Flux流
-     */
+      */
     public Flux<String> chat(Long memoryId, String userMessage) {
-        log.info("StreamingDispatchService.chat 开始处理, memoryId: {}, message: {}", memoryId, userMessage);
+        log.info("========== StreamingDispatchService 开始处理 ==========");
+        log.info("memoryId: {}, userMessage: {}", memoryId, userMessage);
+
+        // 检查服务是否可用
+        if (chatTypeAssistantStream == null) {
+            log.warn("ChatTypeAssistantStream 未配置，使用默认general类型");
+            chatSaveService.saveChatInfo(memoryId, userMessage, BusinessConstant.DEFAULT_TYPE);
+            return chatAssistantStream.chat(memoryId, userMessage);
+        }
 
         // 第一步：进行意图识别
         Long tempMemoryId = System.currentTimeMillis();
-        log.info("开始意图识别, tempMemoryId: {}", tempMemoryId);
+        log.info("步骤1：开始意图识别, tempMemoryId: {}", tempMemoryId);
+        log.info("待识别消息: {}", userMessage);
 
         return chatTypeAssistantStream.chat(tempMemoryId, userMessage)
                 .collectList()
                 .flatMapMany(intentChunks -> {
                     // 合并意图识别的结果
                     String intentResponse = String.join("", intentChunks);
-                    log.info("意图识别结果: {}", intentResponse);
+                    log.info("步骤2：意图识别原始响应: {}", intentResponse);
 
                     // 提取意图
                     String intent = extractIntent(intentResponse);
-                    log.info("解析出的意图: {}, 原始响应: {}", intent, intentResponse);
+                    log.info("步骤3：解析出的意图: {}, 原始响应: {}", intent, intentResponse);
+                    log.info("当前使用的服务: {}", getServiceName(intent));
 
                     // 第二步：根据意图选择业务处理服务
-                    log.info("开始选择业务处理服务, intent: {}", intent);
+                    log.info("步骤4：根据意图选择业务处理服务, intent: {}", intent);
 
                     Flux<String> resultFlux;
 
@@ -82,13 +92,18 @@ public class StreamingDispatchService {
                     log.info("准备调用chatSaveService.saveChatInfo方法，memoryId：{}，用户消息：{}，聊天类型：{}", memoryId, userMessage, intent);
                     chatSaveService.saveChatInfo(memoryId, userMessage, intent);
                     log.info("chatSaveService.saveChatInfo方法调用完成");
-                    
+
                     if (BusinessConstant.MEDICAL_TYPE.equals(intent)) {
                         log.info("选择业务处理服务: DoctorAgent");
                         resultFlux = processWithDoctorAgent(memoryId, userMessage);
                     } else if (BusinessConstant.TRANSLATION_TYPE.equals(intent)) {
                         log.info("选择业务处理服务: TranslaterService");
-                        resultFlux = processWithTranslaterService(memoryId, userMessage);
+                        if (translaterService == null) {
+                            log.warn("TranslaterService 未配置，使用ChatAssistantStream作为备选");
+                            resultFlux = chatAssistantStream.chat(memoryId, userMessage);
+                        } else {
+                            resultFlux = processWithTranslaterService(memoryId, userMessage);
+                        }
                     } else if (BusinessConstant.TERM_EXTRACTION_TYPE.equals(intent)) {
                         log.info("选择业务处理服务: TermExtractionAgent");
                         resultFlux = processWithTermExtractionAgent(userMessage);
@@ -96,12 +111,23 @@ public class StreamingDispatchService {
                         log.info("选择业务处理服务: NaturalLanguageSQLAgent");
                         resultFlux = processWithNaturalLanguageSQLAgent(userMessage);
                     } else {
-                        log.info("选择业务处理服务: ChatAssistantStream (默认)");
+                        log.info("选择业务处理服务: ChatAssistantStream (默认-general)");
                         resultFlux = chatAssistantStream.chat(memoryId, userMessage);
                     }
 
+                    log.info("========== StreamingDispatchService 处理完成 ==========");
                     return resultFlux;
                 });
+    }
+
+    private String getServiceName(String intent) {
+        return switch (intent) {
+            case "medical" -> "DoctorAgent";
+            case "translation" -> "TranslaterService";
+            case "term_extraction" -> "TermExtractionAgent";
+            case "sql_transfer" -> "NaturalLanguageSQLAgent";
+            default -> "ChatAssistantStream (general)";
+        };
     }
 
     /**

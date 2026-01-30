@@ -68,8 +68,8 @@ public class AiConf {
                     .setSize(embeddedModel.dimension())
                     .build();
             qdrantClient.createCollectionAsync(collectionName, vectorParams);
+            System.out.println("Qdrant集合创建完成: " + collectionName);
         } catch (Exception e) {
-            // 集合可能已存在，忽略错误
             System.out.println("Qdrant集合创建完成或已存在: " + e.getMessage());
         }
     }

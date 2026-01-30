@@ -61,33 +61,38 @@ public class ChatServiceImpl implements ChatService {
      * @return 意图分类
      */
     private String processByUserMeanings(Long memoryId, String userMessage) {
-        log.info("\n=== processByUserMeanings 方法开始 ===");
-        log.info("memoryId：" + memoryId + "; userMessage：" + userMessage);
+        log.info("\n========== processByUserMeanings 方法开始 ==========");
+        log.info("memoryId：{}；userMessage：{}", memoryId, userMessage);
 
         // 检查是否配置了LLM模型
         if (chatTypeAssistant == null || chatAssistant == null) {
-            log.info("未配置 LLM 模型，使用默认响应");
-            
+            log.warn("未配置 LLM 模型（chatTypeAssistant: {} 或 chatAssistant: {}），使用默认响应",
+                    chatTypeAssistant == null ? "null" : "available",
+                    chatAssistant == null ? "null" : "available");
+
             // 保存聊天信息到数据库
             saveChatInfo(memoryId, userMessage, BusinessConstant.DEFAULT_TYPE);
-            
+
             return "抱歉，聊天服务暂时不可用，请配置 LLM 模型后重试。";
         }
 
         // 为意图识别创建临时memoryId，确保意图识别不受之前会话的影响
         Long tempMemoryId = System.currentTimeMillis();
-        log.info("tempMemoryId：" + tempMemoryId);
-        
+        log.info("tempMemoryId：{}", tempMemoryId);
+
         // 调用AI模型进行意图识别
         log.info("开始调用 chatTypeAssistant.chat 进行意图识别");
         String aiResponse = chatTypeAssistant.chat(tempMemoryId, userMessage);
+        log.info("意图识别原始响应：{}", aiResponse);
+
         String lowerResponse = aiResponse.toLowerCase();
-        log.info("aiResponse：" + aiResponse + "; lowerResponse：" + lowerResponse);
-        log.info("memoryId：{}；用户意图：{}", memoryId, lowerResponse);
+        log.info("aiResponse：{}；lowerResponse：{}", aiResponse, lowerResponse);
+        log.info("memoryId：{}；用户意图原始响应：{}", memoryId, aiResponse);
 
         // 解析AI返回的JSON结果，提取intent字段
         String intent = extractIntent(aiResponse);
-        log.info("提取的意图类型：" + intent);
+        log.info("最终解析出的意图类型：{}", intent);
+        log.info("========== processByUserMeanings 方法完成 ==========\n");
 
         // 根据解析出的intent确定聊天类型
         log.info("开始确定聊天类型");
@@ -103,7 +108,7 @@ public class ChatServiceImpl implements ChatService {
         } else if (BusinessConstant.DEFAULT_TYPE.equals(intent)) {
             chatType = BusinessConstant.DEFAULT_TYPE;
         }
-        log.info("聊天类型确定完成：" + chatType);
+        log.info("聊天类型确定完成：{}", chatType);
 
         // 根据解析后的意图，选择不同的业务处理服务
         log.info("开始根据意图选择业务处理服务");
