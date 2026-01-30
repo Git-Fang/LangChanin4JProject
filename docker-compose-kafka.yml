@@ -13,8 +13,18 @@ services:
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
+      ZOOKEEPER_INIT_LIMIT: 10
+      ZOOKEEPER_SYNC_LIMIT: 2
+      ZOOKEEPER_MAX_CLIENT_CNXNS: 0
+      ZOOKEEPER_ADMIN_ENABLE_SERVER: "false"
     networks:
       - ai-network
+    healthcheck:
+      test: ["CMD-SHELL", "echo ruok | nc localhost 2181 | grep imok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   # Kafka单节点
   kafka:
@@ -33,15 +43,21 @@ services:
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
       KAFKA_LOG_DIRS: /var/lib/kafka/data
+      KAFKA_ZOOKEEPER_CONNECTION_TIMEOUT_MS: 18000
+      KAFKA_ZOOKEEPER_SESSION_TIMEOUT_MS: 18000
+      KAFKA_REQUEST_TIMEOUT_MS: 30000
+      KAFKA_RETRY_BACKOFF_MS: 500
+      KAFKA_METADATA_MAX_AGE_MS: 5000
     volumes:
       - kafka-data:/var/lib/kafka/data
     networks:
       - ai-network
     healthcheck:
-      test: ["CMD", "kafka-topics", "--bootstrap-server", "kafka:9092", "--list"]
+      test: ["CMD-SHELL", "kafka-topics --bootstrap-server kafka:9092 --list"]
       interval: 10s
       timeout: 10s
       retries: 10
+      start_period: 30s
 
   # Kafka UI管理界面（可选）
   kafka-ui:
