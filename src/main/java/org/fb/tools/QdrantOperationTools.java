@@ -50,9 +50,11 @@ public class QdrantOperationTools {
 
     @Tool(name = "embedding_term_and_save", value = "文本内容向量化、查询与保存:将传入数据{{text}}先进行向量化然后进行查询；若相似度>=0.85则不保存，否则将内容保存写入qdrant向量数据库中。")
     public void embeddingTermAndSave(@P(value = "传入数据") String text) {
+        log.info("embedding_term_and_save被调用，传入数据：{}", text);
 
         EmbeddingSearchResult<TextSegment> searchResult = commonTools.getMatchWordsForTerms(text);
-        
+        log.info("向量数据库查询完成，匹配数量：{}", searchResult.matches().size());
+
         if (searchResult.matches().isEmpty()) {
             log.info("未找到相似内容，开始保存新数据");
             saveTerms(text);
@@ -94,6 +96,7 @@ public class QdrantOperationTools {
         // 2. 按段落切分
         DocumentByParagraphSplitter splitter = new DocumentByParagraphSplitter(800, 80);
         List<TextSegment> segments = splitter.split(document);
+        log.info("文档切分完成，共{}个段落", segments.size());
 
         // 3. 分批调用 embedding（一次最多 10 条）
         int batchSize = 10;
@@ -101,11 +104,17 @@ public class QdrantOperationTools {
             int end = Math.min(i + batchSize, segments.size());
             List<TextSegment> batch = segments.subList(i, end);
 
-            // 调用 embedding API
-            List<Embedding> embeddings = embeddedModel.embedAll(batch).content();
+            try {
+                // 调用 embedding API
+                List<Embedding> embeddings = embeddedModel.embedAll(batch).content();
+                log.info("第{}批embedding完成，数量: {}", (i / batchSize) + 1, embeddings.size());
 
-            // 存入向量数据库
-            embeddingStore.addAll(embeddings, batch);
+                // 存入向量数据库
+                embeddingStore.addAll(embeddings, batch);
+                log.info("第{}批数据已保存到向量数据库", (i / batchSize) + 1);
+            } catch (Exception e) {
+                log.error("保存到向量数据库失败，批次: {}, 错误: {}", (i / batchSize) + 1, e.getMessage(), e);
+            }
         }
         return segments;
     }

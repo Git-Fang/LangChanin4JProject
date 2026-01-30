@@ -29,6 +29,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import reactor.core.publisher.Flux;
 import reactor.core.scheduler.Schedulers;
 
+import java.io.EOFException;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.HashMap;
@@ -222,11 +223,13 @@ public class AsyncChatController implements EnvironmentAware {
                     })
                     .doOnError(error -> {
                         log.error("[Standalone模式] 流式处理失败, requestId: {}", request.getRequestId(), error);
+                        String errorMessage = isEOFException(error) ?
+                            "与AI服务的连接意外断开，请稍后重试" : error.getMessage();
                         ChatResultMessage failedResult = ChatResultMessage.builder()
                                 .requestId(request.getRequestId())
                                 .memoryId(request.getMemoryId())
                                 .status(ChatResultMessage.ResultStatus.FAILED)
-                                .errorMessage(error.getMessage())
+                                .errorMessage(errorMessage)
                                 .build();
                         cacheResult(request.getRequestId(), failedResult);
                     })
@@ -234,11 +237,13 @@ public class AsyncChatController implements EnvironmentAware {
 
             } catch (Exception e) {
                 log.error("[Standalone模式] 流式处理异常, requestId: {}", request.getRequestId(), e);
+                String errorMessage = isEOFException(e) ?
+                    "与AI服务的连接意外断开，请稍后重试" : e.getMessage();
                 ChatResultMessage failedResult = ChatResultMessage.builder()
                         .requestId(request.getRequestId())
                         .memoryId(request.getMemoryId())
                         .status(ChatResultMessage.ResultStatus.FAILED)
-                        .errorMessage(e.getMessage())
+                        .errorMessage(errorMessage)
                         .build();
                 cacheResult(request.getRequestId(), failedResult);
             }
@@ -757,7 +762,8 @@ flux.publishOn(Schedulers.boundedElastic())
 
                         // 保存聊天信息到数据库
                         // 注意：这里使用general类型，因为streamingChatService不进行意图识别
-                        saveChatToDatabase(finalRequest.getMemoryId(), finalRequest.getMessage(), BusinessConstant.DEFAULT_TYPE, finalContent);
+                        // 修改：先删除该memoryId对应的默认general类型记录，保留最新的意图匹配记录
+                        cleanAndSaveChatInfo(finalRequest.getMemoryId(), finalRequest.getMessage(), BusinessConstant.DEFAULT_TYPE, finalContent);
 
                         ChatResultMessage finalResult = ChatResultMessage.builder()
                             .requestId(finalRequestId)
@@ -1527,5 +1533,143 @@ emitter.onError(e -> {
         } catch (Exception e) {
             log.error("保存流式聊天记录到MongoDB失败, memoryId: {}", memoryId, e);
         }
+    }
+
+    /**
+     * 清理并保存聊天信息到数据库
+     * 先删除该memoryId对应的默认general类型记录，再保存新的记录
+     * 解决重复保存问题：确保只保留chatType与对话意图匹配的数据
+     * @param memoryId 对话对应的memoryId
+     * @param userMessage 用户消息
+     * @param chatType 聊天类型
+     * @param aiResponse AI回复内容
+     */
+    private void cleanAndSaveChatInfo(Long memoryId, String userMessage, String chatType, String aiResponse) {
+        if (chatSaveService == null) {
+            log.warn("ChatSaveService未注入，跳过数据库保存");
+            return;
+        }
+
+        try {
+            // 先删除该memoryId对应的默认general类型记录
+            log.info("清理默认general类型记录, memoryId: {}", memoryId);
+            chatSaveService.deleteChatInfoByMemoryIdAndType(memoryId, BusinessConstant.DEFAULT_TYPE);
+
+            // 再保存新的记录
+            chatSaveService.saveChatInfo(memoryId, userMessage, chatType, aiResponse);
+            log.info("聊天记录已清理并保存到数据库, memoryId: {}, chatType: {}", memoryId, chatType);
+        } catch (Exception e) {
+            log.error("清理并保存聊天记录失败, memoryId: {}", memoryId, e);
+        }
+
+        if (mongoChatMemoryStore == null) {
+            log.warn("MongoChatMemoryStore未注入，跳过MongoDB保存");
+            return;
+        }
+
+        try {
+            List<ChatMessage> messages = new java.util.ArrayList<>();
+            messages.add(UserMessage.from(userMessage));
+            messages.add(AiMessage.from(aiResponse));
+            mongoChatMemoryStore.updateMessages(memoryId, messages);
+            log.info("流式聊天记录已保存到MongoDB, memoryId: {}", memoryId);
+        } catch (Exception e) {
+            log.error("保存流式聊天记录到MongoDB失败, memoryId: {}", memoryId, e);
+        }
+    }
+
+    /**
+     * 检查并处理EOFException
+     * 当发生EOFException时，尝试发送友好的错误消息给客户端
+     * @param error 异常
+     * @param requestId 请求ID
+     * @return 是否为EOFException
+     */
+    private boolean isEOFException(Throwable error) {
+        if (error == null) {
+            return false;
+        }
+
+        Throwable cause = error;
+        while (cause != null) {
+            if (cause instanceof EOFException) {
+                return true;
+            }
+            if (cause instanceof java.util.concurrent.CompletionException &&
+                cause.getCause() instanceof EOFException) {
+                return true;
+            }
+            if (cause instanceof RuntimeException &&
+                cause.getMessage() != null &&
+                cause.getMessage().contains("EOF")) {
+                return true;
+            }
+            cause = cause.getCause();
+        }
+
+        return false;
+    }
+
+    /**
+     * 发送EOF错误消息给客户端
+     * @param emitter SSE发射器
+     * @param requestId 请求ID
+     */
+    private void sendEOFError(SseEmitter emitter, String requestId) {
+        try {
+            sendSseEvent(emitter, "error", Map.of(
+                "status", "error",
+                "message", "与AI服务的连接意外断开。这可能是网络不稳定或服务器暂时不可用导致的。请稍后重试。",
+                "errorType", "EOFException",
+                "retryable", true
+            ));
+            sendSseEvent(emitter, "complete", Map.of("event", "complete", "reason", "connection_lost"));
+            emitter.complete();
+            sseConnections.remove(requestId);
+            log.info("EOF错误已处理并通知客户端, requestId: {}", requestId);
+        } catch (Exception e) {
+            log.debug("发送EOF错误消息失败，连接可能已关闭, requestId: {}", requestId, e);
+            emitter.complete();
+            sseConnections.remove(requestId);
+        }
+    }
+
+    /**
+     * 判断错误是否可重试
+     * @param error 错误
+     * @return 是否可重试
+     */
+    private boolean isRetryableError(Throwable error) {
+        if (error == null) {
+            return false;
+        }
+
+        if (isEOFException(error)) {
+            return true;
+        }
+
+        String message = error.getMessage();
+        if (message != null) {
+            message = message.toLowerCase();
+            if (message.contains("timeout") ||
+                message.contains("connection refused") ||
+                message.contains("connection reset") ||
+                message.contains("network is unreachable") ||
+                message.contains("service unavailable") ||
+                message.contains("503") ||
+                message.contains("429")) {
+                return true;
+            }
+        }
+
+        Throwable cause = error.getCause();
+        while (cause != null) {
+            if (isRetryableError(cause)) {
+                return true;
+            }
+            cause = cause.getCause();
+        }
+
+        return false;
     }
 }

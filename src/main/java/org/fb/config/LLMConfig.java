@@ -10,6 +10,7 @@ import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.model.embedding.onnx.allminilml6v2.AllMiniLmL6V2EmbeddingModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;
 import dev.langchain4j.model.openai.OpenAiStreamingChatModel;
+import dev.langchain4j.model.ollama.OllamaChatModel;
 import dev.langchain4j.service.spring.AiService;
 import dev.langchain4j.store.embedding.EmbeddingStore;
 import dev.langchain4j.store.embedding.qdrant.QdrantEmbeddingStore;
@@ -23,7 +24,9 @@ import org.springframework.cloud.context.config.annotation.RefreshScope;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import java.io.IOException;
 import java.time.Duration;
+import java.util.concurrent.TimeUnit;
 
 @Configuration
 @RefreshScope
@@ -69,6 +72,7 @@ public class LLMConfig {
     @Value("${ai.embeddingStore.qdrant.collectionName:ragTranslation-1226}")
     private volatile String collectionName;
 
+    private static final Duration READ_TIMEOUT = Duration.ofSeconds(180);
     private volatile ChatModel deepSeekChatModel;
     private volatile ChatModel qwenChatModel;
     private volatile StreamingChatModel streamingChatModel;
@@ -96,7 +100,7 @@ public class LLMConfig {
                 .logRequests(true)
                 .logResponses(true)
                 .baseUrl(deepSeekUrl)
-                .timeout(Duration.ofSeconds(150))
+                .timeout(READ_TIMEOUT)
                 .build();
     }
 
@@ -111,7 +115,7 @@ public class LLMConfig {
                     .baseUrl(dashscopeUrl)
                     .logRequests(true)
                     .logResponses(true)
-                    .timeout(Duration.ofSeconds(150))
+                    .timeout(READ_TIMEOUT)
                     .build();
         }
     }
@@ -127,17 +131,17 @@ public class LLMConfig {
                     .logRequests(true)
                     .logResponses(true)
                     .baseUrl(dashscopeUrl)
-                    .timeout(Duration.ofSeconds(150))
+                    .timeout(READ_TIMEOUT)
                     .build();
         }
     }
 
     private void refreshOllamaChatModel() {
-        this.ollamaChatModel = dev.langchain4j.model.ollama.OllamaChatModel.builder()
+        this.ollamaChatModel = OllamaChatModel.builder()
                 .baseUrl(ollamaUrl)
                 .modelName(ollamaModel)
                 .temperature(0.8)
-                .timeout(Duration.ofSeconds(150))
+                .timeout(READ_TIMEOUT)
                 .logRequests(true)
                 .logResponses(true)
                 .build();
@@ -150,7 +154,7 @@ public class LLMConfig {
                 .logRequests(true)
                 .logResponses(true)
                 .baseUrl(kimiUrl)
-                .timeout(Duration.ofSeconds(150))
+                .timeout(READ_TIMEOUT)
                 .build();
     }
 
