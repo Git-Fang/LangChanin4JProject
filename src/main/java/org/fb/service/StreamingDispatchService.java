@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.fb.constant.BusinessConstant;
 import org.fb.service.assistant.*;
 import org.fb.service.impl.NL2SQLService;
+import org.fb.tools.QdrantOperationTools;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
@@ -46,6 +47,9 @@ public class StreamingDispatchService {
     
     @Autowired
     private ChatSaveService chatSaveService;
+
+    @Autowired
+    private QdrantOperationTools qdrantOperationTools;
 
     /**
      * 流式处理用户消息
@@ -207,14 +211,14 @@ public class StreamingDispatchService {
     private Flux<String> processWithTermExtractionAgent(String userMessage) {
         log.info("调用TermExtractionAgent.chat, message: {}", userMessage);
         try {
-            // 使用临时的memoryId，因为术语提取不需要记忆
             Long tempMemoryId = System.currentTimeMillis();
             String result = termExtractionAgent.chat(userMessage);
             log.info("TermExtractionAgent返回结果长度: {}", result != null ? result.length() : 0);
-            
-            // 记录术语提取操作，虽然流式服务中不直接保存到数据库
+
             log.info("术语提取完成，结果: {}", result);
-            
+            qdrantOperationTools.embeddingTermAndSave(result);
+            log.info("术语向量保存完成");
+
             return Flux.just(result != null ? result : "");
         } catch (Exception e) {
             log.error("TermExtractionAgent处理失败", e);

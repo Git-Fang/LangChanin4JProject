@@ -7,6 +7,7 @@ import org.fb.service.assistant.ChatAssistant;
 import org.fb.service.assistant.ChatAssistantStream;
 import org.fb.service.assistant.TermExtractionAgent;
 import org.fb.service.assistant.TranslaterService;
+import org.fb.tools.QdrantOperationTools;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -33,6 +34,9 @@ public class TranslationController {
 
     @Autowired
     private TermExtractionAgent termExtractionAgent;
+
+    @Autowired
+    private QdrantOperationTools qdrantOperationTools;
 
     @GetMapping(value = "/chat")
     @Operation(summary = "1-增强式对话")
@@ -98,6 +102,8 @@ public class TranslationController {
             log.info("开始术语提取: {}", content);
             String result = termExtractionAgent.chat(content);
             log.info("术语提取完成: {}", result);
+            qdrantOperationTools.embeddingTermAndSave(result);
+            log.info("术语向量保存完成");
             return result;
         } catch (Exception e) {
             log.error("术语提取出错：", e);

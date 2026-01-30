@@ -4,6 +4,7 @@ import org.fb.constant.BusinessConstant;
 import org.fb.service.ChatSaveService;
 import org.fb.service.ChatService;
 import org.fb.service.assistant.*;
+import org.fb.tools.QdrantOperationTools;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -42,6 +43,9 @@ public class ChatServiceImpl implements ChatService {
 
     @Autowired
     private ChatSaveService chatSaveService;
+
+    @Autowired
+    private QdrantOperationTools qdrantOperationTools;
 
     @Override
     public String chat(Long memoryId, String message) {
@@ -136,14 +140,15 @@ public class ChatServiceImpl implements ChatService {
             saveChatInfo(memoryId, userMessage, BusinessConstant.TRANSLATION_TYPE);
             log.info("翻译完成，聊天信息已保存");
         } else if (BusinessConstant.TERM_EXTRACTION_TYPE.equals(intent) && termExtractionAgent != null) {
-            // 术语提取相关业务，使用术语提取助手（不传递memoryId，避免上下文干扰）
             log.info("选择业务处理服务：TermExtractionAgent");
             result = termExtractionAgent.chat(userMessage);
             
-            // 保存聊天信息到数据库
             log.info("准备调用saveChatInfo方法，memoryId：" + memoryId + "，用户消息：" + userMessage + "，聊天类型：" + BusinessConstant.TERM_EXTRACTION_TYPE);
             saveChatInfo(memoryId, userMessage, BusinessConstant.TERM_EXTRACTION_TYPE);
             log.info("术语提取完成，聊天信息已保存");
+
+            qdrantOperationTools.embeddingTermAndSave(result);
+            log.info("术语向量保存完成");
         } else if (BusinessConstant.SQL_OPERATION_TYPE.equals(intent)) {
             // 自然语言转为sql
             log.info("选择业务处理服务：NL2SQLService");
