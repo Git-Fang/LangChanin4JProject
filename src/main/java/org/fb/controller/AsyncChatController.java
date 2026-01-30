@@ -13,9 +13,11 @@ import org.fb.service.ChatSaveService;
 import org.fb.service.ChatService;
 import org.fb.service.StreamingChatService;
 import org.fb.service.StreamingDispatchService;
+import org.fb.service.assistant.ChatTypeAssistant;
 import org.fb.service.kafka.ChatRequestProducer;
 import org.fb.service.kafka.StandaloneChatRequestProducer;
 import org.fb.tools.MongoChatMemoryStore;
+import org.fb.constant.BusinessConstant;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.EnvironmentAware;
 import org.springframework.context.annotation.Lazy;
@@ -35,6 +37,8 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.fb.config.RedisHealthIndicator;
 
@@ -53,6 +57,9 @@ public class AsyncChatController implements EnvironmentAware {
     private final ChatSaveService chatSaveService;
     private final MongoChatMemoryStore mongoChatMemoryStore;
     private final RedisHealthIndicator redisHealthIndicator;
+    
+    @Autowired
+    private ChatTypeAssistant chatTypeAssistant;
 
     private Environment environment;
 
@@ -668,7 +675,8 @@ flux.publishOn(Schedulers.boundedElastic())
                         String finalContent = accumulated.get();
 
                         // 保存聊天信息到数据库
-                        saveChatToDatabase(finalRequest.getMemoryId(), finalRequest.getMessage(), finalContent);
+                        // 注意：streamingDispatchService内部已经处理了意图识别和数据库保存
+                        // 所以这里不需要再次保存
 
                         ChatResultMessage finalResult = ChatResultMessage.builder()
                             .requestId(finalRequestId)
@@ -748,7 +756,8 @@ flux.publishOn(Schedulers.boundedElastic())
                         String finalContent = accumulated.get();
 
                         // 保存聊天信息到数据库
-                        saveChatToDatabase(finalRequest.getMemoryId(), finalRequest.getMessage(), finalContent);
+                        // 注意：这里使用general类型，因为streamingChatService不进行意图识别
+                        saveChatToDatabase(finalRequest.getMemoryId(), finalRequest.getMessage(), BusinessConstant.DEFAULT_TYPE, finalContent);
 
                         ChatResultMessage finalResult = ChatResultMessage.builder()
                             .requestId(finalRequestId)
@@ -1266,7 +1275,8 @@ if (streamingDispatchService != null) {
                         String finalContent = accumulated.get();
 
                         // 保存聊天信息到数据库
-                        saveChatToDatabase(memoryId, message, finalContent);
+                        // 注意：这里使用general类型，因为这是HTTP流式处理，不进行意图识别
+                        saveChatToDatabase(memoryId, message, BusinessConstant.DEFAULT_TYPE, finalContent);
 
                         ChatResultMessage finalResult = ChatResultMessage.builder()
                             .requestId(requestId)
@@ -1347,7 +1357,8 @@ flux.publishOn(Schedulers.boundedElastic())
                         String finalContent = accumulated.get();
 
                         // 保存聊天信息到数据库
-                        saveChatToDatabase(memoryId, message, finalContent);
+                        // 注意：这里使用general类型，因为这是HTTP流式处理，不进行意图识别
+                        saveChatToDatabase(memoryId, message, BusinessConstant.DEFAULT_TYPE, finalContent);
 
                         ChatResultMessage finalResult = ChatResultMessage.builder()
                             .requestId(requestId)
@@ -1487,16 +1498,17 @@ emitter.onError(e -> {
      * 保存聊天信息到数据库
      * @param memoryId 对话对应的memoryId
      * @param userMessage 用户消息
+     * @param chatType 聊天类型
      * @param aiResponse AI回复内容
      */
-    private void saveChatToDatabase(Long memoryId, String userMessage, String aiResponse) {
+    private void saveChatToDatabase(Long memoryId, String userMessage, String chatType, String aiResponse) {
         if (chatSaveService == null) {
             log.warn("ChatSaveService未注入，跳过数据库保存");
         }
         
         try {
-            chatSaveService.saveChatInfo(memoryId, userMessage, "general", aiResponse);
-            log.info("流式聊天记录已保存到数据库, memoryId: {}", memoryId);
+            chatSaveService.saveChatInfo(memoryId, userMessage, chatType, aiResponse);
+            log.info("流式聊天记录已保存到数据库, memoryId: {}, chatType: {}", memoryId, chatType);
         } catch (Exception e) {
             log.error("保存流式聊天记录失败, memoryId: {}", memoryId, e);
         }

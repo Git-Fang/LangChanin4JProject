@@ -21,11 +21,11 @@ import dev.langchain4j.service.spring.AiServiceWiringMode;
 public interface TranslaterService {
 
     @SystemMessage(fromResource = "translate-prompt.txt")
-    @UserMessage("请基于向量数据中type为TERMS的过滤查询相似向量数据完成该次翻译：{{userMessage}}")
+    @UserMessage("{{userMessage}}")
     String translate(String userMessage);
 
     @SystemMessage(fromResource = "translate-prompt.txt")
-    @UserMessage("请基于向量数据中type为TERMS的过滤查询相似向量数据完成该次翻译：{{userMessage}}")
+    @UserMessage("{{userMessage}}")
     String translate(@MemoryId long memoryId,  @V("userMessage") String userMessage);
 
 }

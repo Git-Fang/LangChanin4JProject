@@ -18,13 +18,9 @@ import dev.langchain4j.service.spring.AiServiceWiringMode;
 )
 public interface TermExtractionAgent {
 
+    @Tool(name = "term_exact", value="提取术语词汇并保存到向量数据库:从传入数据{{userMessage}}中提取符合规范的术语词汇，并调用qdrantOperationTools.embeddingTermAndSave进行重复查询与保存操作")
     @SystemMessage(fromResource = "termExtractionAgent-prompt-template.txt")
     public String chat(@UserMessage String userMessage);
-
-
-    @Tool(name = "term_exact", value="提取术语词汇:从传入数据{{question}}中提取符合规范的术语词汇")
-    @SystemMessage(fromResource = "termExtractionAgent-prompt-template.txt")
-    public String chatWithTermTool(  @UserMessage String userMessage);
 }
 
 

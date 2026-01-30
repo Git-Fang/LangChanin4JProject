@@ -105,11 +105,6 @@ public class ChatServiceImpl implements ChatService {
         }
         log.info("聊天类型确定完成：" + chatType);
 
-        // 保存聊天信息到数据库
-        log.info("准备调用saveChatInfo方法，memoryId：" + memoryId + "，用户消息：" + userMessage + "，聊天类型：" + chatType);
-        saveChatInfo(memoryId, userMessage, chatType);
-        log.info("saveChatInfo方法调用完成");
-
         // 根据解析后的意图，选择不同的业务处理服务
         log.info("开始根据意图选择业务处理服务");
         String result;
@@ -117,27 +112,33 @@ public class ChatServiceImpl implements ChatService {
             // 医疗相关业务，使用医生助手
             log.info("选择业务处理服务：DoctorAgent");
             result = doctorAgent.chat(memoryId, userMessage);
+            // 保存聊天信息到数据库
+            log.info("准备调用saveChatInfo方法，memoryId：" + memoryId + "，用户消息：" + userMessage + "，聊天类型：" + chatType);
+            saveChatInfo(memoryId, userMessage, chatType);
+            log.info("saveChatInfo方法调用完成");
         } else if (BusinessConstant.TRANSLATION_TYPE.equals(intent) && translaterService != null) {
             // 翻译相关业务，使用翻译服务
             log.info("选择业务处理服务：TranslaterService");
-            // 检查用户消息是否是询问是否可以翻译，而不是需要翻译的文本
-            String lowerMessage = userMessage.toLowerCase();
-            if (lowerMessage.contains("可以帮我翻译吗") || lowerMessage.contains("能帮我翻译吗") || lowerMessage.contains("是否可以翻译") || lowerMessage.contains("能不能翻译")) {
-                // 如果是询问是否可以翻译，使用普通聊天助手回复
-                log.info("用户询问是否可以翻译，使用ChatAssistant回复");
-                result = chatAssistant != null ? chatAssistant.chat(memoryId, userMessage) : "是的，我可以帮您翻译。请提供您需要翻译的文本。";
-            } else {
-                // 否则使用翻译服务
-                result = translaterService.translate(memoryId, userMessage);
-            }
+            // 处理用户输入格式，提取实际需要翻译的文本
+            // 用户可能输入类似"翻译成英文：具体文本"的格式
+            String actualTextToTranslate = extractTextForTranslation(userMessage);
+            log.info("提取的待翻译文本：{}", actualTextToTranslate);
+            
+            result = translaterService.translate(memoryId, actualTextToTranslate);
+            
+            // 保存聊天信息到数据库
+            log.info("准备调用saveChatInfo方法，memoryId：" + memoryId + "，用户消息：" + userMessage + "，聊天类型：" + BusinessConstant.TRANSLATION_TYPE);
+            saveChatInfo(memoryId, userMessage, BusinessConstant.TRANSLATION_TYPE);
+            log.info("翻译完成，聊天信息已保存");
         } else if (BusinessConstant.TERM_EXTRACTION_TYPE.equals(intent) && termExtractionAgent != null) {
             // 术语提取相关业务，使用术语提取助手（不传递memoryId，避免上下文干扰）
             log.info("选择业务处理服务：TermExtractionAgent");
             result = termExtractionAgent.chat(userMessage);
             
-            // 特殊处理：术语提取后，确保chatType为term_extraction
-            log.info("术语提取完成，重新保存聊天信息，确保chatType为term_extraction");
+            // 保存聊天信息到数据库
+            log.info("准备调用saveChatInfo方法，memoryId：" + memoryId + "，用户消息：" + userMessage + "，聊天类型：" + BusinessConstant.TERM_EXTRACTION_TYPE);
             saveChatInfo(memoryId, userMessage, BusinessConstant.TERM_EXTRACTION_TYPE);
+            log.info("术语提取完成，聊天信息已保存");
         } else if (BusinessConstant.SQL_OPERATION_TYPE.equals(intent)) {
             // 自然语言转为sql
             log.info("选择业务处理服务：NL2SQLService");
@@ -179,6 +180,7 @@ public class ChatServiceImpl implements ChatService {
             // 未配置聊天助手
             result = "抱歉，聊天服务暂时不可用，请配置 LLM 模型后重试。";
         }
+
         log.info("业务处理服务返回结果：" + result);
         log.info("=== processByUserMeanings 方法完成 ===\n");
         return result;
@@ -224,6 +226,42 @@ public class ChatServiceImpl implements ChatService {
 
         // 默认返回general
         return BusinessConstant.DEFAULT_TYPE;
+    }
+
+    /**
+     * 从用户输入中提取待翻译的文本
+     * 处理如"翻译成英文：具体文本"或"翻译成中文：具体文本"等格式
+     * @param userInput 用户原始输入
+     * @return 待翻译的实际文本
+     */
+    private String extractTextForTranslation(String userInput) {
+        if (userInput == null || userInput.trim().isEmpty()) {
+            return userInput;
+        }
+        
+        // 正则表达式匹配各种翻译格式
+        // 匹配"翻译成[语言]：[文本]"或"翻译[语言]：[文本]"等格式
+        Pattern pattern = Pattern.compile("^[^：]*[语英中文日法德韩俄西阿葡][\u4e00-\ufffd]*[：:]\s*(.*)$");
+        Matcher matcher = pattern.matcher(userInput.trim());
+        
+        if (matcher.find()) {
+            String extractedText = matcher.group(1).trim();
+            if (!extractedText.isEmpty()) {
+                return extractedText;
+            }
+        }
+        
+        // 如果正则匹配失败，尝试简单的分割方式
+        String[] parts = userInput.split("[：:]", 2);
+        if (parts.length > 1) {
+            String candidate = parts[1].trim();
+            if (!candidate.isEmpty()) {
+                return candidate;
+            }
+        }
+        
+        // 如果都无法提取，返回原始输入
+        return userInput;
     }
 
 /**

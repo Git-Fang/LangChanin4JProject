@@ -181,9 +181,8 @@ public class QdrantOperationTools {
             Files.write(filePath, text.getBytes("UTF-8"));
             log.info("文本内容保存成功: 文件名{} 保存至{}", uniqueFileName, filePath);
 
-            // 返回文件的URL信息
-            String fileUrl = storagePath + uniqueFileName; // fileUrlPrefix需要在类中定义，如"/files/"
-            return fileUrl;
+            // 返回文件的绝对路径
+            return filePath.toString();
 
         } catch (IOException e) {
             log.error("文本内容保存失败", e);

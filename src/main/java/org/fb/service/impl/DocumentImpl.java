@@ -655,7 +655,7 @@ public class DocumentImpl implements DocumentService {
                     final String chunk = textChunks.get(i);
                     CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
                         log.info("处理第 {} / {} 个文本块，文本长度: {}", chunkIndex + 1, totalChunks, chunk.length());
-                        String terms = termExtractionAgent.chatWithTermTool(chunk);
+                        String terms = termExtractionAgent.chat(chunk);
                         if (terms != null && !terms.isEmpty()) {
                             allTermsList.add(terms);
                             log.info("第 {} 个文本块术语提取完成，术语长度: {}", chunkIndex + 1, terms.length());

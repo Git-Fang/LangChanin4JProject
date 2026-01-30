@@ -94,11 +94,6 @@ public class FallbackConfig {
             public String chat(String userMessage) {
                 return "抱歉，术语提取服务暂时不可用，请配置 LLM 模型后重试。";
             }
-
-            @Override
-            public String chatWithTermTool(String userMessage) {
-                return "抱歉，术语提取服务暂时不可用，请配置 LLM 模型后重试。";
-            }
         };
     }
 

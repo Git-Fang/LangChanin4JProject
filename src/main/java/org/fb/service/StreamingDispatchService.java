@@ -43,6 +43,9 @@ public class StreamingDispatchService {
 
     @Autowired
     private ChatMemoryProvider chatMemoryProvider;
+    
+    @Autowired
+    private ChatSaveService chatSaveService;
 
     /**
      * 流式处理用户消息
@@ -75,6 +78,11 @@ public class StreamingDispatchService {
 
                     Flux<String> resultFlux;
 
+                    // 保存聊天信息到数据库
+                    log.info("准备调用chatSaveService.saveChatInfo方法，memoryId：{}，用户消息：{}，聊天类型：{}", memoryId, userMessage, intent);
+                    chatSaveService.saveChatInfo(memoryId, userMessage, intent);
+                    log.info("chatSaveService.saveChatInfo方法调用完成");
+                    
                     if (BusinessConstant.MEDICAL_TYPE.equals(intent)) {
                         log.info("选择业务处理服务: DoctorAgent");
                         resultFlux = processWithDoctorAgent(memoryId, userMessage);
@@ -117,13 +125,54 @@ public class StreamingDispatchService {
     private Flux<String> processWithTranslaterService(Long memoryId, String userMessage) {
         log.info("调用TranslaterService.translate, memoryId: {}, message: {}", memoryId, userMessage);
         try {
-            String result = translaterService.translate(memoryId, userMessage);
+            // 处理用户输入格式，提取实际需要翻译的文本
+            // 用户可能输入类似"翻译成英文：具体文本"的格式
+            String actualTextToTranslate = extractTextForTranslation(userMessage);
+            log.info("提取的待翻译文本：{}", actualTextToTranslate);
+            
+            String result = translaterService.translate(memoryId, actualTextToTranslate);
             log.info("TranslaterService返回结果长度: {}", result != null ? result.length() : 0);
             return Flux.just(result != null ? result : "");
         } catch (Exception e) {
             log.error("TranslaterService处理失败", e);
             return Flux.just("抱歉，翻译处理时出现错误: " + e.getMessage());
         }
+    }
+    
+    /**
+     * 从用户输入中提取待翻译的文本
+     * 处理如"翻译成英文：具体文本"或"翻译成中文：具体文本"等格式
+     * @param userInput 用户原始输入
+     * @return 待翻译的实际文本
+     */
+    private String extractTextForTranslation(String userInput) {
+        if (userInput == null || userInput.trim().isEmpty()) {
+            return userInput;
+        }
+        
+        // 正则表达式匹配各种翻译格式
+        // 匹配"翻译成[语言]：[文本]"或"翻译[语言]：[文本]"等格式
+        Pattern pattern = Pattern.compile("^[^：]*[语英中文日法德韩俄西阿葡][\\u4e00-\\ufffd]*[：:]\\s*(.*)$");
+        Matcher matcher = pattern.matcher(userInput.trim());
+        
+        if (matcher.find()) {
+            String extractedText = matcher.group(1).trim();
+            if (!extractedText.isEmpty()) {
+                return extractedText;
+            }
+        }
+        
+        // 如果正则匹配失败，尝试简单的分割方式
+        String[] parts = userInput.split("[：:]", 2);
+        if (parts.length > 1) {
+            String candidate = parts[1].trim();
+            if (!candidate.isEmpty()) {
+                return candidate;
+            }
+        }
+        
+        // 如果都无法提取，返回原始输入
+        return userInput;
     }
 
     /**
@@ -132,6 +181,8 @@ public class StreamingDispatchService {
     private Flux<String> processWithTermExtractionAgent(String userMessage) {
         log.info("调用TermExtractionAgent.chat, message: {}", userMessage);
         try {
+            // 使用临时的memoryId，因为术语提取不需要记忆
+            Long tempMemoryId = System.currentTimeMillis();
             String result = termExtractionAgent.chat(userMessage);
             log.info("TermExtractionAgent返回结果长度: {}", result != null ? result.length() : 0);
             

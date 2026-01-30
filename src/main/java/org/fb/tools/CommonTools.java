@@ -60,7 +60,7 @@ public class CommonTools {
 
         if (searchResult.matches().isEmpty()) {
             log.info("未查询到相关术语数据");
-            return "术语数据库查无相关数据";
+            return "NO_TERMS_FOUND";
         }
 
         StringBuilder result = new StringBuilder();
