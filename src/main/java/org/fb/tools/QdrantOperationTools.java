@@ -74,12 +74,12 @@ public class QdrantOperationTools {
                 double score = embeddingMatch.score();
                 log.info("步骤3：找到{}个相似内容，最高相似度：{}", matchCount, score);
 
-                if (score < 0.85) {
-                    log.info("步骤4：相似度<0.85，开始保存新术语数据");
+                if (score < 0.9) {
+                    log.info("步骤4：相似度<0.9，开始保存新术语数据");
                     saveTerms(text);
                     log.info("步骤5：新术语保存完成");
                 } else {
-                    log.info("步骤4：相似度>=0.85，不保存重复数据");
+                    log.info("步骤4：相似度>=0.9，不保存重复数据");
                 }
             }
         } catch (Exception e) {

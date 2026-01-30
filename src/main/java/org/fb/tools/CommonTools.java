@@ -108,7 +108,7 @@ public class CommonTools {
             EmbeddingSearchRequest searchRequest = EmbeddingSearchRequest.builder()
                     .queryEmbedding(queryEmbedding)
                     .maxResults(30)
-                    .minScore(0.1)
+                    .minScore(0.7)
                     .filter(typeFilter)
                     .build();
 
