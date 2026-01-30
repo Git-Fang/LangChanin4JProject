@@ -36,6 +36,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 
+import org.fb.config.RedisHealthIndicator;
+
 @Slf4j
 @RestController
 @RequestMapping("/xiaozhi")
@@ -50,6 +52,7 @@ public class AsyncChatController implements EnvironmentAware {
     private final StreamingDispatchService streamingDispatchService;
     private final ChatSaveService chatSaveService;
     private final MongoChatMemoryStore mongoChatMemoryStore;
+    private final RedisHealthIndicator redisHealthIndicator;
 
     private Environment environment;
 
@@ -63,7 +66,8 @@ public class AsyncChatController implements EnvironmentAware {
             @Autowired(required = false) StreamingChatService streamingChatService,
             @Autowired(required = false) StreamingDispatchService streamingDispatchService,
             @Autowired(required = false) ChatSaveService chatSaveService,
-            MongoChatMemoryStore mongoChatMemoryStore) {
+            MongoChatMemoryStore mongoChatMemoryStore,
+            RedisHealthIndicator redisHealthIndicator) {
         this.requestProducer = requestProducer;
         this.standaloneRequestProducer = standaloneRequestProducer;
         this.redisTemplate = redisTemplate;
@@ -73,6 +77,7 @@ public class AsyncChatController implements EnvironmentAware {
         this.streamingDispatchService = streamingDispatchService;
         this.chatSaveService = chatSaveService;
         this.mongoChatMemoryStore = mongoChatMemoryStore;
+        this.redisHealthIndicator = redisHealthIndicator;
     }
 
     @Override
@@ -100,6 +105,8 @@ public class AsyncChatController implements EnvironmentAware {
     private static final long SSE_TIMEOUT = 600000L; // 10分钟
     
     private static final ConcurrentHashMap<String, SseEmitter> sseConnections = new ConcurrentHashMap<>();
+    // 内存缓存，用于Redis不可用时的降级方案
+    private static final ConcurrentHashMap<String, ChatRequestMessage> memoryCache = new ConcurrentHashMap<>();
     
     @PostMapping("/chat/async")
     public Map<String, Object> asyncChat(@RequestBody ChatForm chatForm) {
@@ -117,9 +124,15 @@ public class AsyncChatController implements EnvironmentAware {
 
         try {
             String requestJson = objectMapper.writeValueAsString(request);
-            redisTemplate.opsForValue().set("chat:request:" + request.getRequestId(), requestJson, RESULT_TTL);
+            boolean savedToRedis = safeSetRedisValue("chat:request:" + request.getRequestId(), requestJson, RESULT_TTL);
+            
+            // 无论Redis是否可用，都将请求保存到内存缓存中作为降级方案
+            memoryCache.put(request.getRequestId(), request);
+            log.info("请求数据已保存, requestId: {}, Redis保存: {}", request.getRequestId(), savedToRedis);
         } catch (Exception e) {
             log.error("保存请求数据失败, requestId: {}", request.getRequestId(), e);
+            // 即使发生异常，也要将请求保存到内存缓存中
+            memoryCache.put(request.getRequestId(), request);
         }
 
         if (isStandalone()) {
@@ -321,15 +334,26 @@ public class AsyncChatController implements EnvironmentAware {
     }
     
     private void cacheResult(String requestId, ChatResultMessage result) {
+        if (!redisHealthIndicator.isRedisAvailable()) {
+            log.warn("Redis不可用，跳过缓存结果, requestId: {}", requestId);
+            return;
+        }
+        
         try {
             String jsonResult = objectMapper.writeValueAsString(result);
             redisTemplate.opsForValue().set(RESULT_CACHE_PREFIX + requestId, jsonResult, RESULT_TTL);
         } catch (Exception e) {
             log.error("缓存结果失败, requestId: {}", requestId, e);
+            redisHealthIndicator.markRedisUnavailable();
         }
     }
     
     private void updateStreamContent(String requestId, String content) {
+        if (!redisHealthIndicator.isRedisAvailable()) {
+            log.warn("Redis不可用，跳过更新流式内容, requestId: {}", requestId);
+            return;
+        }
+        
         try {
             String cacheKey = STREAM_CACHE_PREFIX + requestId;
             String existingContent = redisTemplate.opsForValue().get(cacheKey);
@@ -337,16 +361,58 @@ public class AsyncChatController implements EnvironmentAware {
             redisTemplate.opsForValue().set(cacheKey, newContent, RESULT_TTL);
         } catch (Exception e) {
             log.error("更新流式内容失败, requestId: {}", requestId, e);
+            redisHealthIndicator.markRedisUnavailable();
         }
     }
     
     private String getStreamContent(String requestId) {
+        if (!redisHealthIndicator.isRedisAvailable()) {
+            log.warn("Redis不可用，返回空流式内容, requestId: {}", requestId);
+            return "";
+        }
+        
         try {
             String cacheKey = STREAM_CACHE_PREFIX + requestId;
             return redisTemplate.opsForValue().get(cacheKey);
         } catch (Exception e) {
             log.error("获取流式内容失败, requestId: {}", requestId, e);
+            redisHealthIndicator.markRedisUnavailable();
             return "";
+        }
+    }
+    
+    /**
+     * 安全地获取Redis值
+     */
+    private String safeGetRedisValue(String key) {
+        if (!redisHealthIndicator.isRedisAvailable()) {
+            return null;
+        }
+        
+        try {
+            return redisTemplate.opsForValue().get(key);
+        } catch (Exception e) {
+            log.error("获取Redis值失败, key: {}", key, e);
+            redisHealthIndicator.markRedisUnavailable();
+            return null;
+        }
+    }
+    
+    /**
+     * 安全地设置Redis值
+     */
+    private boolean safeSetRedisValue(String key, String value, Duration timeout) {
+        if (!redisHealthIndicator.isRedisAvailable()) {
+            return false;
+        }
+        
+        try {
+            redisTemplate.opsForValue().set(key, value, timeout);
+            return true;
+        } catch (Exception e) {
+            log.error("设置Redis值失败, key: {}", key, e);
+            redisHealthIndicator.markRedisUnavailable();
+            return false;
         }
     }
     
@@ -367,7 +433,7 @@ public class AsyncChatController implements EnvironmentAware {
             
             log.info("SSE连接已建立, requestId: {}", requestId);
             
-            String resultJson = redisTemplate.opsForValue().get(cacheKey);
+            String resultJson = safeGetRedisValue(cacheKey);
             
             if (resultJson != null) {
                 ChatResultMessage result = objectMapper.readValue(resultJson, ChatResultMessage.class);
@@ -504,7 +570,7 @@ public class AsyncChatController implements EnvironmentAware {
             ));
             
             String cacheKey = RESULT_CACHE_PREFIX + requestId;
-            String resultJson = redisTemplate.opsForValue().get(cacheKey);
+            String resultJson = safeGetRedisValue(cacheKey);
             
             if (resultJson != null) {
                 ChatResultMessage cachedResult = objectMapper.readValue(resultJson, ChatResultMessage.class);
@@ -527,24 +593,41 @@ public class AsyncChatController implements EnvironmentAware {
             
             log.info("开始流式处理, requestId: {}", requestId);
             
-            String requestJson = redisTemplate.opsForValue().get("chat:request:" + requestId);
+            String requestJson = safeGetRedisValue("chat:request:" + requestId);
+            ChatRequestMessage request = null;
             
-            if (requestJson == null) {
-                log.warn("请求数据不存在, requestId: {}", requestId);
-                sendSseEvent(emitter, "error", Map.of(
-                    "status", "error",
-                    "message", "请求数据不存在，请重新发送消息"
-                ));
-                emitter.complete();
-                sseConnections.remove(requestId);
-                return emitter;
+            if (requestJson != null) {
+                try {
+                    request = objectMapper.readValue(requestJson, ChatRequestMessage.class);
+                } catch (Exception e) {
+                    log.error("解析请求数据失败, requestId: {}", requestId, e);
+                }
             }
             
-            ChatRequestMessage request = objectMapper.readValue(requestJson, ChatRequestMessage.class);
+            // 从内存缓存中获取请求数据（当Redis不可用时）
+            if (request == null) {
+                request = memoryCache.get(requestId);
+                if (request == null) {
+                    log.warn("请求数据不存在, requestId: {}", requestId);
+                    sendSseEvent(emitter, "error", Map.of(
+                        "status", "error",
+                        "message", "请求数据不存在，请重新发送消息"
+                    ));
+                    emitter.complete();
+                    sseConnections.remove(requestId);
+                    return emitter;
+                }
+                log.info("从内存缓存获取请求数据, requestId: {}", requestId);
+            }
 
             if (request != null && streamingDispatchService != null) {
                 log.info("使用流式分发服务(意图识别+业务分发), requestId: {}", requestId);
-                redisTemplate.opsForValue().set(STREAM_CACHE_PREFIX + requestId, "", RESULT_TTL);
+                safeSetRedisValue(STREAM_CACHE_PREFIX + requestId, "", RESULT_TTL);
+
+                final String finalRequestId = requestId;
+                final SseEmitter finalEmitter = emitter;
+                final String finalCacheKey = cacheKey;
+                final ChatRequestMessage finalRequest = request;
 
                 Flux<String> flux = streamingDispatchService.chat(request.getMemoryId(), request.getMessage());
 
@@ -558,13 +641,13 @@ flux.publishOn(Schedulers.boundedElastic())
                             String updated = current + chunk;
                             accumulated.set(updated);
 
-                            redisTemplate.opsForValue().set(
-                                STREAM_CACHE_PREFIX + requestId,
+                            safeSetRedisValue(
+                                STREAM_CACHE_PREFIX + finalRequestId,
                                 updated,
                                 RESULT_TTL
                             );
 
-                            sendSseEvent(emitter, "chunk", Map.of(
+                            sendSseEvent(finalEmitter, "chunk", Map.of(
                                 "content", chunk,
                                 "status", "streaming",
                                 "fullContent", updated,
@@ -572,24 +655,24 @@ flux.publishOn(Schedulers.boundedElastic())
                             ));
 
                             log.debug("流式内容块, requestId: {}, chunk长度: {}, 累计长度: {}",
-                                requestId, chunk.length(), updated.length());
+                                finalRequestId, chunk.length(), updated.length());
                         } catch (Exception ex) {
-                            log.error("发送流式内容块失败, requestId: {}", requestId, ex);
+                            log.error("发送流式内容块失败, requestId: {}", finalRequestId, ex);
                         }
                     })
                     .doOnComplete(() -> {
                         long processingTime = System.currentTimeMillis() - startTime.get();
                         log.info("流式处理完成, requestId: {}, 总长度: {}, 耗时: {}ms",
-                            requestId, accumulated.get().length(), processingTime);
+                            finalRequestId, accumulated.get().length(), processingTime);
 
                         String finalContent = accumulated.get();
 
                         // 保存聊天信息到数据库
-                        saveChatToDatabase(request.getMemoryId(), request.getMessage(), finalContent);
+                        saveChatToDatabase(finalRequest.getMemoryId(), finalRequest.getMessage(), finalContent);
 
                         ChatResultMessage finalResult = ChatResultMessage.builder()
-                            .requestId(requestId)
-                            .memoryId(request.getMemoryId())
+                            .requestId(finalRequestId)
+                            .memoryId(finalRequest.getMemoryId())
                             .result(finalContent)
                             .status(ChatResultMessage.ResultStatus.SUCCESS)
                             .processingTimeMs(processingTime)
@@ -597,29 +680,34 @@ flux.publishOn(Schedulers.boundedElastic())
 
                         try {
                             String jsonResult = objectMapper.writeValueAsString(finalResult);
-                            redisTemplate.opsForValue().set(cacheKey, jsonResult, RESULT_TTL);
+                            safeSetRedisValue(finalCacheKey, jsonResult, RESULT_TTL);
 
-                            processResultEvent(emitter, requestId, finalResult);
-                            emitter.complete();
+                            processResultEvent(finalEmitter, finalRequestId, finalResult);
+                            finalEmitter.complete();
                         } catch (Exception ex) {
-                            log.error("完成流式处理失败, requestId: {}", requestId, ex);
-                            emitter.completeWithError(ex);
+                            log.error("完成流式处理失败, requestId: {}", finalRequestId, ex);
+                            finalEmitter.completeWithError(ex);
                         }
-                        sseConnections.remove(requestId);
+                        sseConnections.remove(finalRequestId);
                     })
                     .doOnError(error -> {
-                        log.error("流式处理错误, requestId: {}", requestId, error);
-                        sendSseEvent(emitter, "error", Map.of(
+                        log.error("流式处理错误, requestId: {}", finalRequestId, error);
+                        sendSseEvent(finalEmitter, "error", Map.of(
                             "status", "error",
                             "message", error.getMessage()
                         ));
-                        emitter.completeWithError(error);
-                        sseConnections.remove(requestId);
+                        finalEmitter.completeWithError(error);
+                        sseConnections.remove(finalRequestId);
                     })
                     .subscribe();
             } else if (request != null && streamingChatService != null) {
                 log.info("使用原始流式处理(无意图识别), requestId: {}", requestId);
-                redisTemplate.opsForValue().set(STREAM_CACHE_PREFIX + requestId, "", RESULT_TTL);
+                safeSetRedisValue(STREAM_CACHE_PREFIX + requestId, "", RESULT_TTL);
+
+                final String finalRequestId = requestId;
+                final SseEmitter finalEmitter = emitter;
+                final String finalCacheKey = cacheKey;
+                final ChatRequestMessage finalRequest = request;
 
                 Flux<String> flux = streamingChatService.chat(request.getMemoryId(), request.getMessage());
 
@@ -633,13 +721,13 @@ flux.publishOn(Schedulers.boundedElastic())
                             String updated = current + chunk;
                             accumulated.set(updated);
 
-                            redisTemplate.opsForValue().set(
-                                STREAM_CACHE_PREFIX + requestId,
+                            safeSetRedisValue(
+                                STREAM_CACHE_PREFIX + finalRequestId,
                                 updated,
                                 RESULT_TTL
                             );
 
-                            sendSseEvent(emitter, "chunk", Map.of(
+                            sendSseEvent(finalEmitter, "chunk", Map.of(
                                 "content", chunk,
                                 "status", "streaming",
                                 "fullContent", updated,
@@ -647,24 +735,24 @@ flux.publishOn(Schedulers.boundedElastic())
                             ));
 
                             log.debug("流式内容块, requestId: {}, chunk长度: {}, 累计长度: {}",
-                                requestId, chunk.length(), updated.length());
+                                finalRequestId, chunk.length(), updated.length());
                         } catch (Exception ex) {
-                            log.error("发送流式内容块失败, requestId: {}", requestId, ex);
+                            log.error("发送流式内容块失败, requestId: {}", finalRequestId, ex);
                         }
                     })
                     .doOnComplete(() -> {
                         long processingTime = System.currentTimeMillis() - startTime.get();
                         log.info("流式处理完成, requestId: {}, 总长度: {}, 耗时: {}ms",
-                            requestId, accumulated.get().length(), processingTime);
+                            finalRequestId, accumulated.get().length(), processingTime);
 
                         String finalContent = accumulated.get();
 
                         // 保存聊天信息到数据库
-                        saveChatToDatabase(request.getMemoryId(), request.getMessage(), finalContent);
+                        saveChatToDatabase(finalRequest.getMemoryId(), finalRequest.getMessage(), finalContent);
 
                         ChatResultMessage finalResult = ChatResultMessage.builder()
-                            .requestId(requestId)
-                            .memoryId(request.getMemoryId())
+                            .requestId(finalRequestId)
+                            .memoryId(finalRequest.getMemoryId())
                             .result(finalContent)
                             .status(ChatResultMessage.ResultStatus.SUCCESS)
                             .processingTimeMs(processingTime)
@@ -672,24 +760,24 @@ flux.publishOn(Schedulers.boundedElastic())
 
                         try {
                             String jsonResult = objectMapper.writeValueAsString(finalResult);
-                            redisTemplate.opsForValue().set(cacheKey, jsonResult, RESULT_TTL);
+                            safeSetRedisValue(finalCacheKey, jsonResult, RESULT_TTL);
 
-                            processResultEvent(emitter, requestId, finalResult);
-                            emitter.complete();
+                            processResultEvent(finalEmitter, finalRequestId, finalResult);
+                            finalEmitter.complete();
                         } catch (Exception ex) {
-                            log.error("完成流式处理失败, requestId: {}", requestId, ex);
-                            emitter.completeWithError(ex);
+                            log.error("完成流式处理失败, requestId: {}", finalRequestId, ex);
+                            finalEmitter.completeWithError(ex);
                         }
-                        sseConnections.remove(requestId);
+                        sseConnections.remove(finalRequestId);
                     })
                     .doOnError(error -> {
-                        log.error("流式处理错误, requestId: {}", requestId, error);
-                        sendSseEvent(emitter, "error", Map.of(
+                        log.error("流式处理错误, requestId: {}", finalRequestId, error);
+                        sendSseEvent(finalEmitter, "error", Map.of(
                             "status", "error",
                             "message", error.getMessage()
                         ));
-                        emitter.completeWithError(error);
-                        sseConnections.remove(requestId);
+                        finalEmitter.completeWithError(error);
+                        sseConnections.remove(finalRequestId);
                     })
                     .subscribe();
             } else if (request != null) {
@@ -699,6 +787,10 @@ flux.publishOn(Schedulers.boundedElastic())
                     "status", "warning",
                     "message", "流式服务不可用，将使用普通模式处理"
                 ));
+                
+                final String finalRequestId = requestId;
+                final SseEmitter finalEmitter = emitter;
+                final ChatRequestMessage finalRequest = request;
                 
                 ChatResultMessage processingResult = ChatResultMessage.builder()
                         .requestId(requestId)
@@ -710,49 +802,49 @@ flux.publishOn(Schedulers.boundedElastic())
                 CompletableFuture.runAsync(() -> {
                     try {
                         long startTimeMs = System.currentTimeMillis();
-                        String result = chatService.chat(request.getMemoryId(), request.getMessage());
+                        String result = chatService.chat(finalRequest.getMemoryId(), finalRequest.getMessage());
                         long processingTime = System.currentTimeMillis() - startTimeMs;
                         
-                        updateStreamContent(requestId, result);
+                        updateStreamContent(finalRequestId, result);
                         
                         ChatResultMessage finalResult = ChatResultMessage.builder()
-                                .requestId(requestId)
-                                .memoryId(request.getMemoryId())
+                                .requestId(finalRequestId)
+                                .memoryId(finalRequest.getMemoryId())
                                 .result(result)
                                 .status(ChatResultMessage.ResultStatus.SUCCESS)
                                 .processingTimeMs(processingTime)
                                 .build();
                         
-                        cacheResult(requestId, finalResult);
+                        cacheResult(finalRequestId, finalResult);
                         
-                        sendSseEvent(emitter, "chunk", Map.of(
+                        sendSseEvent(finalEmitter, "chunk", Map.of(
                             "content", result,
                             "status", "streaming",
                             "fullContent", result,
                             "progress", 100
                         ));
                         
-                        processResultEvent(emitter, requestId, finalResult);
-                        emitter.complete();
-                        sseConnections.remove(requestId);
+                        processResultEvent(finalEmitter, finalRequestId, finalResult);
+                        finalEmitter.complete();
+                        sseConnections.remove(finalRequestId);
                         
-                        log.info("普通模式处理完成, requestId: {}, 耗时: {}ms", requestId, processingTime);
+                        log.info("普通模式处理完成, requestId: {}, 耗时: {}ms", finalRequestId, processingTime);
                     } catch (Exception ex) {
-                        log.error("普通模式处理失败, requestId: {}", requestId, ex);
+                        log.error("普通模式处理失败, requestId: {}", finalRequestId, ex);
                         ChatResultMessage failedResult = ChatResultMessage.builder()
-                                .requestId(requestId)
-                                .memoryId(request.getMemoryId())
+                                .requestId(finalRequestId)
+                                .memoryId(finalRequest.getMemoryId())
                                 .status(ChatResultMessage.ResultStatus.FAILED)
                                 .errorMessage(ex.getMessage())
                                 .build();
-                        cacheResult(requestId, failedResult);
+                        cacheResult(finalRequestId, failedResult);
                         
-                        sendSseEvent(emitter, "error", Map.of(
+                        sendSseEvent(finalEmitter, "error", Map.of(
                             "status", "error",
                             "message", ex.getMessage()
                         ));
-                        emitter.completeWithError(ex);
-                        sseConnections.remove(requestId);
+                        finalEmitter.completeWithError(ex);
+                        sseConnections.remove(finalRequestId);
                     }
                 });
             } else {
@@ -767,7 +859,11 @@ flux.publishOn(Schedulers.boundedElastic())
             
         } catch (Exception e) {
             log.error("SSE流初始化异常, requestId: {}", requestId, e);
-            emitter.completeWithError(e);
+            sendSseEvent(emitter, "error", Map.of(
+                "status", "error",
+                "message", "SSE流初始化失败: " + e.getMessage()
+            ));
+            emitter.complete();
             sseConnections.remove(requestId);
         }
         
@@ -925,7 +1021,8 @@ flux.publishOn(Schedulers.boundedElastic())
         try {
             if (emitter != null) {
                 String jsonData = objectMapper.writeValueAsString(data);
-                emitter.send(SseEmitter.event().name(eventName).data(jsonData));
+                // 明确指定内容类型为 application/json，避免消息转换错误
+                emitter.send(SseEmitter.event().name(eventName).data(jsonData, MediaType.APPLICATION_JSON));
             }
         } catch (Exception e) {
             log.debug("发送SSE事件失败，连接可能已关闭", e);
@@ -974,6 +1071,25 @@ flux.publishOn(Schedulers.boundedElastic())
         return response;
     }
     
+    @GetMapping(value = "/sse/count-stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter getSseCountStream() {
+        SseEmitter emitter = new SseEmitter(SSE_TIMEOUT);
+        
+        try {
+            Map<String, Object> response = new HashMap<>();
+            response.put("activeConnections", sseConnections.size());
+            response.put("timestamp", System.currentTimeMillis());
+            
+            sendSseEvent(emitter, "count", response);
+            emitter.complete();
+        } catch (Exception e) {
+            log.error("获取SSE连接数失败", e);
+            emitter.completeWithError(e);
+        }
+        
+        return emitter;
+    }
+    
     @PostMapping("/chat/http-stream")
     @Operation(summary = "HTTP流式聊天", description = "通过POST发送消息，SSE流式返回结果")
     public Map<String, Object> startHttpStreamChat(@RequestBody ChatForm chatForm) {
@@ -992,10 +1108,44 @@ flux.publishOn(Schedulers.boundedElastic())
         try {
             ChatRequestMessage request = ChatRequestMessage.create(memoryId, fullMessage);
             String requestJson = objectMapper.writeValueAsString(request);
-            redisTemplate.opsForValue().set("chat:request:" + requestId, requestJson, RESULT_TTL);
-            redisTemplate.opsForValue().set(STREAM_CACHE_PREFIX + requestId, "", RESULT_TTL);
+            boolean redisSaved = safeSetRedisValue("chat:request:" + requestId, requestJson, RESULT_TTL);
+            safeSetRedisValue(STREAM_CACHE_PREFIX + requestId, "", RESULT_TTL);
+            
+            // 当Redis保存失败时，使用内存缓存作为降级方案
+            if (!redisSaved) {
+                log.warn("Redis保存失败，使用内存缓存, requestId: {}", requestId);
+                memoryCache.put(requestId, request);
+                // 设置内存缓存过期时间（10分钟）
+                new Thread(() -> {
+                    try {
+                        Thread.sleep(10 * 60 * 1000);
+                        memoryCache.remove(requestId);
+                        log.info("内存缓存已过期并清理, requestId: {}", requestId);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                }).start();
+            }
         } catch (Exception e) {
             log.error("保存请求数据失败, requestId: {}", requestId, e);
+            // 异常时也使用内存缓存作为降级方案
+            try {
+                ChatRequestMessage request = ChatRequestMessage.create(memoryId, fullMessage);
+                memoryCache.put(requestId, request);
+                log.warn("使用内存缓存作为降级方案, requestId: {}", requestId);
+                // 设置内存缓存过期时间（10分钟）
+                new Thread(() -> {
+                    try {
+                        Thread.sleep(10 * 60 * 1000);
+                        memoryCache.remove(requestId);
+                        log.info("内存缓存已过期并清理, requestId: {}", requestId);
+                    } catch (InterruptedException ex) {
+                        Thread.currentThread().interrupt();
+                    }
+                }).start();
+            } catch (Exception ex) {
+                log.error("创建请求消息失败, requestId: {}", requestId, ex);
+            }
         }
 
         Map<String, Object> response = new HashMap<>();
@@ -1022,26 +1172,63 @@ flux.publishOn(Schedulers.boundedElastic())
             
             log.info("HTTP流式连接已建立, requestId: {}", requestId);
             
-            String requestJson = redisTemplate.opsForValue().get("chat:request:" + requestId);
+            String requestJson = safeGetRedisValue("chat:request:" + requestId);
+            ChatRequestMessage request = null;
+            Long tempMemoryId = null;
+            String tempMessage = null;
+            
             if (requestJson == null) {
-                log.warn("请求数据不存在, requestId: {}", requestId);
-                sendSseEvent(emitter, "error", Map.of(
-                    "status", "error",
-                    "message", "请求数据不存在"
-                ));
-                emitter.complete();
-                sseConnections.remove(requestId);
-                return emitter;
+                log.warn("请求数据不存在或Redis不可用, requestId: {}", requestId);
+                // 尝试从内存缓存中获取
+                request = memoryCache.get(requestId);
+                if (request != null) {
+                    log.info("从内存缓存中获取请求数据, requestId: {}", requestId);
+                    tempMemoryId = request.getMemoryId();
+                    tempMessage = request.getMessage();
+                } else {
+                    // 内存缓存也没有时，使用降级处理
+                    log.warn("内存缓存也不存在，使用降级处理, requestId: {}", requestId);
+                    tempMemoryId = System.currentTimeMillis();
+                    tempMessage = "系统服务暂时不可用，请稍后重试";
+                    log.info("使用降级模式, memoryId: {}, message: {}", tempMemoryId, tempMessage);
+                }
+            } else {
+                try {
+                    request = objectMapper.readValue(requestJson, ChatRequestMessage.class);
+                    tempMemoryId = request.getMemoryId();
+                    tempMessage = request.getMessage();
+                } catch (Exception e) {
+                    log.error("解析请求数据失败, requestId: {}", requestId, e);
+                    // 解析失败时，尝试从内存缓存中获取
+                    request = memoryCache.get(requestId);
+                    if (request != null) {
+                        log.info("解析失败，从内存缓存中获取请求数据, requestId: {}", requestId);
+                        tempMemoryId = request.getMemoryId();
+                        tempMessage = request.getMessage();
+                    } else {
+                        // 内存缓存也没有时，使用降级处理
+                        tempMemoryId = System.currentTimeMillis();
+                        tempMessage = "请求数据解析失败，请稍后重试";
+                        log.info("使用降级模式, memoryId: {}, message: {}", tempMemoryId, tempMessage);
+                    }
+                }
             }
             
-            ChatRequestMessage request = objectMapper.readValue(requestJson, ChatRequestMessage.class);
-            Long memoryId = request.getMemoryId();
-            String message = request.getMessage();
+            // 从内存缓存中获取后，清理内存缓存，避免内存泄漏
+            if (request != null) {
+                memoryCache.remove(requestId);
+                log.debug("清理内存缓存, requestId: {}", requestId);
+            }
+            
+            // 声明为final变量，供lambda表达式使用
+            final Long memoryId = tempMemoryId;
+            final String message = tempMessage;
 
 if (streamingDispatchService != null) {
                 log.info("使用流式分发服务(意图识别+业务分发)处理HTTP请求, requestId: {}", requestId);
 
-                redisTemplate.opsForValue().set(STREAM_CACHE_PREFIX + requestId, "", RESULT_TTL);
+                // 安全设置Redis值
+                safeSetRedisValue(STREAM_CACHE_PREFIX + requestId, "", RESULT_TTL);
 
                 Flux<String> flux = streamingDispatchService.chat(memoryId, message);
 
@@ -1055,11 +1242,8 @@ if (streamingDispatchService != null) {
                             String updated = current + chunk;
                             accumulated.set(updated);
 
-                            redisTemplate.opsForValue().set(
-                                STREAM_CACHE_PREFIX + requestId,
-                                updated,
-                                RESULT_TTL
-                            );
+                            // 安全更新流式内容
+                            updateStreamContent(requestId, chunk);
 
                             sendSseEvent(emitter, "chunk", Map.of(
                                 "content", chunk,
@@ -1093,8 +1277,8 @@ if (streamingDispatchService != null) {
                             .build();
 
                         try {
-                            String jsonResult = objectMapper.writeValueAsString(finalResult);
-                            redisTemplate.opsForValue().set(RESULT_CACHE_PREFIX + requestId, jsonResult, RESULT_TTL);
+                            // 安全缓存结果
+                            cacheResult(requestId, finalResult);
 
                             sendSseEvent(emitter, "result", Map.of(
                                 "requestId", requestId,
@@ -1124,25 +1308,23 @@ if (streamingDispatchService != null) {
 } else if (streamingChatService != null) {
                 log.info("使用原始流式服务处理HTTP请求(无意图识别), requestId: {}", requestId);
 
-                redisTemplate.opsForValue().set(STREAM_CACHE_PREFIX + requestId, "", RESULT_TTL);
+                // 安全设置Redis值
+                safeSetRedisValue(STREAM_CACHE_PREFIX + requestId, "", RESULT_TTL);
 
                 Flux<String> flux = streamingChatService.chat(memoryId, message);
 
                 AtomicReference<String> accumulated = new AtomicReference<>("");
                 AtomicReference<Long> startTime = new AtomicReference<>(System.currentTimeMillis());
 
-                flux.publishOn(Schedulers.boundedElastic())
+flux.publishOn(Schedulers.boundedElastic())
                     .doOnNext(chunk -> {
                         try {
                             String current = accumulated.get();
                             String updated = current + chunk;
                             accumulated.set(updated);
 
-                            redisTemplate.opsForValue().set(
-                                STREAM_CACHE_PREFIX + requestId,
-                                updated,
-                                RESULT_TTL
-                            );
+                            // 安全更新流式内容
+                            updateStreamContent(requestId, chunk);
 
                             sendSseEvent(emitter, "chunk", Map.of(
                                 "content", chunk,
@@ -1176,8 +1358,8 @@ if (streamingDispatchService != null) {
                             .build();
 
                         try {
-                            String jsonResult = objectMapper.writeValueAsString(finalResult);
-                            redisTemplate.opsForValue().set(RESULT_CACHE_PREFIX + requestId, jsonResult, RESULT_TTL);
+                            // 安全缓存结果
+                            cacheResult(requestId, finalResult);
 
                             sendSseEvent(emitter, "result", Map.of(
                                 "requestId", requestId,

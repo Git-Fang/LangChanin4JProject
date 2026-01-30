@@ -44,6 +44,7 @@ public class TraceIdFilter extends OncePerRequestFilter {
         String path = request.getRequestURI();
         return path.startsWith("/mcp/sse") 
             || path.startsWith("/mcp/messages") 
-            || path.startsWith("/xiaozhi/chat/stream");
+            || path.startsWith("/xiaozhi/chat/stream")
+            || path.startsWith("/xiaozhi/chat/streaming");
     }
 }

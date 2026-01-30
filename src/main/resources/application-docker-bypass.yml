@@ -1,21 +1,19 @@
 # Docker化时的Mass启动配置 + AI功能绕过
 # 该配置允许项目在没有AI服务的情况下启动
 
-server:
-  port: 8000
-  servlet:
-    # 设置响应的字符编码
-    encoding:
-      charset: utf-8
-      force: true
-      enabled: true
-    async-supported: true
-  tomcat:
-    connection-timeout: 180000
-
 spring:
   application:
     name: RAGTranslationApplication
+  cloud:
+    nacos:
+      config:
+        enabled: false  # 完全禁用Nacos配置
+        import-check:
+          enabled: false  # 禁用配置导入检查
+      discovery:
+        enabled: false  # 完全禁用Nacos服务发现
+    compatibility-verifier:
+      enabled: false  # 禁用Spring Cloud兼容性检查
   web:
     timeout: 240s
   servlet:
@@ -46,11 +44,25 @@ spring:
       host: ${SPRING_REDIS_HOST:localhost}
       port: ${SPRING_REDIS_PORT:6379}
 
-  rabbitmq:
-    host: ${SPRING_RABBITMQ_HOST:localhost}
-    port: ${SPRING_RABBITMQ_PORT:5672}
-    username: ${SPRING_RABBITMQ_USERNAME:admin}
-    password: ${SPRING_RABBITMQ_PASSWORD:admin}
+  # 禁用Kafka相关配置
+  kafka:
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+      group-id: ${SPRING_KAFKA_CONSUMER_GROUP_ID:test-group}
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+    producer:
+      bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+
+rabbitmq:
+  host: ${SPRING_RABBITMQ_HOST:localhost}
+  port: ${SPRING_RABBITMQ_PORT:5672}
+  username: ${SPRING_RABBITMQ_USERNAME:admin}
+  password: ${SPRING_RABBITMQ_PASSWORD:admin}
 
 # MyBatis配置
 mybatis-plus:
@@ -104,6 +116,7 @@ logging:
     dev.langchain4j: WARN
     ai.onnxruntime: WARN
     org.springframework.beans: WARN
+    org.springframework.kafka: WARN  # 降低Kafka日志级别
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} | [%thread] %-5level %logger{36} - %msg%n"
 
@@ -121,3 +134,9 @@ management:
   server:
     port: 8001
     base-path: /management
+
+# 禁用自动配置组件
+autoconfigure:
+  exclude:
+    - org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration
+    - org.springframework.boot.actuate.autoconfigure.kafka.KafkaHealthContributorAutoConfiguration

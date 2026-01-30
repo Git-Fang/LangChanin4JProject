@@ -120,7 +120,16 @@ public class ChatServiceImpl implements ChatService {
         } else if (BusinessConstant.TRANSLATION_TYPE.equals(intent) && translaterService != null) {
             // 翻译相关业务，使用翻译服务
             log.info("选择业务处理服务：TranslaterService");
-            result = translaterService.translate(memoryId, userMessage);
+            // 检查用户消息是否是询问是否可以翻译，而不是需要翻译的文本
+            String lowerMessage = userMessage.toLowerCase();
+            if (lowerMessage.contains("可以帮我翻译吗") || lowerMessage.contains("能帮我翻译吗") || lowerMessage.contains("是否可以翻译") || lowerMessage.contains("能不能翻译")) {
+                // 如果是询问是否可以翻译，使用普通聊天助手回复
+                log.info("用户询问是否可以翻译，使用ChatAssistant回复");
+                result = chatAssistant != null ? chatAssistant.chat(memoryId, userMessage) : "是的，我可以帮您翻译。请提供您需要翻译的文本。";
+            } else {
+                // 否则使用翻译服务
+                result = translaterService.translate(memoryId, userMessage);
+            }
         } else if (BusinessConstant.TERM_EXTRACTION_TYPE.equals(intent) && termExtractionAgent != null) {
             // 术语提取相关业务，使用术语提取助手（不传递memoryId，避免上下文干扰）
             log.info("选择业务处理服务：TermExtractionAgent");
