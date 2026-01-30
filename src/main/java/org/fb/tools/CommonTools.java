@@ -135,12 +135,17 @@ public class CommonTools {
         log.info("术语: {}", terms);
         log.info("术语翻译: {}", termTranslations);
 
-        String textToTranslate = sourceText;
+        String originalText = sourceText;
+        String correctedText = sourceText;
+        String matchedTerms = "无";
 
-        // 如果有术语翻译，先进行术语替换
-        if (terms != null && !terms.isEmpty() && termTranslations != null && !termTranslations.isEmpty()) {
+        if (terms != null && !terms.isEmpty() && !terms.equals("NO_SIMILAR_TERMS_FOUND")) {
+            matchedTerms = terms;
+            log.info("命中术语: {}", terms);
+        }
+
+        if (terms != null && !terms.isEmpty() && termTranslations != null && !termTranslations.isEmpty() && !termTranslations.equals("NO_TERMS_FOUND")) {
             try {
-                // 解析术语翻译 JSON: {"中国":"China","美国":"USA"}
                 Pattern jsonPattern = Pattern.compile("\"([^\"]+)\":\"([^\"]+)\"");
                 Matcher matcher = jsonPattern.matcher(termTranslations);
 
@@ -149,21 +154,18 @@ public class CommonTools {
                     termMap.put(matcher.group(1), matcher.group(2));
                 }
 
-                // 替换术语
                 for (Map.Entry<String, String> entry : termMap.entrySet()) {
-                    textToTranslate = textToTranslate.replace(entry.getKey(), entry.getValue());
+                    correctedText = correctedText.replace(entry.getKey(), entry.getValue());
                 }
-                log.info("术语替换后的文本: {}", textToTranslate);
+                log.info("术语替换后的文本: {}", correctedText);
             } catch (Exception e) {
-                log.warn("术语解析失败，直接翻译原文: {}", e.getMessage());
+                log.warn("术语解析失败: {}", e.getMessage());
             }
         }
 
         log.info("========== doTranslation 完成 ==========");
 
-        // 返回原文，让AI根据上下文生成翻译
-        // AI会根据目标语言理解需要翻译成什么
-        return "翻译结果：" + textToTranslate;
+        return String.format("RESULT|原文:%s|纠正后:%s|命中术语:%s|目标语言:%s", originalText, correctedText, matchedTerms, targetLanguage);
     }
 
     @Tool(name = "correct_and_translate", value = "术语纠正式翻译:先对原文进行术语纠正(相似度>0.85的术语匹配)，然后翻译成目标语言")
