@@ -150,6 +150,30 @@ services:
     networks:
       - ai-network
 
+  # RAGTranslation应用
+  rag-translation:
+    build: .
+    container_name: rag-translation
+    ports:
+      - "8000:8000"
+    depends_on:
+      redis:
+        condition: service_started
+      mongo:
+        condition: service_started
+      kafka:
+        condition: service_healthy
+      nacos:
+        condition: service_started
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker-bypass
+      - SPRING_REDIS_HOST=redis
+      - SPRING_DATA_MONGODB_URI=mongodb://mongo:27017/chat_db
+      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - NACOS_SERVER_ADDR=nacos:8848
+    networks:
+      - ai-network
+
   # Nacos配置中心
   nacos:
     image: nacos/nacos-server:v2.3.2

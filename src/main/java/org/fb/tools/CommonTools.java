@@ -18,7 +18,11 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Component
 public class CommonTools {
@@ -115,6 +119,157 @@ public class CommonTools {
         } catch (Exception e) {
             log.error("术语查询失败：{}", e.getMessage(), e);
             return new EmbeddingSearchResult<>(new ArrayList<>());
+        }
+    }
+
+    @Tool(name = "do_translation", value = "生成翻译结果:将source_text翻译成target_language。如果有术语，先替换再翻译；如果没有术语，直接翻译原文本")
+    public String doTranslation(
+            @P(value="source_text", required = true) String sourceText,
+            @P(value="target_language", required = true) String targetLanguage,
+            @P(value="terms", required = false) String terms,
+            @P(value="term_translations", required = false) String termTranslations) {
+
+        log.info("========== doTranslation 开始 ==========");
+        log.info("原文: {}", sourceText);
+        log.info("目标语言: {}", targetLanguage);
+        log.info("术语: {}", terms);
+        log.info("术语翻译: {}", termTranslations);
+
+        String textToTranslate = sourceText;
+
+        // 如果有术语翻译，先进行术语替换
+        if (terms != null && !terms.isEmpty() && termTranslations != null && !termTranslations.isEmpty()) {
+            try {
+                // 解析术语翻译 JSON: {"中国":"China","美国":"USA"}
+                Pattern jsonPattern = Pattern.compile("\"([^\"]+)\":\"([^\"]+)\"");
+                Matcher matcher = jsonPattern.matcher(termTranslations);
+
+                Map<String, String> termMap = new HashMap<>();
+                while (matcher.find()) {
+                    termMap.put(matcher.group(1), matcher.group(2));
+                }
+
+                // 替换术语
+                for (Map.Entry<String, String> entry : termMap.entrySet()) {
+                    textToTranslate = textToTranslate.replace(entry.getKey(), entry.getValue());
+                }
+                log.info("术语替换后的文本: {}", textToTranslate);
+            } catch (Exception e) {
+                log.warn("术语解析失败，直接翻译原文: {}", e.getMessage());
+            }
+        }
+
+        log.info("========== doTranslation 完成 ==========");
+
+        // 返回原文，让AI根据上下文生成翻译
+        // AI会根据目标语言理解需要翻译成什么
+        return "翻译结果：" + textToTranslate;
+    }
+
+    @Tool(name = "correct_and_translate", value = "术语纠正式翻译:先对原文进行术语纠正(相似度>0.85的别名替换为标准术语)，然后翻译成目标语言")
+    public String correctAndTranslate(
+            @P(value="source_text", required = true) String sourceText,
+            @P(value="target_language", required = true) String targetLanguage) {
+
+        log.info("========== correctAndTranslate 开始 ==========");
+        log.info("原文: {}", sourceText);
+        log.info("目标语言: {}", targetLanguage);
+
+        String correctedText = sourceText;
+
+        try {
+            // 第一步：提取原文中的术语
+            EmbeddingSearchResult<TextSegment> termSearchResult = getMatchWordsForTerms(sourceText);
+
+            if (!termSearchResult.matches().isEmpty()) {
+                // 找到最匹配的术语
+                EmbeddingMatch<TextSegment> bestMatch = termSearchResult.matches().get(0);
+                double score = bestMatch.score();
+                String matchedTerm = bestMatch.embedded().text();
+
+                log.info("术语匹配结果: 匹配文本='{}', 相似度={}", matchedTerm, score);
+
+                // 如果相似度>=0.85，进行术语纠正
+                if (score >= 0.85) {
+                    // 从匹配文本中提取标准术语
+                    // 格式可能是: {"original":"赵丽蓉","alias":"赵丽君","translation":"Zhao Li Rong"}
+                    // 或者直接是术语本身
+
+                    // 解析JSON格式的别名映射
+                    Pattern jsonPattern = Pattern.compile("\\{\"original\":\"([^\"]+)\",\"alias\":\"([^\"]+)\",\"translation\":\"([^\"]+)\"\\}");
+                    Matcher matcher = jsonPattern.matcher(matchedTerm);
+
+                    if (matcher.find()) {
+                        String original = matcher.group(1);
+                        String alias = matcher.group(2);
+
+                        // 如果原文中包含别名，替换为标准术语
+                        if (sourceText.contains(alias)) {
+                            correctedText = sourceText.replace(alias, original);
+                            log.info("术语纠正: '{}' -> '{}'", alias, original);
+                            log.info("纠正后文本: {}", correctedText);
+                        }
+                    } else {
+                        // 如果不是JSON格式，直接使用匹配到的术语进行模糊替换
+                        log.info("非JSON格式匹配，尝试模糊匹配替换");
+
+                        // 简单实现：如果匹配到的术语比原文中的术语更"标准"，进行替换
+                        // 这里可以添加更复杂的模糊匹配逻辑
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("术语纠正过程出错，直接翻译原文: {}", e.getMessage());
+        }
+
+        log.info("========== correctAndTranslate 完成 ==========");
+
+        // 返回纠正后的文本，让AI进行翻译
+        return "待翻译文本：" + correctedText;
+    }
+
+    @Tool(name = "find_similar_terms", value = "查找相似术语:从向量数据库中查找与输入文本相似的术语，返回相似度>=0.85的匹配结果")
+    public String findSimilarTerms(@P(value="text", required = true) String text) {
+        log.info("========== findSimilarTerms 开始 ==========");
+        log.info("查询文本: {}", text);
+
+        try {
+            EmbeddingSearchResult<TextSegment> searchResult = getMatchWordsForTerms(text);
+
+            if (searchResult.matches().isEmpty()) {
+                log.info("未找到相似术语");
+                return "NO_SIMILAR_TERMS_FOUND";
+            }
+
+            // 只返回相似度>=0.85的结果
+            StringBuilder result = new StringBuilder();
+            int matchCount = 0;
+
+            for (EmbeddingMatch<TextSegment> embeddingMatch : searchResult.matches()) {
+                double score = embeddingMatch.score();
+                String matchedText = embeddingMatch.embedded().text();
+
+                log.info("术语匹配: '{}' 相似度={}", matchedText, score);
+
+                if (score >= 0.85) {
+                    if (matchCount > 0) {
+                        result.append(" | ");
+                    }
+                    result.append(matchedText);
+                    matchCount++;
+                }
+            }
+
+            if (matchCount == 0) {
+                log.info("未找到相似度>=0.85的术语");
+                return "NO_SIMILAR_TERMS_FOUND";
+            }
+
+            log.info("找到{}个相似术语", matchCount);
+            return result.toString();
+        } catch (Exception e) {
+            log.error("查找相似术语失败: {}", e.getMessage(), e);
+            return "ERROR: " + e.getMessage();
         }
     }
 
