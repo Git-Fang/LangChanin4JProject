@@ -17,7 +17,7 @@ import java.util.concurrent.TimeUnit;
 public class WebClientConfig {
 
     private static final int CONNECT_TIMEOUT = 30;
-    private static final int READ_TIMEOUT = 300;
+    private static final int READ_TIMEOUT = 600; // 增加超时到10分钟
     private static final int MAX_IN_MEMORY_SIZE = 10 * 1024 * 1024;
 
     @Bean

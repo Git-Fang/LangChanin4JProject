@@ -72,7 +72,7 @@ public class LLMConfig {
     @Value("${ai.embeddingStore.qdrant.collectionName:ragTranslation-1226}")
     private volatile String collectionName;
 
-    private static final Duration READ_TIMEOUT = Duration.ofSeconds(180);
+    private static final Duration READ_TIMEOUT = Duration.ofSeconds(300);
     private volatile ChatModel deepSeekChatModel;
     private volatile ChatModel qwenChatModel;
     private volatile StreamingChatModel streamingChatModel;
