@@ -10,10 +10,10 @@ scrape_configs:
       - targets: ['localhost:9090']
 
   # 应用程序指标 (Docker环境使用服务名)
-  - job_name: 'rag-translation'
+  - job_name: 'ragtranslation-app'
     metrics_path: '/actuator/prometheus'
     static_configs:
-      - targets: ['rag-translation:8000']
+      - targets: ['ragtranslation-app:8000']
 
   # MongoDB指标
   - job_name: 'mongodb'

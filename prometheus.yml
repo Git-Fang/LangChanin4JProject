@@ -12,15 +12,15 @@ scrape_configs:
       - targets: ['localhost:9090']
 
   # 应用程序指标 (Docker环境)
-  - job_name: 'rag-translation'
+  - job_name: 'ragtranslation-app'
     metrics_path: '/actuator/prometheus'
     static_configs:
-      - targets: ['rag-translation:8000']
+      - targets: ['ragtranslation-app:8000']
 
   # MongoDB指标
   - job_name: 'mongodb'
     static_configs:
-      - targets: ['localhost:9216']
+      - targets: ['mongodb-exporter:9216']
     metrics_path: /metrics
     scrape_interval: 15s
     scrape_timeout: 10s
@@ -28,7 +28,7 @@ scrape_configs:
   # Redis指标
   - job_name: 'redis'
     static_configs:
-      - targets: ['localhost:9121']
+      - targets: ['redis-exporter:9121']
     metrics_path: /metrics
     scrape_interval: 15s
     scrape_timeout: 10s
