@@ -21,6 +21,8 @@ import java.util.Map;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    private static final String HEADER_PARSER_NO_BYTES_ERROR = "HTTP/1.1 header parser received no bytes";
+
     /**
      * 处理EOFException - 网络连接异常
      * 通常发生在LLM API调用时连接被远程服务器关闭
@@ -46,12 +48,33 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(IOException.class)
     public ResponseEntity<Map<String, Object>> handleIOException(
             IOException ex, WebRequest request) {
-        log.error("发生IOException: {}", ex.getMessage(), ex);
+        String errorMessage = ex.getMessage();
+        log.error("发生IOException: {}", errorMessage, ex);
 
         Map<String, Object> response = new HashMap<>();
+        String userMessage;
+        String status;
+
+        if (errorMessage != null && errorMessage.contains(HEADER_PARSER_NO_BYTES_ERROR)) {
+            userMessage = "连接错误，请检查网络后重试";
+            status = "NETWORK_ERROR";
+            log.warn("检测到HTTP header解析错误，可能的网络问题");
+        } else if (errorMessage != null && (errorMessage.contains("Connection reset") ||
+                errorMessage.contains("Broken pipe") ||
+                errorMessage.contains("Connection refused"))) {
+            userMessage = "与AI服务的连接被拒绝，请稍后重试";
+            status = "CONNECTION_REFUSED";
+        } else if (errorMessage != null && errorMessage.contains("timeout")) {
+            userMessage = "连接超时，请稍后重试";
+            status = "TIMEOUT";
+        } else {
+            userMessage = "网络通信异常，请检查网络连接后重试";
+            status = "RETRY";
+        }
+
         response.put("error", "IO异常");
-        response.put("message", "网络通信异常，请检查网络连接后重试");
-        response.put("status", "RETRY");
+        response.put("message", userMessage);
+        response.put("status", status);
         response.put("errorType", "IOException");
         response.put("path", request.getDescription(false).replace("uri=", ""));
 

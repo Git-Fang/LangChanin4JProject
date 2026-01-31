@@ -1689,6 +1689,30 @@ emitter.onError(e -> {
     }
 
     /**
+     * 发送HTTP header解析错误消息给客户端
+     * @param emitter SSE发射器
+     * @param requestId 请求ID
+     */
+    private void sendHeaderParserError(SseEmitter emitter, String requestId) {
+        try {
+            sendSseEvent(emitter, "error", Map.of(
+                "status", "error",
+                "message", "连接错误，请检查网络后重试",
+                "errorType", "HEADER_PARSER_ERROR",
+                "retryable", true
+            ));
+            sendSseEvent(emitter, "complete", Map.of("event", "complete", "reason", "header_parser_error"));
+            emitter.complete();
+            sseConnections.remove(requestId);
+            log.warn("HTTP header解析错误已处理并通知客户端, requestId: {}", requestId);
+        } catch (Exception e) {
+            log.debug("发送header解析错误消息失败，连接可能已关闭, requestId: {}", requestId, e);
+            emitter.complete();
+            sseConnections.remove(requestId);
+        }
+    }
+
+    /**
      * 判断错误是否可重试
      * @param error 错误
      * @return 是否可重试
@@ -1702,6 +1726,10 @@ emitter.onError(e -> {
             return true;
         }
 
+        if (isHeaderParserError(error)) {
+            return true;
+        }
+
         String message = error.getMessage();
         if (message != null) {
             message = message.toLowerCase();
@@ -1711,7 +1739,8 @@ emitter.onError(e -> {
                 message.contains("network is unreachable") ||
                 message.contains("service unavailable") ||
                 message.contains("503") ||
-                message.contains("429")) {
+                message.contains("429") ||
+                message.contains("no bytes")) {
                 return true;
             }
         }
@@ -1720,6 +1749,37 @@ emitter.onError(e -> {
         while (cause != null) {
             if (isRetryableError(cause)) {
                 return true;
+            }
+            cause = cause.getCause();
+        }
+
+        return false;
+    }
+
+    /**
+     * 检查是否为HTTP header解析错误
+     * @param error 错误
+     * @return 是否为header解析错误
+     */
+    private boolean isHeaderParserError(Throwable error) {
+        if (error == null) {
+            return false;
+        }
+
+        String message = error.getMessage();
+        if (message != null && message.contains("HTTP/1.1 header parser received no bytes")) {
+            return true;
+        }
+
+        Throwable cause = error.getCause();
+        while (cause != null) {
+            String causeMessage = cause.getMessage();
+            if (causeMessage != null && causeMessage.contains("HTTP/1.1 header parser received no bytes")) {
+                return true;
+            }
+            if (cause instanceof java.io.IOException &&
+                (causeMessage == null || !causeMessage.contains("header parser"))) {
+                return false;
             }
             cause = cause.getCause();
         }

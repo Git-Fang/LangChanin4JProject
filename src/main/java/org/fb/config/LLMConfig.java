@@ -42,6 +42,9 @@ public class LLMConfig {
     @Value("${ai.dashscope.base-url:https://dashscope.aliyuncs.com/compatible-mode/v1}")
     private volatile String dashscopeUrl;
 
+    @Value("${ai.dashscope.max-retries:3}")
+    private volatile int dashscopeMaxRetries;
+
     @Value("${ai.ollama.base-url:http://localhost:11434}")
     private volatile String ollamaUrl;
 
@@ -57,11 +60,17 @@ public class LLMConfig {
     @Value("${ai.deepSeek.base-url:https://api.deepseek.com/v1}")
     private volatile String deepSeekUrl;
 
+    @Value("${ai.deepSeek.max-retries:3}")
+    private volatile int deepSeekMaxRetries;
+
     @Value("${ai.kimi.model:kimi-k2-turbo-preview}")
     private volatile String kimiModel;
 
     @Value("${ai.kimi.base-url:https://api.moonshot.cn/v1}")
     private volatile String kimiUrl;
+
+    @Value("${ai.kimi.max-retries:3}")
+    private volatile int kimiMaxRetries;
 
     @Value("${ai.embeddingStore.qdrant.host:localhost}")
     private volatile String qdrantHost;
@@ -73,6 +82,7 @@ public class LLMConfig {
     private volatile String collectionName;
 
     private static final Duration READ_TIMEOUT = Duration.ofSeconds(300);
+    private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(30);
     private volatile ChatModel deepSeekChatModel;
     private volatile ChatModel qwenChatModel;
     private volatile StreamingChatModel streamingChatModel;
@@ -94,14 +104,20 @@ public class LLMConfig {
     }
 
     private void refreshDeepSeekChatModel() {
-        this.deepSeekChatModel = OpenAiChatModel.builder()
-                .apiKey(deepSeekApiKey)
-                .modelName(deepSeekModel)
-                .logRequests(true)
-                .logResponses(true)
-                .baseUrl(deepSeekUrl)
-                .timeout(READ_TIMEOUT)
-                .build();
+        if (deepSeekApiKey == null || deepSeekApiKey.isEmpty()) {
+            log.warn("DeepSeek API Key未配置，DeepSeek模型不可用");
+            this.deepSeekChatModel = null;
+        } else {
+            this.deepSeekChatModel = OpenAiChatModel.builder()
+                    .apiKey(deepSeekApiKey)
+                    .modelName(deepSeekModel)
+                    .logRequests(true)
+                    .logResponses(true)
+                    .baseUrl(deepSeekUrl)
+                    .timeout(READ_TIMEOUT)
+                    .maxRetries(deepSeekMaxRetries)
+                    .build();
+        }
     }
 
     private void refreshQwenChatModel() {
@@ -116,6 +132,7 @@ public class LLMConfig {
                     .logRequests(true)
                     .logResponses(true)
                     .timeout(READ_TIMEOUT)
+                    .maxRetries(dashscopeMaxRetries)
                     .build();
         }
     }
@@ -148,14 +165,20 @@ public class LLMConfig {
     }
 
     private void refreshKimiChatModel() {
-        this.kimiChatModel = OpenAiChatModel.builder()
-                .apiKey(kimiModel)
-                .modelName(kimiModel)
-                .logRequests(true)
-                .logResponses(true)
-                .baseUrl(kimiUrl)
-                .timeout(READ_TIMEOUT)
-                .build();
+        if (kimiModel == null || kimiModel.isEmpty()) {
+            log.warn("Kimi API Key未配置，Kimi模型不可用");
+            this.kimiChatModel = null;
+        } else {
+            this.kimiChatModel = OpenAiChatModel.builder()
+                    .apiKey(kimiModel)
+                    .modelName(kimiModel)
+                    .logRequests(true)
+                    .logResponses(true)
+                    .baseUrl(kimiUrl)
+                    .timeout(READ_TIMEOUT)
+                    .maxRetries(kimiMaxRetries)
+                    .build();
+        }
     }
 
     @Bean
