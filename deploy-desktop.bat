@@ -32,7 +32,17 @@ docker ps --format "{{.Names}}" | findstr /i "mysql" >nul 2>&1
 if errorlevel 1 (echo       MySQL: Not running) else (echo       MySQL: Running)
 
 docker ps --format "{{.Names}}" | findstr /i "mongo" >nul 2>&1
-if errorlevel 1 (echo       MongoDB: Not running) else (echo       MongoDB: Running)
+if errorlevel 1 (
+    echo       MongoDB: Not running, starting...
+    docker rm -f mongo >nul 2>&1
+    docker run -d --name mongo --network ai-network -p 27017:27017 -v mongo-data:/data/db mongo:7.0
+    if errorlevel 1 (
+        echo       MongoDB failed to start
+    ) else (
+        echo       MongoDB started successfully
+        timeout /t 10 /nobreak >nul
+    )
+) else (echo       MongoDB: Running)
 
 docker ps --format "{{.Names}}" | findstr /i "nacos" >nul 2>&1
 if errorlevel 1 (
