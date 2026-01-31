@@ -10,6 +10,7 @@ import org.fb.bean.ChatForm;
 import org.fb.bean.kafka.ChatRequestMessage;
 import org.fb.bean.kafka.ChatResultMessage;
 import org.fb.service.ChatSaveService;
+import org.fb.service.BusinessMetricsService;
 import org.fb.service.ChatService;
 import org.fb.service.StreamingChatService;
 import org.fb.service.StreamingDispatchService;
@@ -58,6 +59,7 @@ public class AsyncChatController implements EnvironmentAware {
     private final ChatSaveService chatSaveService;
     private final MongoChatMemoryStore mongoChatMemoryStore;
     private final RedisHealthIndicator redisHealthIndicator;
+    private final BusinessMetricsService metricsService;
     
     @Autowired
     private ChatTypeAssistant chatTypeAssistant;
@@ -75,7 +77,8 @@ public class AsyncChatController implements EnvironmentAware {
             @Autowired(required = false) StreamingDispatchService streamingDispatchService,
             @Autowired(required = false) ChatSaveService chatSaveService,
             MongoChatMemoryStore mongoChatMemoryStore,
-            RedisHealthIndicator redisHealthIndicator) {
+            RedisHealthIndicator redisHealthIndicator,
+            BusinessMetricsService metricsService) {
         this.requestProducer = requestProducer;
         this.standaloneRequestProducer = standaloneRequestProducer;
         this.redisTemplate = redisTemplate;
@@ -86,6 +89,7 @@ public class AsyncChatController implements EnvironmentAware {
         this.chatSaveService = chatSaveService;
         this.mongoChatMemoryStore = mongoChatMemoryStore;
         this.redisHealthIndicator = redisHealthIndicator;
+        this.metricsService = metricsService;
     }
 
     @Override
@@ -130,15 +134,22 @@ public class AsyncChatController implements EnvironmentAware {
         String fullMessage = buildFullMessage(userMessage, extractedTexts);
         ChatRequestMessage request = ChatRequestMessage.create(memoryId, fullMessage);
 
+        metricsService.recordChatRequest(request.getRequestId(), "async");
+
+        long requestStartTime = System.currentTimeMillis();
         try {
             String requestJson = objectMapper.writeValueAsString(request);
             boolean savedToRedis = safeSetRedisValue("chat:request:" + request.getRequestId(), requestJson, RESULT_TTL);
+            
+            long redisDuration = System.currentTimeMillis() - requestStartTime;
+            metricsService.recordDatabaseOperationDuration(request.getRequestId(), redisDuration);
             
             // 无论Redis是否可用，都将请求保存到内存缓存中作为降级方案
             memoryCache.put(request.getRequestId(), request);
             log.info("请求数据已保存, requestId: {}, Redis保存: {}", request.getRequestId(), savedToRedis);
         } catch (Exception e) {
             log.error("保存请求数据失败, requestId: {}", request.getRequestId(), e);
+            metricsService.recordError(request.getRequestId(), "redis_save_error");
             // 即使发生异常，也要将请求保存到内存缓存中
             memoryCache.put(request.getRequestId(), request);
         }
@@ -431,17 +442,22 @@ public class AsyncChatController implements EnvironmentAware {
     @GetMapping(value = "/chat/stream/{requestId}", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter streamResult(@PathVariable String requestId) {
         log.info("建立SSE连接, requestId: {}", requestId);
+        long sseStartTime = System.currentTimeMillis();
         
         SseEmitter emitter = new SseEmitter(SSE_TIMEOUT);
         String cacheKey = RESULT_CACHE_PREFIX + requestId;
         sseConnections.put(requestId, emitter);
         
+        metricsService.recordSseConnectionCreated(requestId);
+        
         try {
+            long messageStartTime = System.currentTimeMillis();
             sendSseEvent(emitter, "connected", Map.of(
                 "status", "connected",
                 "requestId", requestId,
                 "timestamp", System.currentTimeMillis()
             ));
+            metricsService.recordSseMessageDuration(requestId, System.currentTimeMillis() - messageStartTime);
             
             log.info("SSE连接已建立, requestId: {}", requestId);
             
@@ -454,6 +470,8 @@ public class AsyncChatController implements EnvironmentAware {
                     processResultEvent(emitter, requestId, result);
                     emitter.complete();
                     sseConnections.remove(requestId);
+                    metricsService.recordSseConnectionClosed(requestId);
+                    metricsService.recordSseConnectionDuration(requestId, System.currentTimeMillis() - sseStartTime);
                     return emitter;
                 }
             }
@@ -462,6 +480,7 @@ public class AsyncChatController implements EnvironmentAware {
             long timeout = SSE_TIMEOUT - 5000;
             long checkInterval = 100;
             int lastContentLength = 0;
+            long totalSseDuration = 0;
             
             while (System.currentTimeMillis() - startTime < timeout) {
                 String currentResultJson = redisTemplate.opsForValue().get(cacheKey);
@@ -470,16 +489,20 @@ public class AsyncChatController implements EnvironmentAware {
                     ChatResultMessage result = objectMapper.readValue(currentResultJson, ChatResultMessage.class);
                     
                     if (result.getStatus() == ChatResultMessage.ResultStatus.PROCESSING) {
+                        long msgStart = System.currentTimeMillis();
                         sendSseEvent(emitter, "processing", Map.of(
                             "status", "processing",
                             "message", "AI正在处理您的请求..."
                         ));
+                        metricsService.recordSseMessageDuration(requestId, System.currentTimeMillis() - msgStart);
                     } else {
                         if (result.getIntent() != null) {
+                            long msgStart = System.currentTimeMillis();
                             sendSseEvent(emitter, "progress", Map.of(
                                 "status", "progress",
                                 "intent", result.getIntent()
                             ));
+                            metricsService.recordSseMessageDuration(requestId, System.currentTimeMillis() - msgStart);
                         }
                         
                         if (result.getResult() != null && !result.getResult().isEmpty()) {
@@ -488,12 +511,15 @@ public class AsyncChatController implements EnvironmentAware {
                             if (streamContent != null && streamContent.length() > lastContentLength) {
                                 String newContent = streamContent.substring(lastContentLength);
                                 if (!newContent.isEmpty()) {
+                                    long msgStart = System.currentTimeMillis();
                                     sendSseEvent(emitter, "chunk", Map.of(
                                         "content", newContent,
                                         "status", "streaming",
                                         "fullContent", streamContent,
                                         "progress", Math.min(streamContent.length(), 100)
                                     ));
+                                    metricsService.recordSseMessageDuration(requestId, System.currentTimeMillis() - msgStart);
+                                    metricsService.recordSseChunksSent(requestId, 1);
                                     lastContentLength = streamContent.length();
                                 }
                             }
@@ -512,11 +538,15 @@ public class AsyncChatController implements EnvironmentAware {
                                 resultData.put("error", result.getErrorMessage());
                             }
                             
+                            long msgStart = System.currentTimeMillis();
                             sendSseEvent(emitter, "result", resultData);
                             sendSseEvent(emitter, "complete", Map.of("event", "complete"));
+                            metricsService.recordSseMessageDuration(requestId, System.currentTimeMillis() - msgStart);
                             
                             emitter.complete();
                             sseConnections.remove(requestId);
+                            totalSseDuration = System.currentTimeMillis() - sseStartTime;
+                            metricsService.recordSseConnectionDuration(requestId, totalSseDuration);
                             log.info("SSE推送完成, requestId: {}, 处理时间: {}ms", 
                                     requestId, result.getProcessingTimeMs());
                             return emitter;
@@ -528,27 +558,37 @@ public class AsyncChatController implements EnvironmentAware {
             }
             
             log.warn("SSE超时, requestId: {}", requestId);
+            long msgStart = System.currentTimeMillis();
             sendSseEvent(emitter, "timeout", Map.of(
                 "status", "timeout",
                 "message", "处理超时"
             ));
             sendSseEvent(emitter, "complete", Map.of("event", "complete", "reason", "timeout"));
+            metricsService.recordSseMessageDuration(requestId, System.currentTimeMillis() - msgStart);
             emitter.complete();
             sseConnections.remove(requestId);
+            metricsService.recordSseConnectionDuration(requestId, System.currentTimeMillis() - sseStartTime);
+            metricsService.recordError(requestId, "sse_timeout");
             
         } catch (Exception e) {
             log.error("SSE流异常, requestId: {}", requestId, e);
+            long msgStart = System.currentTimeMillis();
             sendSseEvent(emitter, "error", Map.of(
                 "status", "error",
                 "message", e.getMessage()
             ));
+            metricsService.recordSseMessageDuration(requestId, System.currentTimeMillis() - msgStart);
             emitter.completeWithError(e);
             sseConnections.remove(requestId);
+            metricsService.recordSseConnectionDuration(requestId, System.currentTimeMillis() - sseStartTime);
+            metricsService.recordError(requestId, "sse_error");
         }
         
         emitter.onTimeout(() -> {
             log.warn("SSE超时回调, requestId: {}", requestId);
+            long msgStart = System.currentTimeMillis();
             sendSseEvent(emitter, "timeout", Map.of("status", "timeout"));
+            metricsService.recordSseMessageDuration(requestId, System.currentTimeMillis() - msgStart);
             emitter.complete();
             sseConnections.remove(requestId);
         });
@@ -569,17 +609,22 @@ public class AsyncChatController implements EnvironmentAware {
     @GetMapping(value = "/chat/streaming/{requestId}", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter streamingChat(@PathVariable String requestId) {
         log.info("建立真·SSE流连接, requestId: {}", requestId);
+        long sseStartTime = System.currentTimeMillis();
         
         SseEmitter emitter = new SseEmitter(SSE_TIMEOUT * 2);
         sseConnections.put(requestId, emitter);
         
+        metricsService.recordSseConnectionCreated(requestId);
+        
         try {
+            long msgStart = System.currentTimeMillis();
             sendSseEvent(emitter, "connected", Map.of(
                 "status", "connected",
                 "requestId", requestId,
                 "timestamp", System.currentTimeMillis(),
                 "mode", "streaming"
             ));
+            metricsService.recordSseMessageDuration(requestId, System.currentTimeMillis() - msgStart);
             
             String cacheKey = RESULT_CACHE_PREFIX + requestId;
             String resultJson = safeGetRedisValue(cacheKey);
@@ -589,16 +634,21 @@ public class AsyncChatController implements EnvironmentAware {
                 if (cachedResult.getStatus() == ChatResultMessage.ResultStatus.SUCCESS) {
                     String content = cachedResult.getResult();
                     if (content != null && !content.isEmpty()) {
+                        long chunkStart = System.currentTimeMillis();
                         sendSseEvent(emitter, "chunk", Map.of(
                             "content", content,
                             "status", "streaming",
                             "fullContent", content,
                             "progress", 100
                         ));
+                        metricsService.recordSseMessageDuration(requestId, System.currentTimeMillis() - chunkStart);
+                        metricsService.recordSseChunksSent(requestId, 1);
                     }
                     processResultEvent(emitter, requestId, cachedResult);
                     emitter.complete();
                     sseConnections.remove(requestId);
+                    metricsService.recordSseConnectionClosed(requestId);
+                    metricsService.recordSseConnectionDuration(requestId, System.currentTimeMillis() - sseStartTime);
                     return emitter;
                 }
             }
@@ -613,6 +663,7 @@ public class AsyncChatController implements EnvironmentAware {
                     request = objectMapper.readValue(requestJson, ChatRequestMessage.class);
                 } catch (Exception e) {
                     log.error("解析请求数据失败, requestId: {}", requestId, e);
+                    metricsService.recordError(requestId, "parse_request_error");
                 }
             }
             
@@ -621,12 +672,15 @@ public class AsyncChatController implements EnvironmentAware {
                 request = memoryCache.get(requestId);
                 if (request == null) {
                     log.warn("请求数据不存在, requestId: {}", requestId);
+                    long errStart = System.currentTimeMillis();
                     sendSseEvent(emitter, "error", Map.of(
                         "status", "error",
                         "message", "请求数据不存在，请重新发送消息"
                     ));
+                    metricsService.recordSseMessageDuration(requestId, System.currentTimeMillis() - errStart);
                     emitter.complete();
                     sseConnections.remove(requestId);
+                    metricsService.recordError(requestId, "request_not_found");
                     return emitter;
                 }
                 log.info("从内存缓存获取请求数据, requestId: {}", requestId);

@@ -2,13 +2,13 @@ services:
   # MongoDB
   mongo:
     image: mongo:7
-    container_name: mongo-monitoring
+    container_name: mongo
     ports:
-      - "27018:27017"
+      - "27017:27017"
     volumes:
-      - mongo-monitoring-data:/data/db
+      - mongo-data:/data/db
     networks:
-      - monitoring-network
+      - ai-network
     healthcheck:
       test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
       interval: 10s
@@ -19,7 +19,7 @@ services:
   # MongoDB Exporter
   mongodb-exporter:
     image: percona/mongodb_exporter:0.39.0
-    container_name: mongodb-exporter-monitoring
+    container_name: mongodb-exporter
     ports:
       - "9216:9216"
     environment:
@@ -33,12 +33,12 @@ services:
       mongo:
         condition: service_healthy
     networks:
-      - monitoring-network
+      - ai-network
 
   # Redis Exporter
   redis-exporter:
     image: oliver006/redis_exporter:latest
-    container_name: redis-exporter-monitoring
+    container_name: redis-exporter
     ports:
       - "9121:9121"
     environment:
@@ -46,50 +46,49 @@ services:
     depends_on:
       - redis
     networks:
-      - monitoring-network
-      - default
+      - ai-network
 
   # Redis
   redis:
     image: redis:7-alpine
-    container_name: redis-monitoring
+    container_name: redis
     ports:
-      - "6380:6379"
+      - "6379:6379"
     networks:
-      - monitoring-network
+      - ai-network
 
   # Prometheus
   prometheus:
     image: prom/prometheus:v2.47.0
-    container_name: prometheus-monitoring
+    container_name: prometheus
     ports:
-      - "9091:9090"
+      - "9090:9090"
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml
     networks:
-      - monitoring-network
+      - ai-network
 
   # Grafana
   grafana:
     image: grafana/grafana:10.1.10
-    container_name: grafana-monitoring
+    container_name: grafana
     ports:
       - "3000:3000"
     environment:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=admin123
     volumes:
-      - grafana-monitoring-data:/var/lib/grafana
+      - grafana-data:/var/lib/grafana
       - ./monitoring/grafana-provisioning/dashboards:/etc/grafana/provisioning/dashboards
       - ./monitoring/grafana-provisioning/datasources:/etc/grafana/provisioning/datasources
     networks:
-      - monitoring-network
+      - ai-network
 
 networks:
-  monitoring-network:
-    name: langchanin4jproject_monitoring-network
+  ai-network:
+    name: ai-network
     driver: bridge
 
 volumes:
-  mongo-monitoring-data:
-  grafana-monitoring-data:
+  mongo-data:
+  grafana-data:

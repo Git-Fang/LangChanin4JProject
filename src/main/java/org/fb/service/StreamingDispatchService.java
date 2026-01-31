@@ -51,6 +51,9 @@ public class StreamingDispatchService {
     @Autowired
     private QdrantOperationTools qdrantOperationTools;
 
+    @Autowired
+    private BusinessMetricsService metricsService;
+
     /**
      * 流式处理用户消息
      * 包含意图识别和业务分发逻辑
@@ -58,10 +61,11 @@ public class StreamingDispatchService {
      * @param memoryId 会话ID
      * @param userMessage 用户消息
      * @return 内容块的Flux流
-      */
+       */
     public Flux<String> chat(Long memoryId, String userMessage) {
         log.info("========== StreamingDispatchService 开始处理 ==========");
         log.info("memoryId: {}, userMessage: {}", memoryId, userMessage);
+        long overallStartTime = System.currentTimeMillis();
 
         // 检查服务是否可用
         if (chatTypeAssistantStream == null) {
@@ -74,18 +78,24 @@ public class StreamingDispatchService {
         Long tempMemoryId = System.currentTimeMillis();
         log.info("步骤1：开始意图识别, tempMemoryId: {}", tempMemoryId);
         log.info("待识别消息: {}", userMessage);
+        long intentRecognitionStart = System.currentTimeMillis();
 
         return chatTypeAssistantStream.chat(tempMemoryId, userMessage)
                 .collectList()
                 .flatMapMany(intentChunks -> {
                     // 合并意图识别的结果
                     String intentResponse = String.join("", intentChunks);
+                    long intentRecognitionDuration = System.currentTimeMillis() - intentRecognitionStart;
+                    
                     log.info("步骤2：意图识别原始响应: {}", intentResponse);
+                    metricsService.recordIntentRecognitionDuration(memoryId.toString(), intentRecognitionDuration);
 
                     // 提取意图
                     String intent = extractIntent(intentResponse);
                     log.info("步骤3：解析出的意图: {}, 原始响应: {}", intent, intentResponse);
                     log.info("当前使用的服务: {}", getServiceName(intent));
+
+                    metricsService.recordChatRequestByIntent(memoryId.toString(), intent);
 
                     // 第二步：根据意图选择业务处理服务
                     log.info("步骤4：根据意图选择业务处理服务, intent: {}", intent);
@@ -94,8 +104,11 @@ public class StreamingDispatchService {
 
                     // 保存聊天信息到数据库
                     log.info("准备调用chatSaveService.saveChatInfo方法，memoryId：{}，用户消息：{}，聊天类型：{}", memoryId, userMessage, intent);
+                    long dbStartTime = System.currentTimeMillis();
                     chatSaveService.saveChatInfo(memoryId, userMessage, intent);
-                    log.info("chatSaveService.saveChatInfo方法调用完成");
+                    long dbDuration = System.currentTimeMillis() - dbStartTime;
+                    metricsService.recordDatabaseOperationDuration(memoryId.toString(), dbDuration);
+                    log.info("chatSaveService.saveChatInfo方法调用完成, 耗时: {}ms", dbDuration);
 
                     if (BusinessConstant.MEDICAL_TYPE.equals(intent)) {
                         log.info("选择业务处理服务: DoctorAgent");
@@ -103,7 +116,6 @@ public class StreamingDispatchService {
                     } else if (BusinessConstant.TRANSLATION_TYPE.equals(intent)) {
                         log.info("选择业务处理服务: TranslaterService");
                         if (translaterService == null) {
-                            log.warn("TranslaterService 未配置，使用ChatAssistantStream作为备选");
                             resultFlux = chatAssistantStream.chat(memoryId, userMessage);
                         } else {
                             resultFlux = processWithTranslaterService(memoryId, userMessage);
@@ -121,6 +133,11 @@ public class StreamingDispatchService {
 
                     log.info("========== StreamingDispatchService 处理完成 ==========");
                     return resultFlux;
+                })
+                .doOnComplete(() -> {
+                    long overallDuration = System.currentTimeMillis() - overallStartTime;
+                    metricsService.recordChatProcessingDuration(memoryId.toString(), overallDuration);
+                    log.info("StreamingDispatchService整体处理耗时: {}ms", overallDuration);
                 });
     }
 
@@ -139,12 +156,21 @@ public class StreamingDispatchService {
      */
     private Flux<String> processWithDoctorAgent(Long memoryId, String userMessage) {
         log.info("调用DoctorAgent.chat, memoryId: {}, message: {}", memoryId, userMessage);
+        long serviceStartTime = System.currentTimeMillis();
         try {
             String result = doctorAgent.chat(memoryId, userMessage);
-            log.info("DoctorAgent返回结果长度: {}", result != null ? result.length() : 0);
+            long serviceDuration = System.currentTimeMillis() - serviceStartTime;
+            log.info("DoctorAgent返回结果长度: {}, 耗时: {}ms", result != null ? result.length() : 0, serviceDuration);
+            metricsService.recordBusinessServiceDuration(memoryId.toString(), serviceDuration, "doctor_agent");
+            
+            if (result != null) {
+                metricsService.recordChatResponseLength(memoryId.toString(), result.length());
+            }
+            
             return Flux.just(result != null ? result : "");
         } catch (Exception e) {
             log.error("DoctorAgent处理失败", e);
+            metricsService.recordError(memoryId.toString(), "doctor_agent_error");
             return Flux.just("抱歉，处理您的医疗咨询时出现错误: " + e.getMessage());
         }
     }
@@ -154,6 +180,7 @@ public class StreamingDispatchService {
      */
     private Flux<String> processWithTranslaterService(Long memoryId, String userMessage) {
         log.info("调用TranslaterService.translate, memoryId: {}, message: {}", memoryId, userMessage);
+        long serviceStartTime = System.currentTimeMillis();
         try {
             // 处理用户输入格式，提取实际需要翻译的文本
             // 用户可能输入类似"翻译成英文：具体文本"的格式
@@ -161,10 +188,18 @@ public class StreamingDispatchService {
             log.info("提取的待翻译文本：{}", actualTextToTranslate);
             
             String result = translaterService.translate(memoryId, actualTextToTranslate);
-            log.info("TranslaterService返回结果长度: {}", result != null ? result.length() : 0);
+            long serviceDuration = System.currentTimeMillis() - serviceStartTime;
+            log.info("TranslaterService返回结果长度: {}, 耗时: {}ms", result != null ? result.length() : 0, serviceDuration);
+            metricsService.recordBusinessServiceDuration(memoryId.toString(), serviceDuration, "translator_service");
+            
+            if (result != null) {
+                metricsService.recordChatResponseLength(memoryId.toString(), result.length());
+            }
+            
             return Flux.just(result != null ? result : "");
         } catch (Exception e) {
             log.error("TranslaterService处理失败", e);
+            metricsService.recordError(memoryId.toString(), "translator_service_error");
             return Flux.just("抱歉，翻译处理时出现错误: " + e.getMessage());
         }
     }
@@ -210,18 +245,30 @@ public class StreamingDispatchService {
      */
     private Flux<String> processWithTermExtractionAgent(String userMessage) {
         log.info("调用TermExtractionAgent.chat, message: {}", userMessage);
+        Long memoryId = System.currentTimeMillis();
+        long serviceStartTime = System.currentTimeMillis();
         try {
-            Long tempMemoryId = System.currentTimeMillis();
             String result = termExtractionAgent.chat(userMessage);
-            log.info("TermExtractionAgent返回结果长度: {}", result != null ? result.length() : 0);
-
+            long serviceDuration = System.currentTimeMillis() - serviceStartTime;
+            log.info("TermExtractionAgent返回结果长度: {}, 耗时: {}ms", result != null ? result.length() : 0, serviceDuration);
+            metricsService.recordBusinessServiceDuration(memoryId.toString(), serviceDuration, "term_extraction_agent");
+            
             log.info("术语提取完成，结果: {}", result);
+            
+            long vectorStartTime = System.currentTimeMillis();
             qdrantOperationTools.embeddingTermAndSave(result);
-            log.info("术语向量保存完成");
-
+            long vectorDuration = System.currentTimeMillis() - vectorStartTime;
+            metricsService.recordVectorStoreOperationDuration(memoryId.toString(), vectorDuration);
+            log.info("术语向量保存完成, 耗时: {}ms", vectorDuration);
+            
+            if (result != null) {
+                metricsService.recordChatResponseLength(memoryId.toString(), result.length());
+            }
+            
             return Flux.just(result != null ? result : "");
         } catch (Exception e) {
             log.error("TermExtractionAgent处理失败", e);
+            metricsService.recordError(memoryId.toString(), "term_extraction_agent_error");
             return Flux.just("抱歉，术语提取时出现错误: " + e.getMessage());
         }
     }
@@ -232,18 +279,28 @@ public class StreamingDispatchService {
      */
     private Flux<String> processWithNaturalLanguageSQLAgent(String userMessage) {
         log.info("调用NL2SQLService.executeNaturalLanguageQuery, message: {}", userMessage);
+        Long memoryId = System.currentTimeMillis();
+        long serviceStartTime = System.currentTimeMillis();
         try {
             List<Map<String, Object>> sqlResult = nl2SQLService.executeNaturalLanguageQuery(userMessage);
+            long serviceDuration = System.currentTimeMillis() - serviceStartTime;
             String result;
             if (sqlResult == null || sqlResult.isEmpty()) {
                 result = "查询结果为空，请检查查询条件或数据库中是否有相关数据";
             } else {
                 result = formatQueryResult(sqlResult);
             }
-            log.info("NL2SQLService返回结果长度: {}", result != null ? result.length() : 0);
+            log.info("NL2SQLService返回结果长度: {}, 耗时: {}ms", result != null ? result.length() : 0, serviceDuration);
+            metricsService.recordBusinessServiceDuration(memoryId.toString(), serviceDuration, "nl2sql_agent");
+            
+            if (result != null) {
+                metricsService.recordChatResponseLength(memoryId.toString(), result.length());
+            }
+            
             return Flux.just(result != null ? result : "");
         } catch (Exception e) {
             log.error("NL2SQLService处理失败", e);
+            metricsService.recordError(memoryId.toString(), "nl2sql_agent_error");
             String errorMsg = e.getMessage();
             String friendlyError;
             if (errorMsg != null && errorMsg.contains("Failed to convert from type")) {

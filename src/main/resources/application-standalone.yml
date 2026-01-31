@@ -105,5 +105,23 @@ ai:
     baiduMap:
       apiKey: ${BAIDU_MAP_API_KEY:}
 
+# Actuator监控指标配置
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+    prometheus:
+      enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}
+    export:
+      prometheus:
+        enabled: true
+
 # 禁用其他AI模型以测试基础功能
 # 仅测试基本HTTP服务功能

@@ -120,17 +120,25 @@ logging:
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} | [%thread] %-5level %logger{36} - %msg%n"
 
-# Actuator健康检查
+# Actuator健康检查和监控指标配置
 management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,metrics,prometheus
       base-path: /actuator
   endpoint:
     health:
       show-details: always
       enable-all: true
+    prometheus:
+      enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}
+    export:
+      prometheus:
+        enabled: true
   server:
     port: 8001
     base-path: /management

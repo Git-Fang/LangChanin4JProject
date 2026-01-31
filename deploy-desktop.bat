@@ -235,13 +235,72 @@ echo       Container started, waiting for initialization...
 timeout /t 20 /nobreak >nul
 
 echo.
-echo       Starting monitoring services...
-docker-compose -f docker-compose-full.yml up -d prometheus grafana mongodb-exporter redis-exporter
-if errorlevel 1 (
-    echo [WARNING] Failed to start monitoring services
-) else (
-    echo       Monitoring services started successfully
+echo [10/10] Start monitoring services (Prometheus, Grafana, Exporters)...
+
+echo       Copy Docker Prometheus config...
+copy /Y prometheus-docker.yml prometheus-temp.yml >nul 2>&1
+if exist "prometheus-docker.yml" (
+    echo       Using Docker Prometheus config
 )
+
+echo.
+echo       Starting Prometheus...
+docker rm -f prometheus >nul 2>&1
+docker run -d --name prometheus --network ai-network -p 9090:9090 ^
+    -v %CD%/prometheus-docker.yml:/etc/prometheus/prometheus.yml:ro ^
+    prom/prometheus:v2.47.0
+if errorlevel 1 (
+    echo [WARNING] Prometheus failed to start
+) else (
+    echo       Prometheus started on port 9090
+)
+
+echo.
+echo       Starting Grafana...
+docker rm -f grafana >nul 2>&1
+docker run -d --name grafana --network ai-network -p 3000:3000 ^
+    -e GF_SECURITY_ADMIN_USER=admin ^
+    -e GF_SECURITY_ADMIN_PASSWORD=admin123 ^
+    -e TZ=Asia/Shanghai ^
+    -v grafana-data:/var/lib/grafana ^
+    -v %CD%/monitoring/grafana-provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro ^
+    -v %CD%/monitoring/grafana-provisioning/datasources:/etc/grafana/provisioning/datasources:ro ^
+    grafana/grafana:10.1.10
+if errorlevel 1 (
+    echo [WARNING] Grafana failed to start
+) else (
+    echo       Grafana started on port 3000
+)
+
+echo.
+echo       Starting MongoDB Exporter...
+docker rm -f mongodb-exporter >nul 2>&1
+docker run -d --name mongodb-exporter --network ai-network -p 9216:9216 ^
+    -e MONGODB_URI=mongodb://mongo:27017 ^
+    percona/mongodb_exporter:0.39.0 ^
+    --mongodb.uri=mongodb://mongo:27017 ^
+    --collector.collstats ^
+    --collector.dbstats ^
+    --collector.indexstats
+if errorlevel 1 (
+    echo [WARNING] MongoDB Exporter failed to start
+) else (
+    echo       MongoDB Exporter started on port 9216
+)
+
+echo.
+echo       Starting Redis Exporter...
+docker rm -f redis-exporter >nul 2>&1
+docker run -d --name redis-exporter --network ai-network -p 9121:9121 ^
+    -e REDIS_ADDR=redis://redis:6379 ^
+    oliver006/redis_exporter:latest
+if errorlevel 1 (
+    echo [WARNING] Redis Exporter failed to start
+) else (
+    echo       Redis Exporter started on port 9121
+)
+
+timeout /t 5 /nobreak >nul
 
 echo.
 echo       Starting Kafka UI...
@@ -268,13 +327,21 @@ echo ============================================
 echo   Deployment completed!
 echo ============================================
 echo.
-echo   URLs:
+echo   Application URLs:
 echo   ----------------------------------------
 echo   Nacos:    http://localhost:8848/nacos
 echo   SSE Chat: http://localhost:8000/chat-sse.html
 echo   Unified:  http://localhost:8000/unified.html
 echo   Home:     http://localhost:8000/
 echo   API Docs: http://localhost:8000/doc.html
+echo   ----------------------------------------
+echo.
+echo   Monitoring URLs:
+echo   ----------------------------------------
+echo   Grafana:  http://localhost:3000 (admin/admin123)
+echo   Dashboards: http://localhost:3000/dashboards
+echo   Prometheus: http://localhost:9090
+echo   Kafka UI: http://localhost:8081
 echo   ----------------------------------------
 echo.
 echo   Commands:

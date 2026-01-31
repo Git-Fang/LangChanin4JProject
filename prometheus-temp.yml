@@ -1,17 +1,15 @@
-# Prometheus配置文件
-# 支持Docker环境和本地环境自动切换
+# Docker环境Prometheus配置文件
 global:
   scrape_interval: 15s
   evaluation_interval: 15s
 
-# Docker环境配置 (默认)
 scrape_configs:
   # Prometheus自身指标
   - job_name: 'prometheus'
     static_configs:
       - targets: ['localhost:9090']
 
-  # 应用程序指标 (Docker环境)
+  # 应用程序指标 (Docker环境使用服务名)
   - job_name: 'rag-translation'
     metrics_path: '/actuator/prometheus'
     static_configs:
@@ -20,7 +18,7 @@ scrape_configs:
   # MongoDB指标
   - job_name: 'mongodb'
     static_configs:
-      - targets: ['localhost:9216']
+      - targets: ['mongodb-exporter:9216']
     metrics_path: /metrics
     scrape_interval: 15s
     scrape_timeout: 10s
@@ -28,7 +26,7 @@ scrape_configs:
   # Redis指标
   - job_name: 'redis'
     static_configs:
-      - targets: ['localhost:9121']
+      - targets: ['redis-exporter:9121']
     metrics_path: /metrics
     scrape_interval: 15s
     scrape_timeout: 10s
