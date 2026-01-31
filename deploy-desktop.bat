@@ -300,6 +300,20 @@ if errorlevel 1 (
     echo       Redis Exporter started on port 9121
 )
 
+echo.
+echo       Starting Kafka UI...
+docker rm -f kafka-ui >nul 2>&1
+docker run -d --name kafka-ui --network ai-network -p 8081:8080 ^
+    -e KAFKA_CLUSTERS_0_NAME=local ^
+    -e KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafka:9092 ^
+    -e KAFKA_CLUSTERS_0_ZOOKEEPER=zookeeper:2181 ^
+    provectuslabs/kafka-ui:latest
+if errorlevel 1 (
+    echo [WARNING] Kafka UI failed to start
+) else (
+    echo       Kafka UI started on port 8081
+)
+
 timeout /t 5 /nobreak >nul
 
 echo.
