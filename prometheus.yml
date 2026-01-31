@@ -26,7 +26,7 @@ scrape_configs:
   # 抓取MongoDB的指标
   - job_name: 'mongodb'
     static_configs:
-      - targets: ['mongodb-exporter:9216']
+      - targets: ['mongodb-exporter-monitoring:9216']
     metrics_path: /metrics
     scrape_interval: 15s
     scrape_timeout: 10s
@@ -34,7 +34,7 @@ scrape_configs:
   # 抓取Redis的指标
   - job_name: 'redis'
     static_configs:
-      - targets: ['redis-exporter:9121']
+      - targets: ['redis-exporter-monitoring:9121']
     metrics_path: /metrics
     scrape_interval: 15s
     scrape_timeout: 10s

@@ -9,6 +9,12 @@ services:
       - mongo-monitoring-data:/data/db
     networks:
       - monitoring-network
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   # MongoDB Exporter
   mongodb-exporter:
@@ -17,16 +23,38 @@ services:
     ports:
       - "9216:9216"
     environment:
-      - MONGODB_URI=mongodb://mongo:27017/admin?directConnection=true
-      - MONGODB_EXPORTER_COLLECT_ALL=true
-      - MONGODB_EXPORTER_COMPATIBLE_MODE=true
-    command: [
-      "--mongodb.uri=mongodb://mongo:27017/admin?directConnection=true",
-      "--collect-all",
-      "--compatible-mode"
-    ]
+      - MONGODB_URI=mongodb://mongo:27017
+    command:
+      - --mongodb.uri=mongodb://mongo:27017
+      - --collector.collstats
+      - --collector.dbstats
+      - --collector.indexstats
     depends_on:
-      - mongo
+      mongo:
+        condition: service_healthy
+    networks:
+      - monitoring-network
+
+  # Redis Exporter
+  redis-exporter:
+    image: oliver006/redis_exporter:latest
+    container_name: redis-exporter-monitoring
+    ports:
+      - "9121:9121"
+    environment:
+      - REDIS_ADDR=redis://redis:6379
+    depends_on:
+      - redis
+    networks:
+      - monitoring-network
+      - default
+
+  # Redis
+  redis:
+    image: redis:7-alpine
+    container_name: redis-monitoring
+    ports:
+      - "6380:6379"
     networks:
       - monitoring-network
 
@@ -52,11 +80,14 @@ services:
       - GF_SECURITY_ADMIN_PASSWORD=admin123
     volumes:
       - grafana-monitoring-data:/var/lib/grafana
+      - ./monitoring/grafana-provisioning/dashboards:/etc/grafana/provisioning/dashboards
+      - ./monitoring/grafana-provisioning/datasources:/etc/grafana/provisioning/datasources
     networks:
       - monitoring-network
 
 networks:
   monitoring-network:
+    name: langchanin4jproject_monitoring-network
     driver: bridge
 
 volumes:
