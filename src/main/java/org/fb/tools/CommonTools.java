@@ -61,22 +61,37 @@ public class CommonTools {
 
     @Tool(name = "embedding_search_for_terms", value="查询qdrant术语向量数据信息:根据传入数据{{question}}从qdrant向量数据库中仅查询type为TERMS的术语数据并返回")
     public String embeddingSearchForTerms(@P(value="question", required = true) String question) {
-        log.info("开始术语向量化查询。传入数据：{}", question);
+        log.info("========== embedding_search_for_terms 开始 ==========");
+        log.info("【待翻译语句中提取的术语】: {}", question);
 
         EmbeddingSearchResult<TextSegment> searchResult = getMatchWordsForTerms(question);
 
         if (searchResult.matches().isEmpty()) {
-            log.info("未查询到相关术语数据");
+            log.info("【术语翻译查询结果】: 未在向量数据库中找到对应翻译");
             return "NO_TERMS_FOUND";
         }
 
         StringBuilder result = new StringBuilder();
+        int matchCount = 0;
+        int totalMatches = searchResult.matches().size();
+
+        log.info("【术语翻译查询】: 向量数据库共返回 {} 个匹配", totalMatches);
+
         for (int i = 0; i < searchResult.matches().size(); i++) {
             EmbeddingMatch<TextSegment> embeddingMatch = searchResult.matches().get(i);
-            log.info("术语匹配{}相似度score：{}; 结果为：{}", i + 1, embeddingMatch.score(), embeddingMatch.embedded().text());
-            result.append("【相关术语数据").append(i + 1).append("】\n");
-            result.append(embeddingMatch.embedded().text()).append("\n\n");
+            double score = embeddingMatch.score();
+            String matchedText = embeddingMatch.embedded().text();
+            
+            log.info("  - 术语: '{}' | 相似度: {} | 类型: TERMS", matchedText, score);
+            
+            result.append("【术语翻译匹配").append(i + 1).append("】\n");
+            result.append("术语: ").append(matchedText).append("\n");
+            result.append("相似度: ").append(score).append("\n\n");
+            matchCount++;
         }
+
+        log.info("【术语翻译查询结果】: 找到 {} 个术语翻译", matchCount);
+        log.info("========== embedding_search_for_terms 完成 ==========");
 
         return result.toString().trim();
     }
@@ -130,10 +145,10 @@ public class CommonTools {
             @P(value="term_translations", required = false) String termTranslations) {
 
         log.info("========== doTranslation 开始 ==========");
-        log.info("原文: {}", sourceText);
-        log.info("目标语言: {}", targetLanguage);
-        log.info("术语: {}", terms);
-        log.info("术语翻译: {}", termTranslations);
+        log.info("【原始待翻译语句】: {}", sourceText);
+        log.info("【目标语言】: {}", targetLanguage);
+        log.info("【向量数据库命中术语】: {}", terms);
+        log.info("【术语翻译对照】: {}", termTranslations);
 
         String originalText = sourceText;
         String correctedText = sourceText;
@@ -141,7 +156,9 @@ public class CommonTools {
 
         if (terms != null && !terms.isEmpty() && !terms.equals("NO_SIMILAR_TERMS_FOUND")) {
             matchedTerms = terms;
-            log.info("命中术语: {}", terms);
+            log.info("【术语库命中处理】: 命中 {} 个术语", terms.split("\\|").length);
+        } else {
+            log.info("【术语库命中处理】: 无命中术语");
         }
 
         if (terms != null && !terms.isEmpty() && termTranslations != null && !termTranslations.isEmpty() && !termTranslations.equals("NO_TERMS_FOUND")) {
@@ -150,18 +167,28 @@ public class CommonTools {
                 Matcher matcher = jsonPattern.matcher(termTranslations);
 
                 Map<String, String> termMap = new HashMap<>();
+                int termReplaceCount = 0;
                 while (matcher.find()) {
-                    termMap.put(matcher.group(1), matcher.group(2));
+                    String cnTerm = matcher.group(1);
+                    String enTerm = matcher.group(2);
+                    termMap.put(cnTerm, enTerm);
+                    log.info("【术语替换对照】: {} -> {}", cnTerm, enTerm);
+                    termReplaceCount++;
                 }
 
+                log.info("【术语替换】开始，共 {} 个术语需要替换", termReplaceCount);
                 for (Map.Entry<String, String> entry : termMap.entrySet()) {
                     correctedText = correctedText.replace(entry.getKey(), entry.getValue());
                 }
-                log.info("术语替换后的文本: {}", correctedText);
+                log.info("【术语替换后语句】: {}", correctedText);
             } catch (Exception e) {
                 log.warn("术语解析失败: {}", e.getMessage());
             }
+        } else {
+            log.info("【术语替换】: 无术语翻译对照，跳过替换");
         }
+
+        log.info("【最终翻译语句】: {}", correctedText);
 
         log.info("========== doTranslation 完成 ==========");
 
@@ -220,25 +247,27 @@ public class CommonTools {
     @Tool(name = "find_similar_terms", value = "查找相似术语:从向量数据库中查找与输入文本相似的术语，返回相似度>=0.85的匹配结果")
     public String findSimilarTerms(@P(value="text", required = true) String text) {
         log.info("========== findSimilarTerms 开始 ==========");
-        log.info("查询文本: {}", text);
+        log.info("待匹配文本: {}", text);
 
         try {
             EmbeddingSearchResult<TextSegment> searchResult = getMatchWordsForTerms(text);
 
             if (searchResult.matches().isEmpty()) {
-                log.info("未找到相似术语");
+                log.info("向量数据库中未找到相似术语");
                 return "NO_SIMILAR_TERMS_FOUND";
             }
 
-            // 只返回相似度>=0.85的结果
             StringBuilder result = new StringBuilder();
             int matchCount = 0;
+            int totalMatches = searchResult.matches().size();
+
+            log.info("向量数据库匹配结果（共{}个匹配）:", totalMatches);
 
             for (EmbeddingMatch<TextSegment> embeddingMatch : searchResult.matches()) {
                 double score = embeddingMatch.score();
                 String matchedText = embeddingMatch.embedded().text();
 
-                log.info("术语匹配: '{}' 相似度={}", matchedText, score);
+                log.info("  - 术语: '{}' | 相似度: {} | 是否命中: {}", matchedText, score, score >= 0.85 ? "是" : "否");
 
                 if (score >= 0.85) {
                     if (matchCount > 0) {
@@ -249,12 +278,14 @@ public class CommonTools {
                 }
             }
 
+            log.info("向量数据库命中术语数量: {} (相似度>=0.85)", matchCount);
+
             if (matchCount == 0) {
-                log.info("未找到相似度>=0.85的术语");
+                log.info("向量数据库中无命中术语");
                 return "NO_SIMILAR_TERMS_FOUND";
             }
 
-            log.info("找到{}个相似术语", matchCount);
+            log.info("向量数据库命中术语: {}", result.toString());
             return result.toString();
         } catch (Exception e) {
             log.error("查找相似术语失败: {}", e.getMessage(), e);
