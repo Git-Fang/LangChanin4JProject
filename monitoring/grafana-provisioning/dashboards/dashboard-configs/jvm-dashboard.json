@@ -187,7 +187,7 @@
       "type": "timeseries",
       "targets": [
         {
-          "expr": "rate(process_cpu_seconds_total{application=\"$application\"}[5m])",
+          "expr": "rate(process_cpu_time_ns_total{application=\"$application\"}[5m]) / 1e9",
           "legendFormat": "CPU Usage Rate",
           "refId": "A"
         }
@@ -353,12 +353,12 @@
       "type": "timeseries",
       "targets": [
         {
-          "expr": "jvm_threads_live{application=\"$application\"}",
+          "expr": "jvm_threads_live_threads{application=\"$application\"}",
           "legendFormat": "Live Threads",
           "refId": "A"
         },
         {
-          "expr": "jvm_threads_daemon{application=\"$application\"}",
+          "expr": "jvm_threads_daemon_threads{application=\"$application\"}",
           "legendFormat": "Daemon Threads",
           "refId": "B"
         }
