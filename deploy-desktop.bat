@@ -31,7 +31,7 @@ echo       Checking middleware services...
 docker ps --format "{{.Names}}" | findstr /i "mysql" >nul 2>&1
 if errorlevel 1 (echo       MySQL: Not running) else (echo       MySQL: Running)
 
-docker ps --format "{{.Names}}" | findstr /i "mongo" >nul 2>&1
+docker ps --format "{{.Names}}" | findstr /i "^mongo$" >nul 2>&1
 if errorlevel 1 (
     echo       MongoDB: Not running, starting...
     docker rm -f mongo >nul 2>&1
