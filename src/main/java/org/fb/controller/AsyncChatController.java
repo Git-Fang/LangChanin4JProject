@@ -1580,15 +1580,26 @@ emitter.onError(e -> {
         
         try {
             List<ChatMessage> messages = new java.util.ArrayList<>();
+            // 先获取已有的历史消息
+            try {
+                List<ChatMessage> existingMessages = mongoChatMemoryStore.getMessages(memoryId);
+                if (existingMessages != null && !existingMessages.isEmpty()) {
+                    messages.addAll(existingMessages);
+                    log.info("获取已有对话历史, memoryId: {}, 历史消息数量: {}", memoryId, existingMessages.size());
+                }
+            } catch (Exception e) {
+                log.warn("获取已有对话历史失败, memoryId: {}, 将从空历史开始", memoryId, e);
+            }
+            // 追加新消息
             messages.add(UserMessage.from(userMessage));
             messages.add(AiMessage.from(aiResponse));
             mongoChatMemoryStore.updateMessages(memoryId, messages);
-            log.info("流式聊天记录已保存到MongoDB, memoryId: {}", memoryId);
+            log.info("对话历史已保存到MongoDB, memoryId: {}, 总消息数量: {}", memoryId, messages.size());
         } catch (Exception e) {
-            log.error("保存流式聊天记录到MongoDB失败, memoryId: {}", memoryId, e);
+            log.error("保存对话历史到MongoDB失败, memoryId: {}", memoryId, e);
         }
     }
-
+    
     /**
      * 清理并保存聊天信息到数据库
      * 先删除该memoryId对应的默认general类型记录，再保存新的记录
@@ -1623,12 +1634,23 @@ emitter.onError(e -> {
 
         try {
             List<ChatMessage> messages = new java.util.ArrayList<>();
+            // 先获取已有的历史消息
+            try {
+                List<ChatMessage> existingMessages = mongoChatMemoryStore.getMessages(memoryId);
+                if (existingMessages != null && !existingMessages.isEmpty()) {
+                    messages.addAll(existingMessages);
+                    log.info("获取已有对话历史, memoryId: {}, 历史消息数量: {}", memoryId, existingMessages.size());
+                }
+            } catch (Exception e) {
+                log.warn("获取已有对话历史失败, memoryId: {}, 将从空历史开始", memoryId, e);
+            }
+            // 追加新消息
             messages.add(UserMessage.from(userMessage));
             messages.add(AiMessage.from(aiResponse));
             mongoChatMemoryStore.updateMessages(memoryId, messages);
-            log.info("流式聊天记录已保存到MongoDB, memoryId: {}", memoryId);
+            log.info("对话历史已保存到MongoDB, memoryId: {}, 总消息数量: {}", memoryId, messages.size());
         } catch (Exception e) {
-            log.error("保存流式聊天记录到MongoDB失败, memoryId: {}", memoryId, e);
+            log.error("保存对话历史到MongoDB失败, memoryId: {}", memoryId, e);
         }
     }
 

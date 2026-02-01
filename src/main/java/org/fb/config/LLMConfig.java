@@ -1,6 +1,7 @@
 package org.fb.config;
 
 import dev.langchain4j.community.model.dashscope.WanxImageModel;
+import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.memory.chat.ChatMemoryProvider;
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
@@ -12,13 +13,16 @@ import dev.langchain4j.model.openai.OpenAiChatModel;
 import dev.langchain4j.model.openai.OpenAiStreamingChatModel;
 import dev.langchain4j.model.ollama.OllamaChatModel;
 import dev.langchain4j.service.spring.AiService;
+import dev.langchain4j.service.spring.AiServiceWiringMode;
 import dev.langchain4j.store.embedding.EmbeddingStore;
 import dev.langchain4j.store.embedding.qdrant.QdrantEmbeddingStore;
 import io.qdrant.client.QdrantClient;
 import io.qdrant.client.QdrantGrpcClient;
 import jakarta.annotation.PostConstruct;
+import org.fb.tools.MongoChatMemoryStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.context.config.annotation.RefreshScope;
 import org.springframework.context.annotation.Bean;
@@ -26,6 +30,7 @@ import org.springframework.context.annotation.Configuration;
 
 import java.io.IOException;
 import java.time.Duration;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 @Configuration
@@ -80,6 +85,9 @@ public class LLMConfig {
 
     @Value("${ai.embeddingStore.qdrant.collectionName:ragTranslation-1226}")
     private volatile String collectionName;
+
+    @Autowired
+    private volatile MongoChatMemoryStore mongoChatMemoryStore;
 
     private static final Duration READ_TIMEOUT = Duration.ofSeconds(300);
     private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(30);
@@ -228,7 +236,24 @@ public class LLMConfig {
 
     @Bean(name = "chatMemoryProvider")
     public ChatMemoryProvider chatMemoryProvider() {
-        return memoryId -> MessageWindowChatMemory.withMaxMessages(10);
+        return memoryId -> {
+            MessageWindowChatMemory chatMemory = MessageWindowChatMemory.withMaxMessages(10);
+            
+            // 从MongoDB加载历史消息
+            if (mongoChatMemoryStore != null) {
+                try {
+                    List<ChatMessage> historyMessages = mongoChatMemoryStore.getMessages(memoryId);
+                    if (historyMessages != null && !historyMessages.isEmpty()) {
+                        log.info("从MongoDB加载对话历史, memoryId: {}, 消息数量: {}", memoryId, historyMessages.size());
+                        historyMessages.forEach(chatMemory::add);
+                    }
+                } catch (Exception e) {
+                    log.error("从MongoDB加载对话历史失败, memoryId: {}", memoryId, e);
+                }
+            }
+            
+            return chatMemory;
+        };
     }
 
     @Bean

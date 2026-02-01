@@ -367,9 +367,16 @@
     
     <div class="chat-container">
         <div class="chat-header">
-            <h1>🤖 AI 智能助手 (SSE实时版)</h1>
-            <p>基于Kafka异步处理 + SSE实时推送</p>
-            <span class="badge">实时推送 · 高性能</span>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <h1>🤖 AI 智能助手 (SSE实时版)</h1>
+                    <p>基于Kafka异步处理 + SSE实时推送</p>
+                    <span class="badge">实时推送 · 高性能</span>
+                </div>
+                <button class="new-chat-btn" onclick="newChat()" style="background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); color: white; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 0.9rem;">
+                    + 新会话
+                </button>
+            </div>
         </div>
         
         <div class="messages-area" id="messagesArea">
@@ -415,6 +422,21 @@
         let isStreaming = false;
         let attachedFiles = [];
         let extractedTexts = [];
+        
+        // 初始化memoryId - 使用sessionStorage保证同一页面会话连贯性
+        function initMemoryId() {
+            const storedMemoryId = sessionStorage.getItem('chatMemoryId');
+            if (storedMemoryId) {
+                currentMemoryId = parseInt(storedMemoryId, 10);
+                lastUserMemoryId = currentMemoryId;
+            } else {
+                currentMemoryId = Date.now();
+                lastUserMemoryId = currentMemoryId;
+                sessionStorage.setItem('chatMemoryId', currentMemoryId.toString());
+            }
+            console.log('初始化memoryId:', currentMemoryId);
+        }
+        initMemoryId();
         
         const messagesArea = document.getElementById('messagesArea');
         const messageInput = document.getElementById('messageInput');
@@ -870,10 +892,11 @@
             }
 
             const charCount = message.length;
-            console.log('发送消息, 字符数:', charCount);
+            console.log('发送消息, 字符数:', charCount, 'memoryId:', currentMemoryId);
 
             lastUserMessage = message;
-            lastUserMemoryId = Date.now();
+            // 使用页面初始化时生成的memoryId，保证同一会话连贯性
+            lastUserMemoryId = currentMemoryId;
 
             let fullMessage = message;
             if (attachedFiles.length > 0 && extractedTexts.length > 0) {
@@ -1210,6 +1233,27 @@
             messageInput.style.height = Math.min(messageInput.scrollHeight, 150) + 'px';
         });
         
+        function newChat() {
+            currentMemoryId = Date.now();
+            lastUserMemoryId = currentMemoryId;
+            sessionStorage.setItem('chatMemoryId', currentMemoryId.toString());
+            lastUserMessage = null;
+            conversationHistory = [];
+            
+            // 清空消息区域
+            const messagesArea = document.getElementById('messagesArea');
+            messagesArea.innerHTML = '';
+            
+            // 添加欢迎消息
+            addMessage('ai', '你好！我是AI智能助手（SSE实时版）。使用Kafka异步处理+SSE实时推送，为您带来更快的响应体验！\n\n输入您的问题开始对话吧~');
+            
+            // 关闭现有SSE连接
+            closeEventSource();
+            updateConnectionStatus('disconnected', '未连接');
+            
+            console.log('新会话已创建, memoryId:', currentMemoryId);
+        }
+
         window.addEventListener('beforeunload', () => {
             closeEventSource();
             TextToSpeech.stop();

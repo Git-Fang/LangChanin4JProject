@@ -1163,7 +1163,7 @@
     <script>
         // 全局状态
         let currentMode = 'http'; // 'http' 或 'sse'
-        let memoryId = Date.now();
+        let memoryId = null;
         let eventSource = null;
         let sessionId = null;
         let messageId = 1;
@@ -1172,6 +1172,19 @@
         let lastUserMessage = null; // 保存最后一条用户消息用于AI重试
         let attachedFiles = []; // 附件文件列表
         let extractedTexts = []; // 提取的文件内容
+
+        // 初始化memoryId - 使用sessionStorage保证同一页面会话连贯性
+        function initMemoryId() {
+            const storedMemoryId = sessionStorage.getItem('chatMemoryId');
+            if (storedMemoryId) {
+                memoryId = parseInt(storedMemoryId, 10);
+            } else {
+                memoryId = Date.now();
+                sessionStorage.setItem('chatMemoryId', memoryId.toString());
+            }
+            console.log('初始化memoryId:', memoryId);
+        }
+        initMemoryId();
 
         // API 配置 - 使用动态地址以支持手机端和不同网络环境访问
         const getApiBaseUrl = () => {
@@ -2161,6 +2174,7 @@
         // 新会话
         function newChat() {
             memoryId = Date.now();
+            sessionStorage.setItem('chatMemoryId', memoryId.toString());
             lastMessage = null;
             const container = document.getElementById('messagesContainer');
             container.innerHTML = '<div class="empty-state">开始新的对话吧</div>';
