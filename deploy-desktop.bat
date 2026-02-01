@@ -8,6 +8,7 @@ echo.
 set IMAGE_NAME=ragtranslation-app
 set CONTAINER_NAME=ragtranslation-app
 set APP_PORT=8000
+set USE_LOCAL_MYSQL=0
 
 echo [1/8] Check Docker Desktop status...
 docker version >nul 2>&1
@@ -28,8 +29,37 @@ echo       Network ready
 echo.
 echo       Checking middleware services...
 
-docker ps --format "{{.Names}}" | findstr /i "mysql" >nul 2>&1
-if errorlevel 1 (echo       MySQL: Not running) else (echo       MySQL: Running)
+echo       Checking local MySQL service...
+sc query MySQL | findstr /i "RUNNING" >nul 2>&1
+if not errorlevel 1 (
+    echo       Local MySQL service is running
+    set USE_LOCAL_MYSQL=1
+) else (
+    netstat -ano | findstr ":3306" | findstr "LISTENING" >nul 2>&1
+    if not errorlevel 1 (
+        echo       Local MySQL is listening on port 3306
+        set USE_LOCAL_MYSQL=1
+    ) else (
+        echo       No local MySQL found
+        set USE_LOCAL_MYSQL=0
+    )
+)
+
+if "%USE_LOCAL_MYSQL%"=="1" (
+    echo       Will use local MySQL (localhost:3306)
+) else (
+    echo       Starting Docker MySQL...
+    docker rm -f mysql >nul 2>&1
+    docker run -d --name mysql --network ai-network -p 3306:3306 -e MYSQL_ROOT_PASSWORD=root -e MYSQL_DATABASE=mydocker -v mysql-data:/var/lib/mysql -v %CD%/sql:/docker-entrypoint-initdb.d mysql:8.0-debian
+    if errorlevel 1 (
+        echo       MySQL failed to start
+    ) else (
+        echo       MySQL started successfully
+        echo       Waiting for MySQL to be ready...
+        timeout /t 30 /nobreak >nul
+        echo       MySQL is ready
+    )
+)
 
 docker ps --format "{{.Names}}" | findstr /i "^mongo$" >nul 2>&1
 if errorlevel 1 (
@@ -161,14 +191,6 @@ docker ps --format "{{.Names}}" | findstr /i "nacos" >nul 2>&1
 if errorlevel 1 (
     echo       Nacos container not found, starting...
     
-    echo       Creating nacos_config database in MySQL...
-    docker exec mysql mysql -uroot -proot -e "CREATE DATABASE IF NOT EXISTS nacos_config DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;" 2>nul
-    if errorlevel 1 (
-        echo [WARNING] Failed to create nacos_config database, Nacos may use embedded database
-    ) else (
-        echo       Database nacos_config ready
-    )
-    
     docker rm -f nacos >nul 2>&1
     docker run -d --name nacos --network ai-network -p 8848:8848 -e MODE=standalone -e NACOS_AUTH_ENABLE=false -e TZ=Asia/Shanghai nacos/nacos-server:v2.4.2
     
@@ -233,7 +255,13 @@ echo       Old container cleaned up
 echo.
 echo       Starting Docker container with environment variables from .env...
 
-docker run -d --name %CONTAINER_NAME% --network ai-network -p %APP_PORT%:%APP_PORT% --env-file .env --add-host=host.docker.internal:host-gateway -e SPRING_PROFILES_ACTIVE=docker -e NACOS_SERVER_ADDR=nacos:8848 -e SPRING_DATASOURCE_URL=jdbc:mysql://host.docker.internal:3306/mydocker?useUnicode=true^&characterEncoding=UTF-8^&serverTimezone=Asia/Shanghai^&useSSL=false^&allowPublicKeyRetrieval=true -e SPRING_DATA_MONGODB_URI=mongodb://host.docker.internal:27017/chat_db -e SPRING_REDIS_HOST=redis -e SPRING_REDIS_PORT=6379 -e AI_EMBEDDINGSTORE_QDRANT_HOST=qdrant -e AI_EMBEDDINGSTORE_QDRANT_PORT=6334 -e spring.kafka.bootstrap-servers=kafka:9092 -e TZ=Asia/Shanghai --dns=8.8.8.8 --dns=114.114.114.114 %IMAGE_NAME%:latest
+if "%USE_LOCAL_MYSQL%"=="1" (
+    echo       Using local MySQL (localhost:3306)
+    docker run -d --name %CONTAINER_NAME% --network ai-network -p %APP_PORT%:%APP_PORT% --env-file .env --add-host=host.docker.internal:host-gateway -e SPRING_PROFILES_ACTIVE=docker -e NACOS_SERVER_ADDR=nacos:8848 -e SPRING_DATASOURCE_URL=jdbc:mysql://host.docker.internal:3306/mydocker?useUnicode=true^&characterEncoding=UTF-8^&serverTimezone=Asia/Shanghai^&useSSL=false^&allowPublicKeyRetrieval=true -e SPRING_DATA_MONGODB_URI=mongodb://host.docker.internal:27017/chat_db -e SPRING_REDIS_HOST=redis -e SPRING_REDIS_PORT=6379 -e AI_EMBEDDINGSTORE_QDRANT_HOST=qdrant -e AI_EMBEDDINGSTORE_QDRANT_PORT=6334 -e spring.kafka.bootstrap-servers=kafka:9092 -e TZ=Asia/Shanghai --dns=8.8.8.8 --dns=114.114.114.114 %IMAGE_NAME%:latest
+) else (
+    echo       Using Docker MySQL (mysql:3306)
+    docker run -d --name %CONTAINER_NAME% --network ai-network -p %APP_PORT%:%APP_PORT% --env-file .env --add-host=host.docker.internal:host-gateway -e SPRING_PROFILES_ACTIVE=docker -e NACOS_SERVER_ADDR=nacos:8848 -e SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/mydocker?useUnicode=true^&characterEncoding=UTF-8^&serverTimezone=Asia/Shanghai^&useSSL=false^&allowPublicKeyRetrieval=true -e SPRING_DATA_MONGODB_URI=mongodb://host.docker.internal:27017/chat_db -e SPRING_REDIS_HOST=redis -e SPRING_REDIS_PORT=6379 -e AI_EMBEDDINGSTORE_QDRANT_HOST=qdrant -e AI_EMBEDDINGSTORE_QDRANT_PORT=6334 -e spring.kafka.bootstrap-servers=kafka:9092 -e TZ=Asia/Shanghai --dns=8.8.8.8 --dns=114.114.114.114 %IMAGE_NAME%:latest
+)
 
 if errorlevel 1 (
     echo [ERROR] Container failed to start!
