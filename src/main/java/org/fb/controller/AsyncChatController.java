@@ -728,17 +728,16 @@ flux.publishOn(Schedulers.boundedElastic())
                     })
                     .doOnComplete(() -> {
                         long processingTime = System.currentTimeMillis() - startTime.get();
-                        log.info("流式处理完成, requestId: {}, 总长度: {}, 耗时: {}ms",
-                            finalRequestId, accumulated.get().length(), processingTime);
+                        log.info("HTTP流式处理完成, requestId: {}, 总长度: {}, 耗时: {}ms",
+                            requestId, accumulated.get().length(), processingTime);
 
                         String finalContent = accumulated.get();
 
-                        // 保存聊天信息到数据库
-                        // 注意：streamingDispatchService内部已经处理了意图识别和数据库保存
-                        // 所以这里不需要再次保存
+                        // 注意：streamingDispatchService内部已经调用saveChatInfo保存了聊天记录
+                        // 这里不再重复保存，避免同一次对话存入两条记录
 
                         ChatResultMessage finalResult = ChatResultMessage.builder()
-                            .requestId(finalRequestId)
+                            .requestId(requestId)
                             .memoryId(finalRequest.getMemoryId())
                             .result(finalContent)
                             .status(ChatResultMessage.ResultStatus.SUCCESS)

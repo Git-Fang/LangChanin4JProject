@@ -17,9 +17,23 @@ public class AppointmentTools {
 
     @Tool(name="book_appointment", value = "预约挂号：根据参数，先执行工具方法queryDepartment查询是否可预约，并直接给用户回答是否可预约，并让用户确认所有预约信息，用户确认后再进行预约。")
     public String bookAppointment(Appointment appointment){
-        if (appointment.getDepartment() == null || appointment.getDate() == null ||
-            appointment.getTime() == null || appointment.getDoctorName() == null) {
-            return "预约信息不完整，请提供完整的预约信息（科室、日期、时间、医生姓名）";
+        if (appointment.getUsername() == null || appointment.getUsername().trim().isEmpty()) {
+            return "预约信息不完整，请提供您的姓名";
+        }
+        if (appointment.getIdCard() == null || appointment.getIdCard().trim().isEmpty()) {
+            return "预约信息不完整，请提供您的身份证号";
+        }
+        if (appointment.getDepartment() == null || appointment.getDepartment().trim().isEmpty()) {
+            return "预约信息不完整，请提供预约科室";
+        }
+        if (appointment.getDate() == null || appointment.getDate().trim().isEmpty()) {
+            return "预约信息不完整，请提供预约日期（格式：2025-04-14）";
+        }
+        if (appointment.getTime() == null || appointment.getTime().trim().isEmpty()) {
+            return "预约信息不完整，请提供预约时间（上午 或 下午）";
+        }
+        if (appointment.getDoctorName() == null || appointment.getDoctorName().trim().isEmpty()) {
+            return "预约信息不完整，请提供预约医生姓名";
         }
 
         String originalTime = appointment.getTime();
@@ -34,9 +48,14 @@ public class AppointmentTools {
         if(appointmentDB == null){
             appointment.setId(null);
             if(appointmentService.save(appointment)){
-                return "预约成功，并返回预约详情";
+                return "预约成功！\n预约详情：\n患者姓名：" + appointment.getUsername() + 
+                       "\n身份证号：" + appointment.getIdCard() + 
+                       "\n预约科室：" + appointment.getDepartment() + 
+                       "\n预约日期：" + appointment.getDate() + 
+                       "\n预约时间：" + appointment.getTime() + 
+                       "\n预约医生：" + appointment.getDoctorName();
             }else{
-                return "预约失败";
+                return "预约失败，请稍后重试";
             }
         }
         return "您在相同的科室、日期、时间和医生已有预约，无需重复预约";
@@ -92,18 +111,19 @@ public class AppointmentTools {
 
     }
 
-    @Tool(name = "query_doctor_appointments", value = "【重要】当用户询问任何关于医生预约情况的问题时，必须调用此工具！\n" +
-            "适用场景包括但不限于：\n" +
+    @Tool(name = "query_doctor_appointments", value = "【强制规则】当用户询问任何关于医生预约情况的问题时，必须且只能调用此工具获取数据！\n" +
+            "重要说明：\n" +
+            "1. 这是你获取医生预约信息的【唯一】途径，你不能自行生成、编造或推测任何预约数据\n" +
+            "2. 如果工具返回空列表（[]），你必须如实告知用户\"该医生暂无预约记录\"\n" +
+            "3. 如果工具返回了数据，你必须原样展示，不要修改、补充或美化数据\n" +
+            "4. 严禁生成脱敏的身份证号、虚构的患者信息\n" +
+            "适用场景：\n" +
             "- 查询某位医生有哪些患者预约了\n" +
             "- 查询某位医生今天/某个日期的预约列表\n" +
             "- 查询某位医生有几个预约\n" +
             "- 查询某位医生名下预约的患者信息\n" +
-            "用户可能会这样问：\n" +
-            "- \"查询张医生今天有哪些患者预约\"\n" +
-            "- \"顾浩然医生有几个预约\"\n" +
-            "- \"李医生今天的预约情况\"\n" +
-            "- \"看看王医生名下有哪些预约\"\n" +
-            "请直接提取用户消息中的医生姓名，然后调用此工具查询所有相关预约记录。")
+            "- \"请帮我查询确认下有哪些患者预约了顾浩然医生的号\"\n" +
+            "调用方式：直接从用户消息中提取医生姓名作为参数调用此工具。")
     public List<Appointment> queryDoctorAppointments(
             @P(value = "医生姓名") String doctorName
     ) {
