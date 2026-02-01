@@ -41,7 +41,7 @@ public class LLMConfig {
     @Value("${ai.dashscope.apiKey:demo}")
     private volatile String dashscopeApiKey;
 
-    @Value("${ai.dashscope.model:qwen-vl-max}")
+    @Value("${ai.dashscope.model:qwen-max}")
     private volatile String dashscopeModel;
 
     @Value("${ai.dashscope.base-url:https://dashscope.aliyuncs.com/compatible-mode/v1}")
