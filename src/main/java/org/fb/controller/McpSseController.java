@@ -13,6 +13,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import reactor.core.publisher.Mono;
@@ -62,7 +63,7 @@ public class McpSseController {
 
     @PostMapping("/messages")
     @Operation(summary = "发送MCP消息")
-    public Mono<Void> sendMessage(
+    public ResponseEntity<Map<String, Object>> sendMessage(
             @RequestHeader(value = "X-Session-ID", required = false) String sessionId,
             @RequestBody McpMessage message,
             HttpServletRequest request) {
@@ -71,8 +72,24 @@ public class McpSseController {
 
         logger.info("接收MCP消息: sessionId={}, method={}", finalSessionId, message.getMethod());
 
-        return mcpSseService.handleMessage(finalSessionId, message)
-            .doOnError(error -> logger.error("处理MCP消息失败: sessionId={}, error={}", finalSessionId, error.getMessage(), error));
+        try {
+            mcpSseService.handleMessage(finalSessionId, message)
+                .doOnError(error -> logger.error("处理MCP消息失败: sessionId={}, error={}", finalSessionId, error.getMessage(), error))
+                .block();
+            
+            return ResponseEntity.ok(Map.of(
+                "status", "ok",
+                "sessionId", finalSessionId,
+                "message", "消息已接收"
+            ));
+        } catch (Exception e) {
+            logger.error("处理MCP消息失败: sessionId={}, error={}", finalSessionId, e.getMessage(), e);
+            return ResponseEntity.internalServerError().body(Map.of(
+                "status", "error",
+                "sessionId", finalSessionId,
+                "message", "处理失败: " + e.getMessage()
+            ));
+        }
     }
 
     @GetMapping("/health")

@@ -1,10 +1,13 @@
 package org.fb.config;
 
 import lombok.extern.slf4j.Slf4j;
+import org.fb.util.SseRequestDetector;
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotWritableException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
@@ -14,19 +17,12 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
-/**
- * 全局异常处理器，处理Redis连接失败、EOFException等异常
- */
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
     private static final String HEADER_PARSER_NO_BYTES_ERROR = "HTTP/1.1 header parser received no bytes";
 
-    /**
-     * 处理EOFException - 网络连接异常
-     * 通常发生在LLM API调用时连接被远程服务器关闭
-     */
     @ExceptionHandler(EOFException.class)
     public ResponseEntity<Map<String, Object>> handleEOFException(
             EOFException ex, WebRequest request) {
@@ -42,9 +38,6 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(response);
     }
 
-    /**
-     * 处理IOException - IO异常
-     */
     @ExceptionHandler(IOException.class)
     public ResponseEntity<Map<String, Object>> handleIOException(
             IOException ex, WebRequest request) {
@@ -81,9 +74,6 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(response);
     }
 
-    /**
-     * 处理Redis连接失败异常
-     */
     @ExceptionHandler(RedisConnectionFailureException.class)
     public ResponseEntity<Map<String, Object>> handleRedisConnectionFailure(
             RedisConnectionFailureException ex, WebRequest request) {
@@ -94,13 +84,9 @@ public class GlobalExceptionHandler {
         response.put("status", "WARNING");
         response.put("path", request.getDescription(false).replace("uri=", ""));
 
-        // 返回200状态码，因为这是一个警告而不是错误
         return ResponseEntity.ok(response);
     }
 
-    /**
-     * 处理通用数据访问异常
-     */
     @ExceptionHandler(DataAccessException.class)
     public ResponseEntity<Map<String, Object>> handleDataAccessException(
             DataAccessException ex, WebRequest request) {
@@ -114,16 +100,75 @@ public class GlobalExceptionHandler {
         return ResponseEntity.ok(response);
     }
 
-    /**
-     * 处理通用异常
-     */
+    @ExceptionHandler(HttpMessageNotWritableException.class)
+    public ResponseEntity<Map<String, Object>> handleHttpMessageNotWritableException(
+            HttpMessageNotWritableException ex, WebRequest request) {
+        log.error("HttpMessageNotWritableException: {}", ex.getMessage(), ex);
+
+        boolean isSseRequest = isSseRequest(request);
+        if (isSseRequest) {
+            log.warn("检测到SSE请求的消息转换异常，尝试降级处理");
+        }
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("error", "消息转换失败");
+        response.put("message", getSafeMessage(ex, isSseRequest ? "数据序列化失败，请检查输入格式" : "系统内部错误"));
+        response.put("status", "ERROR");
+        response.put("errorType", "MESSAGE_CONVERSION_ERROR");
+        response.put("retryable", !isSseRequest);
+
+        if (isSseRequest) {
+            response.put("fallback", "请尝试刷新页面或重新连接");
+        }
+
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(response);
+    }
+
+    private boolean isSseRequest(WebRequest request) {
+        return SseRequestDetector.isSseRequest(request);
+    }
+
+    private String getSafeMessage(Throwable ex, String defaultMessage) {
+        if (ex == null) {
+            return defaultMessage;
+        }
+        String message = ex.getMessage();
+        if (message != null && !message.isEmpty()) {
+            if (message.contains("No converter") && message.contains("HashMap")) {
+                return "数据格式转换失败，请检查请求参数";
+            }
+            return message;
+        }
+        if (ex.getCause() != null) {
+            return getSafeMessage(ex.getCause(), defaultMessage);
+        }
+        return defaultMessage;
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, Object>> handleGeneralException(
             Exception ex, WebRequest request) {
         log.error("发生异常: {}", ex.getMessage(), ex);
+
+        if (isSseRequest(request)) {
+            log.warn("检测到SSE请求异常，返回SSE兼容的错误响应");
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("status", "error");
+            errorResponse.put("message", "系统错误: " + getSafeMessage(ex, "未知错误"));
+            errorResponse.put("errorType", "GENERAL_EXCEPTION");
+            errorResponse.put("retryable", true);
+            errorResponse.put("timestamp", System.currentTimeMillis());
+
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(errorResponse);
+        }
+
         Map<String, Object> response = new HashMap<>();
         response.put("error", "系统错误");
-        response.put("message", ex.getMessage());
+        response.put("message", getSafeMessage(ex, "系统内部错误"));
         response.put("status", "ERROR");
         response.put("path", request.getDescription(false).replace("uri=", ""));
 
