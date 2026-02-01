@@ -1658,7 +1658,16 @@
         }
 
         function copyMessage(content, btn) {
-            navigator.clipboard.writeText(content).then(() => {
+            // 优先使用dataset中存储的最新内容，其次从DOM获取
+            const messageElement = btn.closest('.message');
+            const latestContent = messageElement?.dataset?.content;
+            const contentDiv = messageElement?.querySelector('.message-content');
+            const domContent = contentDiv?.textContent;
+
+            // 按优先级获取内容：dataset.content > DOM textContent > 原始参数
+            const textToCopy = latestContent || domContent || content;
+
+            navigator.clipboard.writeText(textToCopy).then(() => {
                 btn.classList.add('copied');
                 btn.innerHTML = '<span>✓</span> 已复制';
                 setTimeout(() => {
@@ -1819,6 +1828,7 @@
                             if (data.content) {
                                 accumulatedContent += data.content;
                                 contentDiv.textContent = accumulatedContent;
+                                loadingDiv.dataset.content = accumulatedContent;
                                 
                                 const container = document.getElementById('messagesContainer');
                                 container.scrollTop = container.scrollHeight;
