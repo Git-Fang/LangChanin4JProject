@@ -29,11 +29,6 @@ public class ChatSaveServiceImpl implements ChatSaveService {
         log.info("memoryId: {}, chatType: {}", memoryId, chatType);
 
         try {
-            // 先删除该memoryId对应的所有类型记录，避免重复
-            log.info("准备清理该memoryId的所有类型记录, memoryId: {}", memoryId);
-            deleteChatInfoByMemoryId(memoryId);
-            log.info("该memoryId的所有类型记录清理完成");
-
             SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
             String currentTime = sdf.format(new Date());
 

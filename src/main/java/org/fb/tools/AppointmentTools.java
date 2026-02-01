@@ -17,19 +17,29 @@ public class AppointmentTools {
 
     @Tool(name="book_appointment", value = "预约挂号：根据参数，先执行工具方法queryDepartment查询是否可预约，并直接给用户回答是否可预约，并让用户确认所有预约信息，用户确认后再进行预约。")
     public String bookAppointment(Appointment appointment){
-        //查找数据库中是否包含对应的预约记录
-//        Appointment appointmentDB = appointmentService.getOne(appointment);
-        Appointment appointmentDB = appointmentService.getByIdCard(appointment);
+        if (appointment.getDepartment() == null || appointment.getDate() == null ||
+            appointment.getTime() == null || appointment.getDoctorName() == null) {
+            return "预约信息不完整，请提供完整的预约信息（科室、日期、时间、医生姓名）";
+        }
+
+        String originalTime = appointment.getTime();
+        if (originalTime != null && originalTime.contains("下午")) {
+            appointment.setTime("下午");
+        } else if (originalTime != null && originalTime.contains("上午")) {
+            appointment.setTime("上午");
+        }
+
+        Appointment appointmentDB = appointmentService.getOne(appointment);
 
         if(appointmentDB == null){
-            appointment.setId(null); //防止大模型幻觉设置了id
+            appointment.setId(null);
             if(appointmentService.save(appointment)){
                 return "预约成功，并返回预约详情";
             }else{
                 return "预约失败";
             }
         }
-        return "您在相同的科室和时间已有预约";
+        return "您在相同的科室、日期、时间和医生已有预约，无需重复预约";
     }
 
     @Tool(name="cancel_appointment", value = "取消预约挂号:根据参数，查询预约是否存在，如果存在则删除预约记录并返回取 消预约成功，否则返回取消预约失败")

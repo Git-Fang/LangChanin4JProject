@@ -19,12 +19,16 @@ public class AppointmentServiceImpl extends ServiceImpl<AppointmentMapper, Appoi
 
     @Override
     public Appointment getOne(Appointment appointment) {
+        if (appointment.getDepartment() == null || appointment.getDate() == null ||
+            appointment.getTime() == null || appointment.getDoctorName() == null) {
+            return null;
+        }
+
         LambdaQueryWrapper<Appointment> queryWrapper = new LambdaQueryWrapper<>();
-        queryWrapper.eq(Appointment::getUsername, appointment.getUsername());
-        queryWrapper.eq(Appointment::getIdCard, appointment.getIdCard());
         queryWrapper.eq(Appointment::getDepartment, appointment.getDepartment());
         queryWrapper.eq(Appointment::getDate, appointment.getDate());
         queryWrapper.eq(Appointment::getTime, appointment.getTime());
+        queryWrapper.eq(Appointment::getDoctorName, appointment.getDoctorName());
 
         Appointment appointmentDB = baseMapper.selectOne(queryWrapper);
         return appointmentDB;
