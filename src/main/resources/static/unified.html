@@ -1006,6 +1006,23 @@
             animation: pulse 1s infinite;
         }
 
+        .message-action-btn.stop-btn {
+            border-color: #f44336;
+            color: #f44336;
+        }
+
+        .message-action-btn.stop-btn:hover {
+            background: #f44336;
+            color: white;
+        }
+
+        .message-action-btn.stop-btn:disabled {
+            background: #f5f5f5;
+            color: #999;
+            border-color: #ddd;
+            cursor: not-allowed;
+        }
+
         @keyframes pulse {
             0%, 100% { opacity: 1; }
             50% { opacity: 0.7; }
@@ -1172,6 +1189,9 @@
         let lastUserMessage = null; // 保存最后一条用户消息用于AI重试
         let attachedFiles = []; // 附件文件列表
         let extractedTexts = []; // 提取的文件内容
+        let httpController = null;
+        let httpEventSource = null;
+        let currentLoadingDiv = null;
 
         // 初始化memoryId - 使用sessionStorage保证同一页面会话连贯性
         function initMemoryId() {
@@ -1315,18 +1335,25 @@
             }
         }
 
-        async function sendSseMessage(message) {
+        async function sendSseMessage(message, controller = null) {
             const messagesUrl = `${SSE_BASE_URL}/messages`;
 
             try {
-                const response = await fetch(messagesUrl, {
+                const fetchOptions = {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         'X-Session-ID': sessionId
                     },
                     body: JSON.stringify(message)
-                });
+                };
+
+                // 如果提供了 controller，使用其 signal
+                if (controller) {
+                    fetchOptions.signal = controller.signal;
+                }
+
+                const response = await fetch(messagesUrl, fetchOptions);
 
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
@@ -1339,7 +1366,10 @@
                     return responseData;
                 }
             } catch (error) {
-                addLog('ERROR', '发送SSE消息失败: ' + error.message);
+                // 如果是被中止的，不记录日志
+                if (error.name !== 'AbortError') {
+                    addLog('ERROR', '发送SSE消息失败: ' + error.message);
+                }
                 throw error;
             }
         }
@@ -1582,12 +1612,30 @@
                 actionsDiv.classList.add('message-actions-http');
             }
 
-            const copyBtn = document.createElement('button');
-            copyBtn.className = 'message-action-btn copy-btn';
-            copyBtn.innerHTML = '<span>📋</span> 复制';
-            copyBtn.onclick = () => copyMessage(content, copyBtn);
+                const copyBtn = document.createElement('button');
+                copyBtn.className = 'message-action-btn copy-btn';
+                copyBtn.innerHTML = '<span>📋</span> 复制';
+                copyBtn.onclick = () => copyMessage(content, copyBtn);
 
-            actionsDiv.appendChild(copyBtn);
+                actionsDiv.appendChild(copyBtn);
+
+                // HTTP 模式下添加停止按钮
+                if (!isUser && currentMode === 'http') {
+                    const stopBtn = document.createElement('button');
+                    stopBtn.className = 'message-action-btn stop-btn';
+                    stopBtn.innerHTML = '<span>⏹</span> 停止';
+                    stopBtn.onclick = () => stopStreaming(stopBtn, messageDiv);
+                    actionsDiv.appendChild(stopBtn);
+                }
+
+                // SSE 模式下添加停止按钮
+                if (!isUser && currentMode === 'sse') {
+                    const stopBtn = document.createElement('button');
+                    stopBtn.className = 'message-action-btn stop-btn';
+                    stopBtn.innerHTML = '<span>⏹</span> 停止';
+                    stopBtn.onclick = () => stopSseStreaming(stopBtn, messageDiv);
+                    actionsDiv.appendChild(stopBtn);
+                }
 
             if (isUser) {
                 const editRetryBtn = document.createElement('button');
@@ -1644,6 +1692,13 @@
                 wrapperDiv.appendChild(actionsDiv);
                 messageDiv.appendChild(avatar);
                 messageDiv.appendChild(wrapperDiv);
+            } else if (!isUser && currentMode === 'sse') {
+                const wrapperDiv = document.createElement('div');
+                wrapperDiv.className = 'message-http-wrapper';
+                wrapperDiv.appendChild(contentDiv);
+                wrapperDiv.appendChild(actionsDiv);
+                messageDiv.appendChild(avatar);
+                messageDiv.appendChild(wrapperDiv);
             } else {
                 messageDiv.appendChild(avatar);
                 messageDiv.appendChild(contentDiv);
@@ -1678,6 +1733,83 @@
                 console.error('复制失败:', err);
                 alert('复制失败，请手动选择文本复制');
             });
+        }
+
+        function stopStreaming(stopBtn, messageElement) {
+            // 从消息元素获取控制器引用
+            const controller = messageElement?._controller;
+            const eventSource = messageElement?._eventSource;
+
+            // 中止 HTTP 请求
+            if (controller) {
+                controller.abort();
+                messageElement._controller = null;
+            }
+
+            // 关闭 EventSource
+            if (eventSource) {
+                eventSource.close();
+                messageElement._eventSource = null;
+            }
+
+            // 禁用停止按钮
+            stopBtn.disabled = true;
+            stopBtn.innerHTML = '<span>⏹</span> 已停止';
+
+            // 标记消息已完成
+            messageElement.dataset.stopped = 'true';
+
+            // 移除当前消息的复制和停止按钮
+            const actionsDiv = messageElement?.querySelector('.message-actions');
+            if (actionsDiv) {
+                const copyBtn = actionsDiv.querySelector('.copy-btn');
+                const stopBtnInActions = actionsDiv.querySelector('.stop-btn');
+                if (copyBtn) copyBtn.style.display = 'none';
+                if (stopBtnInActions) stopBtnInActions.remove();
+
+                // 添加完成提示
+                const tipDiv = document.createElement('div');
+                tipDiv.style.cssText = 'font-size: 0.75rem; color: #999; margin-top: 4px;';
+                tipDiv.textContent = '已手动停止';
+                actionsDiv.appendChild(tipDiv);
+            }
+
+            console.log('已停止流式接收');
+        }
+
+        function stopSseStreaming(stopBtn, messageElement) {
+            // 获取 SSE 控制器
+            const controller = messageElement?._sseController;
+
+            // 中止 SSE 请求
+            if (controller) {
+                controller.abort();
+                messageElement._sseController = null;
+            }
+
+            // 禁用停止按钮
+            stopBtn.disabled = true;
+            stopBtn.innerHTML = '<span>⏹</span> 已停止';
+
+            // 标记消息已完成
+            messageElement.dataset.stopped = 'true';
+
+            // 移除当前消息的复制和停止按钮
+            const actionsDiv = messageElement?.querySelector('.message-actions');
+            if (actionsDiv) {
+                const copyBtn = actionsDiv.querySelector('.copy-btn');
+                const stopBtnInActions = actionsDiv.querySelector('.stop-btn');
+                if (copyBtn) copyBtn.style.display = 'none';
+                if (stopBtnInActions) stopBtnInActions.remove();
+
+                // 添加完成提示
+                const tipDiv = document.createElement('div');
+                tipDiv.style.cssText = 'font-size: 0.75rem; color: #999; margin-top: 4px;';
+                tipDiv.textContent = '已手动停止';
+                actionsDiv.appendChild(tipDiv);
+            }
+
+            console.log('已停止 SSE 流式接收');
         }
 
         function toggleSpeech(messageElement, button) {
@@ -1772,6 +1904,7 @@
             clearAttachedFiles();
 
             const loadingDiv = addMessage('正在思考...', false);
+            currentLoadingDiv = loadingDiv;
             const contentDiv = loadingDiv.querySelector('.message-content');
             const loadingIndicator = document.createElement('span');
             loadingIndicator.className = 'loading';
@@ -1783,6 +1916,7 @@
                 if (currentMode === 'http') {
                     // HTTP 模式 - 使用 POST + SSE 流式接口
                     const controller = new AbortController();
+                    loadingDiv._controller = controller;
                     const timeoutId = setTimeout(() => controller.abort(), 300000);
 
                     const initResponse = await fetch(`${API_BASE_URL}/xiaozhi/chat/http-stream`, {
@@ -1811,16 +1945,25 @@
                     const streamUrlFull = `${API_BASE_URL}${streamUrl}`;
                     console.log('HTTP流式请求ID:', streamRequestId, 'URL:', streamUrlFull);
                     
-                    const httpEventSource = new EventSource(streamUrlFull);
+                    const eventSource = new EventSource(streamUrlFull);
+                    loadingDiv._eventSource = eventSource;
                     let accumulatedContent = '';
                     let httpStreamComplete = false;
                     
-                    httpEventSource.addEventListener('connected', async (e) => {
+                    eventSource.addEventListener('connected', async (e) => {
                         console.log('HTTP SSE 连接已建立');
                         addLog('INFO', 'HTTP流式连接已建立');
                     });
                     
-                    httpEventSource.addEventListener('chunk', async (e) => {
+                    eventSource.addEventListener('chunk', async (e) => {
+                        // 检查是否已手动停止
+                        if (loadingDiv.dataset.stopped === 'true') {
+                            eventSource.close();
+                            loadingDiv._eventSource = null;
+                            loadingDiv._controller = null;
+                            return;
+                        }
+
                         try {
                             const data = JSON.parse(e.data);
                             console.log('收到HTTP流式内容块:', data);
@@ -1842,7 +1985,15 @@
                         }
                     });
                     
-                    httpEventSource.addEventListener('result', async (e) => {
+                    eventSource.addEventListener('result', async (e) => {
+                        // 检查是否已手动停止
+                        if (loadingDiv.dataset.stopped === 'true') {
+                            eventSource.close();
+                            loadingDiv._eventSource = null;
+                            loadingDiv._controller = null;
+                            return;
+                        }
+
                         try {
                             const result = JSON.parse(e.data);
                             console.log('收到HTTP流式结果:', result);
@@ -1867,8 +2018,9 @@
                                 addMessage('处理失败: ' + (result.error || '未知错误'), false);
                             }
                             
-                            httpEventSource.close();
-                            httpEventSource = null;
+                            eventSource.close();
+                            loadingDiv._eventSource = null;
+                            loadingDiv._controller = null;
                             
                             loadHistorySessions();
                         } catch (error) {
@@ -1876,36 +2028,58 @@
                         }
                     });
                     
-                    httpEventSource.addEventListener('complete', (e) => {
+                    eventSource.addEventListener('complete', (e) => {
                         console.log('HTTP SSE 流完成');
                         if (!httpStreamComplete) {
+                            // 检查是否已手动停止
+                            if (loadingDiv.dataset.stopped === 'true') {
+                                eventSource.close();
+                                loadingDiv._eventSource = null;
+                                loadingDiv._controller = null;
+                                return;
+                            }
+
                             if (accumulatedContent) {
                                 contentDiv.innerHTML = marked.parse(accumulatedContent);
                             }
-                            httpEventSource.close();
-                            httpEventSource = null;
+                            eventSource.close();
+                            loadingDiv._eventSource = null;
+                            loadingDiv._controller = null;
                         }
                     });
                     
-                    httpEventSource.addEventListener('error', (error) => {
+                    eventSource.addEventListener('error', (error) => {
                         console.error('HTTP SSE 错误:', error);
                         httpStreamComplete = true;
-                        httpEventSource.close();
-                        httpEventSource = null;
-                        
+
+                        // 检查是否已手动停止
+                        if (loadingDiv.dataset.stopped === 'true') {
+                            eventSource.close();
+                            loadingDiv._eventSource = null;
+                            loadingDiv._controller = null;
+                            return;
+                        }
+
                         if (loadingDiv && loadingDiv.parentNode) {
                             loadingDiv.remove();
                         }
                         addMessage('抱歉，服务暂时不可用，请稍后重试。', false);
+
+                        eventSource.close();
+                        loadingDiv._eventSource = null;
+                        loadingDiv._controller = null;
                     });
                     
-                    httpEventSource.onerror = (error) => {
+                    eventSource.onerror = (error) => {
                         console.error('HTTP SSE 底层错误:', error);
                     };
                     
                     return;
                 } else {
                     // SSE 模式
+                    const sseController = new AbortController();
+                    loadingDiv._sseController = sseController;
+
                     const sseMessage = {
                         jsonrpc: "2.0",
                         id: String(messageId++),
@@ -1922,16 +2096,36 @@
                     // 记录发送的消息到日志
                     addLog('REQUEST', '发送SSE消息', sseMessage);
                     
-                    await sendSseMessage(sseMessage);
+                    try {
+                        await sendSseMessage(sseMessage, sseController);
+                    } catch (error) {
+                        // 检查是否是手动停止
+                        if (loadingDiv.dataset.stopped === 'true') {
+                            console.log('SSE 请求已手动停止');
+                            loadingDiv._sseController = null;
+                            return;
+                        }
+                        throw error;
+                    }
+
+                    // 请求完成，清除控制器
+                    loadingDiv._sseController = null;
                 }
             } catch (error) {
                 console.error('Error:', error);
                 console.error('Error stack:', error.stack);
                 
+                // 检查是否是手动停止
+                if (loadingDiv?.dataset?.stopped === 'true') {
+                    console.log('请求已手动停止');
+                    return;
+                }
+                
                 let errorMsg = '请求失败,请重试';
                 let showRetry = true;
                 if (error.name === 'AbortError') {
-                    errorMsg = '请求超时，请稍后重试';
+                    errorMsg = '请求已取消';
+                    showRetry = false;
                 } else if (error.message) {
                     errorMsg = error.message.length > 50 ? '请求失败,请重试' : error.message;
                 }

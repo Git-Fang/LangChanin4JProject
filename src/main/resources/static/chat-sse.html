@@ -356,6 +356,23 @@
             animation: pulse 1s infinite;
         }
 
+        .action-btn.stop-btn {
+            border-color: #f44336;
+            color: #f44336;
+        }
+
+        .action-btn.stop-btn:hover {
+            background: #f44336;
+            color: white;
+        }
+
+        .action-btn.stop-btn:disabled {
+            background: #f5f5f5;
+            color: #999;
+            border-color: #ddd;
+            cursor: not-allowed;
+        }
+
         @keyframes pulse {
             0%, 100% { opacity: 1; }
             50% { opacity: 0.7; }
@@ -559,7 +576,16 @@
         }
         
         function copyMessage(content, btn) {
-            navigator.clipboard.writeText(content).then(() => {
+            // 优先使用dataset中存储的最新内容，其次从DOM获取
+            const messageElement = btn.closest('.message');
+            const latestContent = messageElement?.dataset?.content;
+            const bubble = messageElement?.querySelector('.bubble');
+            const domContent = bubble?.textContent;
+
+            // 按优先级获取内容：dataset.content > DOM textContent > 原始参数
+            const textToCopy = latestContent || domContent || content;
+
+            navigator.clipboard.writeText(textToCopy).then(() => {
                 btn.classList.add('copied');
                 btn.innerHTML = '<span>✓</span> 已复制';
                 setTimeout(() => {
@@ -599,6 +625,53 @@
                     if (originalOnEnd) originalOnEnd.call(this);
                 };
             }
+        }
+
+        function stopSseStreaming(stopBtn, messageElement) {
+            // 关闭 EventSource
+            if (eventSource) {
+                eventSource.close();
+                eventSource = null;
+            }
+
+            // 禁用停止按钮
+            stopBtn.disabled = true;
+            stopBtn.innerHTML = '<span>⏹</span> 已停止';
+
+            // 标记消息已完成
+            messageElement.dataset.stopped = 'true';
+            isStreaming = false;
+
+            // 更新状态指示
+            updateConnectionStatus('disconnected', '已手动停止');
+
+            // 移除复制、停止按钮，添加停止提示
+            const actionsDiv = messageElement?.querySelector('.actions');
+            if (actionsDiv) {
+                const copyBtn = actionsDiv.querySelector('.copy-btn');
+                const retryBtn = actionsDiv.querySelector('.retry-btn');
+                const ttsBtn = actionsDiv.querySelector('.tts-btn');
+                if (copyBtn) copyBtn.style.display = 'none';
+                if (retryBtn) retryBtn.style.display = 'none';
+                if (ttsBtn) ttsBtn.style.display = 'none';
+
+                // 添加停止提示
+                const tipDiv = document.createElement('div');
+                tipDiv.style.cssText = 'font-size: 0.75rem; color: #999; margin-top: 4px;';
+                tipDiv.textContent = '已手动停止';
+                messageElement.appendChild(tipDiv);
+            }
+
+            // 隐藏流式指示器
+            const streamingIndicator = messageElement.querySelector('.streaming-indicator');
+            if (streamingIndicator) {
+                streamingIndicator.style.display = 'none';
+            }
+
+            // 重置状态
+            resetState();
+
+            console.log('已停止 SSE 流式接收');
         }
 
         function retryWithEdit(content) {
@@ -992,6 +1065,12 @@
             copyBtn.innerHTML = '<span>📋</span> 复制';
             copyBtn.onclick = () => copyMessage(accumulatedContent, copyBtn);
             actionsDiv.appendChild(copyBtn);
+
+            const stopBtn = document.createElement('button');
+            stopBtn.className = 'action-btn stop-btn';
+            stopBtn.innerHTML = '<span>⏹</span> 停止';
+            stopBtn.onclick = () => stopSseStreaming(stopBtn, aiMessageDiv);
+            actionsDiv.appendChild(stopBtn);
             
             const retryBtn = document.createElement('button');
             retryBtn.className = 'action-btn retry-btn';
@@ -1027,6 +1106,7 @@
                 if (chunkBuffer.length >= 10 || (now - lastChunkTime >= MIN_CHUNK_DELAY && chunkBuffer.length > 0)) {
                     accumulatedContent += chunkBuffer;
                     bubble.textContent = accumulatedContent;
+                    aiMessageDiv.dataset.content = accumulatedContent;
                     
                     messagesArea.scrollTop = messagesArea.scrollHeight;
                     
@@ -1047,6 +1127,13 @@
             });
             
             eventSource.addEventListener('chunk', (e) => {
+                // 检查是否已手动停止
+                if (aiMessageDiv.dataset.stopped === 'true') {
+                    closeEventSource();
+                    isStreaming = false;
+                    return;
+                }
+
                 try {
                     const data = JSON.parse(e.data);
                     console.log('收到内容块:', data);
@@ -1082,6 +1169,13 @@
             });
             
             eventSource.addEventListener('result', (e) => {
+                // 检查是否已手动停止
+                if (aiMessageDiv.dataset.stopped === 'true') {
+                    closeEventSource();
+                    isStreaming = false;
+                    return;
+                }
+
                 try {
                     const result = JSON.parse(e.data);
                     console.log('收到结果:', result);
@@ -1152,6 +1246,13 @@
             });
             
             eventSource.addEventListener('error', (e) => {
+                // 检查是否已手动停止
+                if (aiMessageDiv.dataset.stopped === 'true') {
+                    closeEventSource();
+                    isStreaming = false;
+                    return;
+                }
+
                 console.error('SSE错误事件:', e);
                 isStreaming = false;
                 streamingIndicator.style.display = 'none';
@@ -1176,6 +1277,13 @@
             });
             
             eventSource.addEventListener('timeout', (e) => {
+                // 检查是否已手动停止
+                if (aiMessageDiv.dataset.stopped === 'true') {
+                    closeEventSource();
+                    isStreaming = false;
+                    return;
+                }
+
                 console.warn('SSE超时');
                 isStreaming = false;
                 streamingIndicator.style.display = 'none';
@@ -1185,6 +1293,13 @@
             });
             
             eventSource.onerror = (error) => {
+                // 检查是否已手动停止
+                if (aiMessageDiv.dataset.stopped === 'true') {
+                    closeEventSource();
+                    isStreaming = false;
+                    return;
+                }
+
                 console.error('SSE底层错误:', error);
                 isStreaming = false;
                 streamingIndicator.style.display = 'none';
