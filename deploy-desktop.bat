@@ -250,6 +250,17 @@ echo.
 echo       Stopping and removing old container if exists...
 docker stop %CONTAINER_NAME% >nul 2>&1
 docker rm -f %CONTAINER_NAME% >nul 2>&1
+timeout /t 2 /nobreak >nul
+
+echo       Checking for conflicting containers...
+for /f "tokens=*" %%i in ('docker ps -a --filter "name=%CONTAINER_NAME%" --format "{{.ID}}"') do (
+    if not "%%i"=="" (
+        echo       Found conflicting container %%i, removing...
+        docker rm -f %%i >nul 2>&1
+    )
+)
+timeout /t 2 /nobreak >nul
+
 echo       Old container cleaned up
 
 echo.
@@ -264,9 +275,25 @@ if "%USE_LOCAL_MYSQL%"=="1" (
 )
 
 if errorlevel 1 (
-    echo [ERROR] Container failed to start!
-    pause
-    exit /b 1
+    echo [WARNING] Container failed to start, attempting to clean up and retry...
+    docker stop %CONTAINER_NAME% >nul 2>&1
+    docker rm -f %CONTAINER_NAME% >nul 2>&1
+    timeout /t 3 /nobreak >nul
+    
+    echo       Retrying container start...
+    if "%USE_LOCAL_MYSQL%"=="1" (
+        docker run -d --name %CONTAINER_NAME% --network ai-network -p %APP_PORT%:%APP_PORT% --env-file .env --add-host=host.docker.internal:host-gateway -e SPRING_PROFILES_ACTIVE=docker -e NACOS_SERVER_ADDR=nacos:8848 -e SPRING_DATASOURCE_URL=jdbc:mysql://host.docker.internal:3306/mydocker?useUnicode=true^&characterEncoding=UTF-8^&serverTimezone=Asia/Shanghai^&useSSL=false^&allowPublicKeyRetrieval=true -e SPRING_DATA_MONGODB_URI=mongodb://host.docker.internal:27017/chat_db -e SPRING_REDIS_HOST=redis -e SPRING_REDIS_PORT=6379 -e AI_EMBEDDINGSTORE_QDRANT_HOST=qdrant -e AI_EMBEDDINGSTORE_QDRANT_PORT=6334 -e spring.kafka.bootstrap-servers=kafka:9092 -e TZ=Asia/Shanghai --dns=8.8.8.8 --dns=114.114.114.114 %IMAGE_NAME%:latest
+    ) else (
+        docker run -d --name %CONTAINER_NAME% --network ai-network -p %APP_PORT%:%APP_PORT% --env-file .env --add-host=host.docker.internal:host-gateway -e SPRING_PROFILES_ACTIVE=docker -e NACOS_SERVER_ADDR=nacos:8848 -e SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/mydocker?useUnicode=true^&characterEncoding=UTF-8^&serverTimezone=Asia/Shanghai^&useSSL=false^&allowPublicKeyRetrieval=true -e SPRING_DATA_MONGODB_URI=mongodb://host.docker.internal:27017/chat_db -e SPRING_REDIS_HOST=redis -e SPRING_REDIS_PORT=6379 -e AI_EMBEDDINGSTORE_QDRANT_HOST=qdrant -e AI_EMBEDDINGSTORE_QDRANT_PORT=6334 -e spring.kafka.bootstrap-servers=kafka:9092 -e TZ=Asia/Shanghai --dns=8.8.8.8 --dns=114.114.114.114 %IMAGE_NAME%:latest
+    )
+    
+    if errorlevel 1 (
+        echo [ERROR] Container failed to start after retry!
+        pause
+        exit /b 1
+    ) else (
+        echo       Container started successfully on retry!
+    )
 )
 
 echo       Container started, waiting for initialization...

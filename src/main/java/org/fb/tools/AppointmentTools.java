@@ -92,7 +92,18 @@ public class AppointmentTools {
 
     }
 
-    @Tool(name = "query_doctor_appointments", value="查询医生的预约列表:根据医生姓名查询该医生的所有预约记录，并返回给用户")
+    @Tool(name = "query_doctor_appointments", value = "【重要】当用户询问任何关于医生预约情况的问题时，必须调用此工具！\n" +
+            "适用场景包括但不限于：\n" +
+            "- 查询某位医生有哪些患者预约了\n" +
+            "- 查询某位医生今天/某个日期的预约列表\n" +
+            "- 查询某位医生有几个预约\n" +
+            "- 查询某位医生名下预约的患者信息\n" +
+            "用户可能会这样问：\n" +
+            "- \"查询张医生今天有哪些患者预约\"\n" +
+            "- \"顾浩然医生有几个预约\"\n" +
+            "- \"李医生今天的预约情况\"\n" +
+            "- \"看看王医生名下有哪些预约\"\n" +
+            "请直接提取用户消息中的医生姓名，然后调用此工具查询所有相关预约记录。")
     public List<Appointment> queryDoctorAppointments(
             @P(value = "医生姓名") String doctorName
     ) {
