@@ -93,6 +93,7 @@ public class LLMConfig {
     private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(30);
     private volatile ChatModel deepSeekChatModel;
     private volatile ChatModel qwenChatModel;
+    private volatile ChatModel qwenVisionChatModel;
     private volatile StreamingChatModel streamingChatModel;
     private volatile ChatModel ollamaChatModel;
     private volatile ChatModel kimiChatModel;
@@ -105,6 +106,7 @@ public class LLMConfig {
     public void refreshAllModels() {
         refreshDeepSeekChatModel();
         refreshQwenChatModel();
+        refreshQwenVisionChatModel();
         refreshStreamingChatModel();
         refreshOllamaChatModel();
         refreshKimiChatModel();
@@ -142,6 +144,25 @@ public class LLMConfig {
                     .timeout(READ_TIMEOUT)
                     .maxRetries(dashscopeMaxRetries)
                     .build();
+        }
+    }
+
+    private void refreshQwenVisionChatModel() {
+        if (dashscopeApiKey == null || dashscopeApiKey.isEmpty() || dashscopeApiKey.equals("demo")) {
+            log.warn("DashScope API Key未配置，Qwen Vision模型不可用");
+            this.qwenVisionChatModel = null;
+        } else {
+            // 使用支持视觉能力的qwen-vl模型
+            this.qwenVisionChatModel = OpenAiChatModel.builder()
+                    .apiKey(dashscopeApiKey)
+                    .modelName("qwen-vl-max")
+                    .baseUrl(dashscopeUrl)
+                    .logRequests(true)
+                    .logResponses(true)
+                    .timeout(READ_TIMEOUT)
+                    .maxRetries(dashscopeMaxRetries)
+                    .build();
+            log.info("Qwen Vision模型(qwen-vl-max)初始化成功");
         }
     }
 
@@ -202,6 +223,11 @@ public class LLMConfig {
     @Bean
     public ChatModel qwenChatModel() {
         return qwenChatModel;
+    }
+
+    @Bean(name = "qwenVisionChatModel")
+    public ChatModel qwenVisionChatModel() {
+        return qwenVisionChatModel;
     }
 
     @Bean

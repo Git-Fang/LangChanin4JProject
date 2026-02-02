@@ -2300,7 +2300,33 @@
                 reader.onload = async function(e) {
                     try {
                         const base64Data = e.target.result.split(',')[1];
-                        const imageType = file.type.split('/')[1] || 'png';
+                        
+                        // 从文件类型或文件名扩展名提取图片类型
+                        let imageType = file.type.split('/')[1];
+                        
+                        // 如果file.type为空或无法识别，从文件名扩展名提取
+                        if (!imageType || imageType.trim() === '') {
+                            const fileName = file.name.toLowerCase();
+                            if (fileName.endsWith('.jpg') || fileName.endsWith('.jpeg')) {
+                                imageType = 'jpeg';
+                            } else if (fileName.endsWith('.png')) {
+                                imageType = 'png';
+                            } else if (fileName.endsWith('.gif')) {
+                                imageType = 'gif';
+                            } else if (fileName.endsWith('.bmp')) {
+                                imageType = 'bmp';
+                            } else if (fileName.endsWith('.webp')) {
+                                imageType = 'webp';
+                            } else {
+                                // 默认使用png
+                                imageType = 'png';
+                            }
+                        }
+                        
+                        // 确保jpeg文件使用正确的MIME类型
+                        if (imageType === 'jpg') {
+                            imageType = 'jpeg';
+                        }
 
                         const formData = new FormData();
                         formData.append('base64Data', base64Data);
@@ -2924,8 +2950,34 @@
             reader.onload = function(e) {
                 selectedImageBase64 = e.target.result.split(',')[1];
                 
-                const imageType = file.type.split('/')[1];
-                selectedImageType = imageType || 'png';
+                // 从文件类型或文件名扩展名提取图片类型
+                let imageType = file.type.split('/')[1];
+                
+                // 如果file.type为空或无法识别，从文件名扩展名提取
+                if (!imageType || imageType.trim() === '') {
+                    const fileName = file.name.toLowerCase();
+                    if (fileName.endsWith('.jpg') || fileName.endsWith('.jpeg')) {
+                        imageType = 'jpeg';
+                    } else if (fileName.endsWith('.png')) {
+                        imageType = 'png';
+                    } else if (fileName.endsWith('.gif')) {
+                        imageType = 'gif';
+                    } else if (fileName.endsWith('.bmp')) {
+                        imageType = 'bmp';
+                    } else if (fileName.endsWith('.webp')) {
+                        imageType = 'webp';
+                    } else {
+                        // 默认使用png
+                        imageType = 'png';
+                    }
+                }
+                
+                // 确保jpeg文件使用正确的MIME类型
+                if (imageType === 'jpg') {
+                    imageType = 'jpeg';
+                }
+                
+                selectedImageType = imageType;
                 
                 const imagePreview = document.getElementById('imagePreview');
                 imagePreview.classList.add('has-image');

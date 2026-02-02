@@ -42,7 +42,7 @@ public class ChatImageController {
     private EnvConf envConf;
 
     @Autowired
-    @Qualifier("qwenChatModel")
+    @Qualifier("qwenVisionChatModel")
     private ChatModel qwen;
 
     @PostMapping("/chatImage")
@@ -60,6 +60,11 @@ public class ChatImageController {
 
         // 获取图片的MIME类型
         String mimeType = "image/" + imageType;
+        
+        // 确保jpg文件使用正确的MIME类型
+        if ("jpg".equalsIgnoreCase(imageType)) {
+            mimeType = "image/jpeg";
+        }
 
         log.info("收到图片处理请求: imageType={}, prompt={}, base64Length={}", imageType, prompt, base64Data.length());
 
