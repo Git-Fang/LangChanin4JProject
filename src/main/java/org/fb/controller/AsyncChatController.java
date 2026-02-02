@@ -1292,7 +1292,7 @@ flux.publishOn(Schedulers.boundedElastic())
             final Long memoryId = tempMemoryId;
             final String message = tempMessage;
 
-if (streamingDispatchService != null) {
+ if (streamingDispatchService != null) {
                 log.info("使用流式分发服务(意图识别+业务分发)处理HTTP请求, requestId: {}", requestId);
 
                 // 安全设置Redis值
@@ -1333,9 +1333,8 @@ if (streamingDispatchService != null) {
 
                         String finalContent = accumulated.get();
 
-                        // 保存聊天信息到数据库
-                        // 注意：这里使用general类型，因为这是HTTP流式处理，不进行意图识别
-                        saveChatToDatabase(memoryId, message, BusinessConstant.DEFAULT_TYPE, finalContent);
+                        // 注意：streamingDispatchService内部已经调用saveChatInfo保存了聊天记录
+                        // 这里不再重复保存，避免同一次对话存入两条记录
 
                         ChatResultMessage finalResult = ChatResultMessage.builder()
                             .requestId(requestId)
@@ -1385,7 +1384,7 @@ if (streamingDispatchService != null) {
                 AtomicReference<String> accumulated = new AtomicReference<>("");
                 AtomicReference<Long> startTime = new AtomicReference<>(System.currentTimeMillis());
 
-flux.publishOn(Schedulers.boundedElastic())
+                flux.publishOn(Schedulers.boundedElastic())
                     .doOnNext(chunk -> {
                         try {
                             String current = accumulated.get();
@@ -1416,8 +1415,9 @@ flux.publishOn(Schedulers.boundedElastic())
                         String finalContent = accumulated.get();
 
                         // 保存聊天信息到数据库
-                        // 注意：这里使用general类型，因为这是HTTP流式处理，不进行意图识别
-                        saveChatToDatabase(memoryId, message, BusinessConstant.DEFAULT_TYPE, finalContent);
+                        // 使用cleanAndSaveChatInfo方法，先删除该memoryId对应的所有记录，再保存新的general类型记录
+                        // 解决重复保存问题：确保只保留一条与chatType匹配的记录
+                        cleanAndSaveChatInfo(memoryId, message, BusinessConstant.DEFAULT_TYPE, finalContent);
 
                         ChatResultMessage finalResult = ChatResultMessage.builder()
                             .requestId(requestId)
