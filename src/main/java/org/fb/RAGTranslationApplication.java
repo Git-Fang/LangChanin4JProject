@@ -7,10 +7,12 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration;
 import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
+import org.springframework.cloud.context.config.annotation.RefreshScope;
 
 @SpringBootApplication(exclude = {KafkaAutoConfiguration.class})
 @MapperScan("mapper")
 @EnableDiscoveryClient
+@RefreshScope  // 添加此注解实现配置热生效
 public class RAGTranslationApplication {
 
     public static void main(String[] args) {
