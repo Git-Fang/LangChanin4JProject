@@ -1,156 +1,175 @@
 @echo off
 REM ============================================================================
-REM Nacos配置初始化脚本
-REM 用于在Nacos中创建项目的配置文件
+REM Nacos Config Initialization Script
+REM Creates project configuration files in Nacos
 REM ============================================================================
+
+setlocal
 
 set NACOS_SERVER=%NACOS_SERVER_ADDR%
 if "%NACOS_SERVER%"=="" set NACOS_SERVER=localhost:8848
 
 echo ============================================
-echo   Nacos配置初始化
+echo   Nacos Config Initialization
 echo ============================================
 echo.
-echo   Nacos服务器: %NACOS_SERVER%
+echo   Nacos Server: %NACOS_SERVER%
 echo.
 
-REM 读取配置文件内容
 set DATA_ID_DOCKER=RAGTranslationApplication-docker.yml
 set DATA_ID_STANDALONE=RAGTranslationApplication-standalone.yml
 set GROUP=DEFAULT_GROUP
 
-echo [1/4] 创建Docker环境配置...
-curl -X POST "http://%NACOS_SERVER%/nacos/v1/cs/configs" ^
-    -d "dataId=%DATA_ID_DOCKER%" ^
-    -d "group=%GROUP%" ^
-    -d "type=yaml" ^
-    -d "content=server:
-  port: 8000
-  address: 0.0.0.0
+set TEMP_DIR=%TEMP%\nacos_config_init
+mkdir "%TEMP_DIR%" 2>nul
 
-spring:
-  application:
-    name: RAGTranslationApplication
-  datasource:
-    driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://mysql:3306/mydocker?useUnicode=true^&characterEncoding=UTF-8^&serverTimezone=Asia/Shanghai^&useSSL=false^&allowPublicKeyRetrieval=true
-    username: root
-    password: root
-  data:
-    mongodb:
-      uri: mongodb://mongo:27017/chat_db
-    redis:
-      host: redis
-      port: 6379
-  kafka:
-    bootstrap-servers: kafka:9092
+REM ========================================================================
+REM 1. Create Docker Environment Config
+REM ========================================================================
+echo [1/4] Creating Docker environment config...
 
-ai:
-  deepSeek:
-    base-url: https://api.deepseek.com/v1
-    model: deepseek-chat
-    apiKey: ${DeepSeek_API_KEY:}
-  kimi:
-    base-url: https://api.moonshot.cn/v1
-    model: kimi-k2-turbo-preview
-    apiKey: ${KIMI_API_KEY:}
-  embeddingStore:
-    qdrant:
-      collectionName: ragTranslation-1226
-      host: qdrant
-      port: 6334
-  dashscope:
-    apiKey: ${DASHSCOPE_API_KEY:}
-    model: qwen-max
-"
+(
+echo server:
+echo   port: 8000
+echo   address: 0.0.0.0
 echo.
-echo   Docker配置创建完成
+echo spring:
+echo   application:
+echo     name: RAGTranslationApplication
+echo   datasource:
+echo     driver-class-name: com.mysql.cj.jdbc.Driver
+echo     url: "jdbc:mysql://mysql:3306/mydocker?useUnicode=true^&characterEncoding=UTF-8^&serverTimezone=Asia/Shanghai^&useSSL=false^&allowPublicKeyRetrieval=true"
+echo     username: root
+echo     password: root
+echo   data:
+echo     mongodb:
+echo       uri: mongodb://mongo:27017/chat_db
+echo     redis:
+echo       host: redis
+echo       port: 6379
+echo   kafka:
+echo     bootstrap-servers: kafka:9092
 echo.
+echo ai:
+echo   deepSeek:
+echo     base-url: https://api.deepseek.com/v1
+echo     model: deepseek-chat
+echo     apiKey: ${DeepSeek_API_KEY:}
+echo   kimi:
+echo     base-url: https://api.moonshot.cn/v1
+echo     model: kimi-k2-turbo-preview
+echo     apiKey: ${KIMI_API_KEY:}
+echo   embeddingStore:
+echo     qdrant:
+echo       collectionName: ragTranslation-1226
+echo       host: qdrant
+echo       port: 6334
+echo   dashscope:
+echo     apiKey: ${DASHSCOPE_API_KEY:}
+echo     model: qwen-max
+) > "%TEMP_DIR%\docker.yml"
 
-echo [2/4] 创建Standalone环境配置...
-curl -X POST "http://%NACOS_SERVER%/nacos/v1/cs/configs" ^
-    -d "dataId=%DATA_ID_STANDALONE%" ^
-    -d "group=%GROUP%" ^
-    -d "type=yaml" ^
-    -d "content=server:
-  port: 8020
-
-spring:
-  application:
-    name: RAGTranslationApplication
-  datasource:
-    driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://localhost:3306/mydocker?useUnicode=true^&characterEncoding=UTF-8^&serverTimezone=UTC^&allowPublicKeyRetrieval=true^&useSSL=false
-    username: root
-    password: root
-  data:
-    mongodb:
-      uri: mongodb://localhost:27017/chat_db
-    redis:
-      host: localhost
-      port: 6379
-  kafka:
-    bootstrap-servers: localhost:9092
-
-ai:
-  deepSeek:
-    base-url: https://api.deepseek.com/v1
-    model: deepseek-chat
-    apiKey: ${DeepSeek_API_KEY:}
-  kimi:
-    base-url: https://api.moonshot.cn/v1
-    model: kimi-k2-turbo-preview
-    apiKey: ${KIMI_API_KEY:}
-  embeddingStore:
-    qdrant:
-      collectionName: ragTranslation-1226
-      host: localhost
-      port: 6334
-  dashscope:
-    apiKey: ${DASHSCOPE_API_KEY:}
-    model: qwen-vl-max
-"
-echo.
-echo   Standalone配置创建完成
+curl -s -X POST "http://%NACOS_SERVER%/nacos/v1/cs/configs" -d "dataId=%DATA_ID_DOCKER%" -d "group=%GROUP%" -d "type=yaml" --data-binary @"%TEMP_DIR%\docker.yml"
+if %errorlevel% equ 0 (echo   [OK] Docker config created) else (echo   [ERROR] Docker config failed)
 echo.
 
-echo [3/4] 创建通用配置(可选)...
-curl -X POST "http://%NACOS_SERVER%/nacos/v1/cs/configs" ^
-    -d "dataId=common.yml" ^
-    -d "group=%GROUP%" ^
-    -d "type=yaml" ^
-    -d "content=# 通用配置
-logging:
-  level:
-    root: INFO
-    org.fb: DEBUG
+REM ========================================================================
+REM 2. Create Standalone Environment Config
+REM ========================================================================
+echo [2/4] Creating Standalone environment config...
 
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health,info,metrics,prometheus
-"
+(
+echo server:
+echo   port: 8020
 echo.
-echo   通用配置创建完成
+echo spring:
+echo   application:
+echo     name: RAGTranslationApplication
+echo   datasource:
+echo     driver-class-name: com.mysql.cj.jdbc.Driver
+echo     url: "jdbc:mysql://localhost:3306/mydocker?useUnicode=true^&characterEncoding=UTF-8^&serverTimezone=UTC^&allowPublicKeyRetrieval=true^&useSSL=false"
+echo     username: root
+echo     password: root
+echo   data:
+echo     mongodb:
+echo       uri: mongodb://localhost:27017/chat_db
+echo     redis:
+echo       host: localhost
+echo       port: 6379
+echo   kafka:
+echo     bootstrap-servers: localhost:9092
+echo.
+echo ai:
+echo   deepSeek:
+echo     base-url: https://api.deepseek.com/v1
+echo     model: deepseek-chat
+echo     apiKey: ${DeepSeek_API_KEY:}
+echo   kimi:
+echo     base-url: https://api.moonshot.cn/v1
+echo     model: kimi-k2-turbo-preview
+echo     apiKey: ${KIMI_API_KEY:}
+echo   embeddingStore:
+echo     qdrant:
+echo       collectionName: ragTranslation-1226
+echo       host: localhost
+echo       port: 6334
+echo   dashscope:
+echo     apiKey: ${DASHSCOPE_API_KEY:}
+echo     model: qwen-vl-max
+) > "%TEMP_DIR%\standalone.yml"
+
+curl -s -X POST "http://%NACOS_SERVER%/nacos/v1/cs/configs" -d "dataId=%DATA_ID_STANDALONE%" -d "group=%GROUP%" -d "type=yaml" --data-binary @"%TEMP_DIR%\standalone.yml"
+if %errorlevel% equ 0 (echo   [OK] Standalone config created) else (echo   [ERROR] Standalone config failed)
 echo.
 
-echo [4/4] 验证配置是否创建成功...
+REM ========================================================================
+REM 3. Create Common Config
+REM ========================================================================
+echo [3/4] Creating common config...
+
+(
+echo # Common config
+echo logging:
+echo   level:
+echo     root: INFO
+echo     org.fb: DEBUG
 echo.
-echo   Docker配置: http://%NACOS_SERVER%/nacos/#/configurationManagement?dataId=%DATA_ID_DOCKER%^&group=%GROUP%
-echo   Standalone配置: http://%NACOS_SERVER%/nacos/#/configurationManagement?dataId=%DATA_ID_STANDALONE%^&group=%GROUP%
-echo   通用配置: http://%NACOS_SERVER%/nacos/#/configurationManagement?dataId=common.yml^&group=%GROUP%
+echo management:
+echo   endpoints:
+echo     web:
+echo       exposure:
+echo         include: health,info,metrics,prometheus
+) > "%TEMP_DIR%\common.yml"
+
+curl -s -X POST "http://%NACOS_SERVER%/nacos/v1/cs/configs" -d "dataId=common.yml" -d "group=%GROUP%" -d "type=yaml" --data-binary @"%TEMP_DIR%\common.yml"
+if %errorlevel% equ 0 (echo   [OK] Common config created) else (echo   [ERROR] Common config failed)
 echo.
+
+REM ========================================================================
+REM 4. Display Links
+REM ========================================================================
+echo [4/4] Verifying configs...
+echo.
+echo   Docker Config:       http://%NACOS_SERVER%/nacos/#/configurationManagement?dataId=%DATA_ID_DOCKER%^&group=%GROUP%
+echo   Standalone Config:   http://%NACOS_SERVER%/nacos/#/configurationManagement?dataId=%DATA_ID_STANDALONE%^&group=%GROUP%
+echo   Common Config:       http://%NACOS_SERVER%/nacos/#/configurationManagement?dataId=common.yml^&group=%GROUP%
+echo.
+
+REM Cleanup
+del /q "%TEMP_DIR%\*.yml" 2>nul
+rmdir "%TEMP_DIR%" 2>nul
+
+endlocal
 
 echo ============================================
-echo   Nacos配置初始化完成!
+echo   Nacos Config Initialization Complete!
 echo ============================================
 echo.
-echo   使用说明:
-echo   1. 访问 http://%NACOS_SERVER%/nacos 查看配置
-echo   2. 默认用户名: nacos, 密码: nacos
-echo   3. 修改配置后保存，应用程序会自动刷新配置
-echo   4. 支持动态配置更新，无需重启服务
+echo   Usage:
+echo   1. Open http://%NACOS_SERVER%/nacos
+echo   2. Login: nacos/nacos
+echo   3. Modify configs as needed
+echo   4. Config changes auto-refresh, no restart needed
 echo.
 echo ============================================
 pause
