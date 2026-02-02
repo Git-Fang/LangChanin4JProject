@@ -686,8 +686,14 @@
     </div>
 
     <script>
+        // API基础地址 - 使用当前域名和端口，自动适应Docker和本地环境
+        // 从当前URL中提取协议和主机，端口从window.location获取
+        (function() {
+            const port = window.location.port || (window.location.protocol === 'https:' ? '443' : '80');
+            const baseUrl = window.location.protocol + '//' + window.location.hostname + (port && port !== '80' && port !== '443' ? ':' + port : '');
+            window.API_BASE_URL = baseUrl;
+        })();
         let memoryId = Date.now(); // 使用时间戳作为memoryId
-        const API_BASE_URL = 'http://localhost:8000/mcp/exec';
 
         // 显示错误消息
         function showError(message) {
@@ -927,7 +933,7 @@
         // 加载历史会话列表
         async function loadHistorySessions() {
             try {
-                const response = await fetch('http://localhost:8000/xiaozhi/history');
+                const response = await fetch(window.API_BASE_URL + '/xiaozhi/history');
                 if (!response.ok) {
                     throw new Error('Failed to load history sessions');
                 }
@@ -1020,7 +1026,7 @@
             
             try {
                 // 加载历史消息
-                const response = await fetch(`http://localhost:8000/xiaozhi/history/${sessionId}`);
+                const response = await fetch(window.API_BASE_URL + `/xiaozhi/history/${sessionId}`);
                 if (!response.ok) {
                     throw new Error('Failed to load history messages');
                 }
@@ -1058,7 +1064,7 @@
             formData.append('file', file);
 
             try {
-                const response = await fetch('http://localhost:8000/xiaozhi/personal/upload', {
+                const response = await fetch(window.API_BASE_URL + '/xiaozhi/personal/upload', {
                     method: 'POST',
                     body: formData
                 });
@@ -1086,7 +1092,7 @@
         async function deleteSession(sessionId) {
             try {
                 // 发送删除请求到后端
-                const response = await fetch(`http://localhost:8000/xiaozhi/history/${sessionId}`, {
+                const response = await fetch(window.API_BASE_URL + `/xiaozhi/history/${sessionId}`, {
                     method: 'DELETE',
                     headers: {
                         'Content-Type': 'application/json',

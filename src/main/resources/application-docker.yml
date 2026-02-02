@@ -19,7 +19,8 @@ spring:
     name: RAGTranslationApplication
   config:
     import:
-      - optional:nacos:application-docker.yml
+      - optional:nacos:${spring.application.name}-${spring.profiles.active}.yml?group=DEFAULT_GROUP
+      - optional:nacos:${spring.application.name}.yml?group=DEFAULT_GROUP
   web:
     timeout: 240s
   servlet:

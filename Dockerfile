@@ -8,8 +8,8 @@ RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /timezone
 
 WORKDIR /app
 
-# 设置默认profile为docker-bypass
-ENV SPRING_PROFILES_ACTIVE=docker-bypass
+# 设置默认profile为docker（使用Nacos配置中心）
+ENV SPRING_PROFILES_ACTIVE=docker
 
 # 复制JAR文件
 COPY target/*.jar app.jar
