@@ -1,20 +1,42 @@
 package org.fb.service.impl;
 
 import org.fb.service.assistant.NaturalLanguageSQLAgent;
+import org.fb.util.AIAPIErrorHandler;
+import org.fb.util.AIInputValidator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.regex.Pattern;
 
+/**
+ * 自然语言转SQL服务
+ * 提供文本到SQL查询的转换功能，包含完善的错误处理和输入验证
+ */
 @Service
 public class NL2SQLService {
+
     private static final Logger log = LoggerFactory.getLogger(NL2SQLService.class);
+
+    // AI模型输入限制配置
+    @Value("${ai.model.max-input-length:30000}")
+    private int maxInputLength;
+
+    // Schema最大长度配置
+    @Value("${ai.sql.schema-max-length:15000}")
+    private int schemaMaxLength;
+
+    // 系统提示词模板长度估算
+    private static final int SYSTEM_PROMPT_ESTIMATED_LENGTH = 800;
+
+    // 重试配置
+    private static final int MAX_RETRY_COUNT = 2;
+    private static final long RETRY_DELAY_MS = 1000;
 
     // 需要真正查询数据库的关键词模式（必须有具体的查询动词和目标）
     private static final Pattern QUERY_DATABASE_PATTERN = Pattern.compile(
@@ -124,6 +146,8 @@ public class NL2SQLService {
             }
 
             log.info("用户输入：{}", naturalLanguage);
+
+            // 调用增强的自然语言转SQL方法
             String sql = naturalLanguageToSQL(naturalLanguage);
             log.info("原始AI生成的SQL: [{}]", sql);
 
@@ -164,7 +188,10 @@ public class NL2SQLService {
             throw e;
         } catch (Exception e) {
             log.error("执行自然语言查询失败", e);
-            throw new RuntimeException("查询失败: " + e.getMessage());
+            // 尝试解析AI错误
+            AIAPIErrorHandler.AIErrorResult errorResult = AIAPIErrorHandler.parseError(e.getMessage());
+            String userMessage = AIAPIErrorHandler.generateUserFriendlyMessage(errorResult);
+            throw new RuntimeException(userMessage);
         }
     }
 
@@ -206,83 +233,214 @@ public class NL2SQLService {
     }
 
     public String naturalLanguageToSQL(String naturalLanguage) {
-        // 获取数据库schema信息（智能筛选相关表）
-        String schemaInfo = getDatabaseSchema(naturalLanguage);
+        // 1. 验证用户输入
+        if (naturalLanguage == null || naturalLanguage.trim().isEmpty()) {
+            throw new RuntimeException("用户输入为空，无法生成SQL");
+        }
 
-        // 构建提示词
-        String prompt = String.format(
-            "你是一个MySQL专家。基于以下数据库结构，将自然语言转换为SQL查询语句。\n" +
-            "只返回SQL语句，不要任何解释。\n\n" +
-            "重要注意事项：\n" +
-            "1. 只生成SELECT查询语句，不要生成INSERT、UPDATE、DELETE等修改数据的语句\n" +
-            "2. 确保SQL语句中的所有字段和表名都存在于提供的数据库结构中\n" +
-            "3. 对于统计查询（如查询表数量、数据数量等），使用正确的聚合函数和统计方法\n" +
-            "4. 绝对不要使用'default'、'null'、'DEFAULT'、'NULL'等作为字符串字面值\n" +
-            "5. 对于字符串字段，使用单引号包裹值，但值必须是实际的数据内容，不能是关键字\n" +
-            "6. 对于数值字段，不要使用引号，直接使用数字\n" +
-            "7. 对于日期字段，使用标准的日期格式，如'2024-01-01'\n" +
-            "8. 如果不确定如何转换，返回SELECT 1语句\n" +
-            "9. 检查生成的SQL，确保WHERE条件中的值与字段类型匹配\n" +
-            "10. 如果字段类型是BIGINT、INT等数值类型，不要使用字符串比较\n" +
-            "11. 查询表数量时，使用: SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE()\n" +
-            "12. 查询数据行数时，使用: SELECT COUNT(*) FROM 表名\n\n" +
-            "数据库结构：\n" +
-            "%s\n\n" +
-            "用户查询：%s\n\n" +
-            "SQL语句：", schemaInfo, naturalLanguage);
+        String trimmedInput = naturalLanguage.trim();
+        log.info("开始处理自然语言转SQL，用户输入长度: {}", trimmedInput.length());
 
-        return languageSQLService.convertToSQL(prompt);
+        // 2. 获取数据库schema信息（智能筛选相关表）
+        String schemaInfo = getDatabaseSchema(trimmedInput);
+        log.info("原始schema信息长度: {}", schemaInfo.length());
+
+        // 3. 构建提示词
+        String prompt = buildSQLPrompt(schemaInfo, trimmedInput);
+
+        // 4. 验证prompt长度
+        AIInputValidator.ValidationResult validation = AIInputValidator.validate(prompt, maxInputLength);
+        if (!validation.isValid()) {
+            log.warn("Prompt长度验证失败: {}", validation.getMessage());
+
+            // 如果提供了截断的输入，尝试使用
+            if (validation.getTruncatedInput() != null) {
+                log.info("尝试使用截断的prompt进行重试");
+                prompt = AIInputValidator.truncate(prompt, maxInputLength);
+            } else {
+                // 无法处理，返回错误
+                throw new RuntimeException("SQL生成失败：输入内容过长，请简化您的查询需求。");
+            }
+        }
+
+        // 5. 调用AI服务生成SQL（带重试逻辑）
+        return executeSQLConversionWithRetry(prompt, trimmedInput);
+    }
+
+    /**
+     * 带重试机制的SQL转换
+     * @param prompt 提示词
+     * @param originalQuery 原始用户查询
+     * @return 生成的SQL
+     */
+    private String executeSQLConversionWithRetry(String prompt, String originalQuery) {
+        int retryCount = 0;
+        Exception lastException = null;
+
+        while (retryCount <= MAX_RETRY_COUNT) {
+            try {
+                log.info("第{}次调用AI服务生成SQL", retryCount + 1);
+                return languageSQLService.convertToSQL(prompt);
+            } catch (Exception e) {
+                lastException = e;
+                retryCount++;
+                log.warn("SQL转换失败 (尝试 {}/{}): {}", retryCount, MAX_RETRY_COUNT + 1, e.getMessage());
+
+                // 分析错误类型
+                AIAPIErrorHandler.AIErrorResult errorResult = AIAPIErrorHandler.parseError(e.getMessage());
+
+                // 如果是不可重试的错误，直接抛出
+                if (!AIAPIErrorHandler.isRetryable(errorResult)) {
+                    log.error("不可重试的错误: {}", errorResult.getErrorType());
+                    throw new RuntimeException(AIAPIErrorHandler.generateUserFriendlyMessage(errorResult));
+                }
+
+                // 如果还有重试次数，等待后重试
+                if (retryCount <= MAX_RETRY_COUNT) {
+                    long delay = RETRY_DELAY_MS * retryCount; // 指数退避
+                    log.info("等待{}ms后进行第{}次重试", delay, retryCount + 1);
+                    try {
+                        Thread.sleep(delay);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        throw new RuntimeException("SQL转换被中断");
+                    }
+                }
+            }
+        }
+
+        // 所有重试都失败了
+        log.error("SQL转换在{}次尝试后仍然失败", MAX_RETRY_COUNT + 1);
+        if (lastException != null) {
+            AIAPIErrorHandler.AIErrorResult finalError = AIAPIErrorHandler.parseError(lastException.getMessage());
+            throw new RuntimeException(AIAPIErrorHandler.generateUserFriendlyMessage(finalError));
+        }
+        throw new RuntimeException("SQL转换失败，请稍后重试");
+    }
+
+    /**
+     * 构建SQL生成提示词
+     * @param schemaInfo 数据库schema信息
+     * @param userQuery 用户查询
+     * @return 完整的提示词
+     */
+    private String buildSQLPrompt(String schemaInfo, String userQuery) {
+        StringBuilder prompt = new StringBuilder();
+
+        // 系统指令
+        prompt.append("你是一个MySQL专家。基于以下数据库结构，将自然语言转换为SQL查询语句。\n");
+        prompt.append("只返回SQL语句，不要任何解释。\n\n");
+        prompt.append("重要注意事项：\n");
+        prompt.append("1. 只生成SELECT查询语句，不要生成INSERT、UPDATE、DELETE等修改数据的语句\n");
+        prompt.append("2. 确保SQL语句中的所有字段和表名都存在于提供的数据库结构中\n");
+        prompt.append("3. 对于统计查询（如查询表数量、数据数量等），使用正确的聚合函数和统计方法\n");
+        prompt.append("4. 绝对不要使用'default'、'null'、'DEFAULT'、'NULL'等作为字符串字面值\n");
+        prompt.append("5. 对于字符串字段，使用单引号包裹值，但值必须是实际的数据内容，不能是关键字\n");
+        prompt.append("6. 对于数值字段，不要使用引号，直接使用数字\n");
+        prompt.append("7. 对于日期字段，使用标准的日期格式，如'2024-01-01'\n");
+        prompt.append("8. 如果不确定如何转换，返回SELECT 1语句\n");
+        prompt.append("9. 检查生成的SQL，确保WHERE条件中的值与字段类型匹配\n");
+        prompt.append("10. 如果字段类型是BIGINT、INT等数值类型，不要使用字符串比较\n");
+        prompt.append("11. 查询表数量时，使用: SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE()\n");
+        prompt.append("12. 查询数据行数时，使用: SELECT COUNT(*) FROM 表名\n\n");
+
+        // 数据库结构
+        prompt.append("数据库结构：\n");
+        prompt.append(schemaInfo).append("\n\n");
+
+        // 用户查询
+        prompt.append("用户查询：").append(userQuery).append("\n\n");
+        prompt.append("SQL语句：");
+
+        return prompt.toString();
     }
 
     /**
      * 根据用户查询智能筛选相关的表结构
+     * 实现智能schema选择，避免过多无关表信息导致prompt过长
      * @param naturalLanguage 用户查询
      * @return 相关的表结构信息
      */
     private String getDatabaseSchema(String naturalLanguage) {
         StringBuilder schema = new StringBuilder();
-        
-        // 定义业务关键词与表名的映射关系
-        java.util.Map<String, java.util.List<String>> keywordToTables = new java.util.HashMap<>();
-        keywordToTables.put("预约", java.util.Arrays.asList("appointment"));
-        keywordToTables.put("医生", java.util.Arrays.asList("appointment"));
-        keywordToTables.put("患者", java.util.Arrays.asList("appointment"));
-        keywordToTables.put("病人", java.util.Arrays.asList("appointment"));
-        keywordToTables.put("挂号", java.util.Arrays.asList("appointment"));
-        keywordToTables.put("用户", java.util.Arrays.asList("users", "user"));
-        keywordToTables.put("订单", java.util.Arrays.asList("orders", "order"));
-        keywordToTables.put("产品", java.util.Arrays.asList("products", "product"));
-        
+
+        // 定义业务关键词与表名的映射关系（支持更多业务场景）
+        Map<String, List<String>> keywordToTables = new HashMap<>();
+        keywordToTables.put("预约", Arrays.asList("appointment"));
+        keywordToTables.put("医生", Arrays.asList("appointment", "doctor"));
+        keywordToTables.put("患者", Arrays.asList("appointment", "patient"));
+        keywordToTables.put("病人", Arrays.asList("appointment", "patient"));
+        keywordToTables.put("挂号", Arrays.asList("appointment"));
+        keywordToTables.put("用户", Arrays.asList("users", "user"));
+        keywordToTables.put("订单", Arrays.asList("orders", "order"));
+        keywordToTables.put("产品", Arrays.asList("products", "product"));
+        keywordToTables.put("部门", Arrays.asList("department", "dept"));
+        keywordToTables.put("员工", Arrays.asList("employee", "staff"));
+        keywordToTables.put("课程", Arrays.asList("course", "class"));
+        keywordToTables.put("学生", Arrays.asList("student"));
+        keywordToTables.put("图书", Arrays.asList("book", "library"));
+        keywordToTables.put("商品", Arrays.asList("product", "goods", "item"));
+
         // 分析用户查询，提取关键词
         String lowerQuery = naturalLanguage.toLowerCase();
-        java.util.Set<String> relevantTables = new java.util.HashSet<>();
-        
-        // 默认包含appointment表（最常用的业务表）
-        relevantTables.add("appointment");
-        
-        for (java.util.Map.Entry<String, java.util.List<String>> entry : keywordToTables.entrySet()) {
+        Set<String> relevantTables = new HashSet<>();
+
+        // 默认包含appointment表（最常用的业务表）- 但限制为必需时才包含
+        boolean hasExplicitTableReference = false;
+
+        for (Map.Entry<String, List<String>> entry : keywordToTables.entrySet()) {
             if (lowerQuery.contains(entry.getKey().toLowerCase())) {
                 relevantTables.addAll(entry.getValue());
+                hasExplicitTableReference = true;
             }
         }
-        
-        log.info("用户查询: {}，相关的表: {}", naturalLanguage, relevantTables);
-        
+
+        log.info("用户查询: {}，初步识别的相关表: {}", naturalLanguage, relevantTables);
+
         try {
             // 获取所有表信息
-            List<Map<String, Object>> tables = jdbcTemplate.queryForList(
+            List<Map<String, Object>> allTables = jdbcTemplate.queryForList(
                 "SELECT TABLE_NAME, TABLE_COMMENT FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE()");
-            
-            for (Map<String, Object> table : tables) {
-                String tableName = (String) table.get("TABLE_NAME");
-                
-                // 只处理相关的表
-                if (!relevantTables.contains(tableName.toLowerCase())) {
-                    continue;
+
+            // 如果没有明确匹配到表，只返回最常用的几个表
+            if (relevantTables.isEmpty()) {
+                log.info("未匹配到明确的业务表，返回appointment表的schema");
+                relevantTables.add("appointment");
+            }
+
+            // 按相关性排序处理表
+            List<Map<String, Object>> sortedTables = new ArrayList<>();
+            Set<String> processedTables = new HashSet<>();
+
+            // 首先处理明确相关的表
+            for (String tableName : relevantTables) {
+                for (Map<String, Object> table : allTables) {
+                    String dbTableName = (String) table.get("TABLE_NAME");
+                    if (dbTableName.equalsIgnoreCase(tableName) && !processedTables.contains(dbTableName)) {
+                        sortedTables.add(table);
+                        processedTables.add(dbTableName);
+                    }
                 }
-                
+            }
+
+            // 添加主业务表appointment（如果没有被包含）
+            if (!processedTables.contains("appointment")) {
+                for (Map<String, Object> table : allTables) {
+                    String tableName = (String) table.get("TABLE_NAME");
+                    if ("appointment".equalsIgnoreCase(tableName) && !processedTables.contains(tableName)) {
+                        sortedTables.add(table);
+                        processedTables.add(tableName);
+                        break;
+                    }
+                }
+            }
+
+            // 收集完整的schema信息
+            StringBuilder fullSchema = new StringBuilder();
+            for (Map<String, Object> table : sortedTables) {
+                String tableName = (String) table.get("TABLE_NAME");
                 String tableComment = (String) table.get("TABLE_COMMENT");
-                schema.append(String.format("表: %s (%s)\n", tableName, tableComment != null ? tableComment : ""));
+                fullSchema.append(String.format("表: %s (%s)\n", tableName, tableComment != null ? tableComment : ""));
 
                 // 获取表字段信息
                 List<Map<String, Object>> columns = jdbcTemplate.queryForList(
@@ -290,16 +448,33 @@ public class NL2SQLService {
                     "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION", tableName);
 
                 for (Map<String, Object> column : columns) {
-                    schema.append(String.format("  - %s: %s %s (%s)\n",
+                    fullSchema.append(String.format("  - %s: %s %s (%s)\n",
                         column.get("COLUMN_NAME"),
                         column.get("DATA_TYPE"),
                         "YES".equals(column.get("IS_NULLABLE")) ? "NULL" : "NOT NULL",
                         column.get("COLUMN_COMMENT") != null ? column.get("COLUMN_COMMENT") : ""
                     ));
                 }
-                schema.append("\n");
+                fullSchema.append("\n");
             }
-            
+
+            // 截断schema以符合长度限制
+            int estimatedUserQueryLength = naturalLanguage.length();
+            int availableSchemaLength = AIInputValidator.calculateMaxSchemaLength(
+                SYSTEM_PROMPT_ESTIMATED_LENGTH,
+                estimatedUserQueryLength,
+                schemaMaxLength
+            );
+
+            if (fullSchema.length() > availableSchemaLength) {
+                log.warn("Schema信息过长 ({} > {})，需要截断", fullSchema.length(), availableSchemaLength);
+                schema.append(AIInputValidator.truncateSchema(fullSchema.toString(), availableSchemaLength));
+            } else {
+                schema.append(fullSchema);
+            }
+
+            log.info("最终schema信息长度: {}", schema.length());
+
             // 如果没有找到相关表，返回简要的表列表提示
             if (schema.length() == 0) {
                 schema.append("表: appointment (预约信息表)\n");
@@ -311,7 +486,7 @@ public class NL2SQLService {
                 schema.append("  - time: varchar NULL (预约时间)\n");
                 schema.append("  - doctor_name: varchar NULL (预约医生姓名)\n");
             }
-            
+
         } catch (Exception e) {
             log.error("获取数据库schema失败，返回默认schema", e);
             // 返回默认的appointment表结构
@@ -324,7 +499,7 @@ public class NL2SQLService {
             schema.append("  - time: varchar NULL (预约时间)\n");
             schema.append("  - doctor_name: varchar NULL (预约医生姓名)\n");
         }
-        
+
         return schema.toString();
     }
 
@@ -362,3 +537,4 @@ public class NL2SQLService {
         }
     }
 }
+

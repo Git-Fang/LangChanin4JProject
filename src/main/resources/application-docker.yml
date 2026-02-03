@@ -156,6 +156,22 @@ ai:
     timeout: 300s
     max-retries: 3
 
+  # SQL执行相关配置
+  sql:
+    # AI模型输入最大长度 (字符数)
+    model-max-input-length: 30000
+    # Schema信息最大长度
+    schema-max-length: 15000
+    # 重试配置
+    retry:
+      max-attempts: 2
+      initial-delay-ms: 1000
+      multiplier: 2.0
+    # 启用智能Schema选择
+    smart-schema-enabled: true
+    # 最大相关表数量
+    max-relevant-tables: 5
+
   mcp:
     baiduMap:
       apiKey: ${BAIDU_MAP_API_KEY:}

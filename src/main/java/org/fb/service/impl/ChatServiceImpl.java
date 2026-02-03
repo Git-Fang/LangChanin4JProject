@@ -8,9 +8,11 @@ import org.fb.service.ChatService;
 import org.fb.service.ModelAwareChatService;
 import org.fb.service.assistant.*;
 import org.fb.tools.QdrantOperationTools;
+import org.fb.util.AIAPIErrorHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
@@ -199,25 +201,58 @@ public class ChatServiceImpl implements ChatService {
                 }
             } catch (Exception e) {
                 log.error("SQL查询执行失败", e);
-                
-                // 提供更友好的错误提示
+
+                // 使用AI错误处理器解析错误
+                AIAPIErrorHandler.AIErrorResult errorResult = AIAPIErrorHandler.parseError(e.getMessage());
+
+                // 根据错误类型生成用户友好的错误消息
                 String errorMsg = e.getMessage();
-                if (errorMsg != null && errorMsg.contains("Failed to convert from type")) {
+
+                // 检查是否是AI服务相关的错误
+                if (errorMsg != null && (errorMsg.contains("AI模型") || errorMsg.contains("AI服务") ||
+                    errorMsg.contains("输入长度") || errorMsg.contains("超时") ||
+                    errorMsg.contains("过于频繁") || errorMsg.contains("Range of input length"))) {
+                    // AI服务错误，直接使用生成的消息
+                    result = errorMsg;
+                }
+                // 检查类型转换错误
+                else if (errorMsg != null && errorMsg.contains("Failed to convert from type")) {
                     result = "抱歉，SQL查询时出现类型转换错误。这可能是AI生成的SQL中字段类型不匹配导致的。\n\n" +
-                           "建议：\n" +
-                           "1. 请尝试更具体地描述您的查询需求\n" +
-                           "2. 如果查询涉及数值字段，请明确说明数值范围\n" +
-                           "3. 例如：不要说\"查询default用户\"，而要说\"查询ID为1的用户\"\n\n" +
-                           "错误详情：" + errorMsg;
-                } else if (errorMsg != null && errorMsg.contains("不合理的字符串字面量")) {
+                            "建议：\n" +
+                            "1. 请尝试更具体地描述您的查询需求\n" +
+                            "2. 如果查询涉及数值字段，请明确说明数值范围\n" +
+                            "3. 例如：不要说\"查询default用户\"，而要说\"查询ID为1的用户\"\n\n" +
+                            "错误详情：" + errorMsg;
+                }
+                // 检查不合理的字符串字面量错误
+                else if (errorMsg != null && errorMsg.contains("不合理的字符串字面量")) {
                     result = "抱歉，AI生成的SQL包含不合理的值。请尝试用不同的方式描述您的查询需求。\n\n" +
-                           "建议：\n" +
-                           "1. 避免使用\"default\"、\"null\"等关键字作为查询值\n" +
-                           "2. 使用具体的数值或文本进行查询\n" +
-                           "3. 例如：\"查询用户名为张三的记录\"而不是\"查询default用户\"";
-                } else {
+                            "建议：\n" +
+                            "1. 避免使用\"default\"、\"null\"等关键字作为查询值\n" +
+                            "2. 使用具体的数值或文本进行查询\n" +
+                            "3. 例如：\"查询用户名为张三的记录\"而不是\"查询default用户\"";
+                }
+                // 检查空SQL错误
+                else if (errorMsg != null && (errorMsg.contains("SQL语句为空") || errorMsg.contains("无法生成SQL"))) {
+                    result = "抱歉，AI未能成功生成SQL查询语句。\n\n" +
+                            "建议：\n" +
+                            "1. 请尝试更清晰地描述您的查询需求\n" +
+                            "2. 明确说明要查询的表名和字段\n" +
+                            "3. 例如：\"查询appointment表中所有的医生姓名\"";
+                }
+                // 检查危险操作错误
+                else if (errorMsg != null && errorMsg.contains("不允许执行修改数据的SQL操作")) {
+                    result = "抱歉，为了数据安全，不允许执行修改数据的SQL操作（如DELETE、UPDATE等）。\n\n" +
+                            "当前功能仅支持SELECT查询操作。\n" +
+                            "如需执行数据操作，请联系数据库管理员。";
+                }
+                // 默认错误消息
+                else {
                     result = "抱歉，执行SQL查询时出错：" + errorMsg + "。\n\n" +
-                           "建议：请尝试用更清晰、更具体的方式描述您的查询需求。";
+                            "建议：\n" +
+                            "1. 请尝试用更清晰、更具体的方式描述您的查询需求\n" +
+                            "2. 简化问题，避免过长的描述\n" +
+                            "3. 如果问题持续，请联系管理员";
                 }
             }
         } else if (chatAssistant != null || modelAwareChatService != null) {
