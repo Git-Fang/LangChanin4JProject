@@ -206,8 +206,8 @@ public class NL2SQLService {
     }
 
     public String naturalLanguageToSQL(String naturalLanguage) {
-        // 获取数据库schema信息
-        String schemaInfo = getDatabaseSchema();
+        // 获取数据库schema信息（智能筛选相关表）
+        String schemaInfo = getDatabaseSchema(naturalLanguage);
 
         // 构建提示词
         String prompt = String.format(
@@ -234,35 +234,97 @@ public class NL2SQLService {
         return languageSQLService.convertToSQL(prompt);
     }
 
-    private String getDatabaseSchema() {
+    /**
+     * 根据用户查询智能筛选相关的表结构
+     * @param naturalLanguage 用户查询
+     * @return 相关的表结构信息
+     */
+    private String getDatabaseSchema(String naturalLanguage) {
         StringBuilder schema = new StringBuilder();
-
-        // 获取所有表信息
-        List<Map<String, Object>> tables = jdbcTemplate.queryForList(
-            "SELECT TABLE_NAME, TABLE_COMMENT FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE()");
-
-        for (Map<String, Object> table : tables) {
-            String tableName = (String) table.get("TABLE_NAME");
-            String tableComment = (String) table.get("TABLE_COMMENT");
-
-            schema.append(String.format("表: %s (%s)\n", tableName, tableComment));
-
-            // 获取表字段信息
-            List<Map<String, Object>> columns = jdbcTemplate.queryForList(
-                "SELECT COLUMN_NAME, DATA_TYPE, IS_NULLABLE, COLUMN_COMMENT FROM INFORMATION_SCHEMA.COLUMNS " +
-                "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION", tableName);
-
-            for (Map<String, Object> column : columns) {
-                schema.append(String.format("  - %s: %s %s (%s)\n",
-                    column.get("COLUMN_NAME"),
-                    column.get("DATA_TYPE"),
-                    "YES".equals(column.get("IS_NULLABLE")) ? "NULL" : "NOT NULL",
-                    column.get("COLUMN_COMMENT")
-                ));
+        
+        // 定义业务关键词与表名的映射关系
+        java.util.Map<String, java.util.List<String>> keywordToTables = new java.util.HashMap<>();
+        keywordToTables.put("预约", java.util.Arrays.asList("appointment"));
+        keywordToTables.put("医生", java.util.Arrays.asList("appointment"));
+        keywordToTables.put("患者", java.util.Arrays.asList("appointment"));
+        keywordToTables.put("病人", java.util.Arrays.asList("appointment"));
+        keywordToTables.put("挂号", java.util.Arrays.asList("appointment"));
+        keywordToTables.put("用户", java.util.Arrays.asList("users", "user"));
+        keywordToTables.put("订单", java.util.Arrays.asList("orders", "order"));
+        keywordToTables.put("产品", java.util.Arrays.asList("products", "product"));
+        
+        // 分析用户查询，提取关键词
+        String lowerQuery = naturalLanguage.toLowerCase();
+        java.util.Set<String> relevantTables = new java.util.HashSet<>();
+        
+        // 默认包含appointment表（最常用的业务表）
+        relevantTables.add("appointment");
+        
+        for (java.util.Map.Entry<String, java.util.List<String>> entry : keywordToTables.entrySet()) {
+            if (lowerQuery.contains(entry.getKey().toLowerCase())) {
+                relevantTables.addAll(entry.getValue());
             }
-            schema.append("\n");
         }
+        
+        log.info("用户查询: {}，相关的表: {}", naturalLanguage, relevantTables);
+        
+        try {
+            // 获取所有表信息
+            List<Map<String, Object>> tables = jdbcTemplate.queryForList(
+                "SELECT TABLE_NAME, TABLE_COMMENT FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE()");
+            
+            for (Map<String, Object> table : tables) {
+                String tableName = (String) table.get("TABLE_NAME");
+                
+                // 只处理相关的表
+                if (!relevantTables.contains(tableName.toLowerCase())) {
+                    continue;
+                }
+                
+                String tableComment = (String) table.get("TABLE_COMMENT");
+                schema.append(String.format("表: %s (%s)\n", tableName, tableComment != null ? tableComment : ""));
 
+                // 获取表字段信息
+                List<Map<String, Object>> columns = jdbcTemplate.queryForList(
+                    "SELECT COLUMN_NAME, DATA_TYPE, IS_NULLABLE, COLUMN_COMMENT FROM INFORMATION_SCHEMA.COLUMNS " +
+                    "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION", tableName);
+
+                for (Map<String, Object> column : columns) {
+                    schema.append(String.format("  - %s: %s %s (%s)\n",
+                        column.get("COLUMN_NAME"),
+                        column.get("DATA_TYPE"),
+                        "YES".equals(column.get("IS_NULLABLE")) ? "NULL" : "NOT NULL",
+                        column.get("COLUMN_COMMENT") != null ? column.get("COLUMN_COMMENT") : ""
+                    ));
+                }
+                schema.append("\n");
+            }
+            
+            // 如果没有找到相关表，返回简要的表列表提示
+            if (schema.length() == 0) {
+                schema.append("表: appointment (预约信息表)\n");
+                schema.append("  - id: bigint NOT NULL (主键ID)\n");
+                schema.append("  - username: varchar NULL (患者姓名)\n");
+                schema.append("  - id_card: varchar NULL (身份证号)\n");
+                schema.append("  - department: varchar NULL (预约科室)\n");
+                schema.append("  - date: varchar NULL (预约日期)\n");
+                schema.append("  - time: varchar NULL (预约时间)\n");
+                schema.append("  - doctor_name: varchar NULL (预约医生姓名)\n");
+            }
+            
+        } catch (Exception e) {
+            log.error("获取数据库schema失败，返回默认schema", e);
+            // 返回默认的appointment表结构
+            schema.append("表: appointment (预约信息表)\n");
+            schema.append("  - id: bigint NOT NULL (主键ID)\n");
+            schema.append("  - username: varchar NULL (患者姓名)\n");
+            schema.append("  - id_card: varchar NULL (身份证号)\n");
+            schema.append("  - department: varchar NULL (预约科室)\n");
+            schema.append("  - date: varchar NULL (预约日期)\n");
+            schema.append("  - time: varchar NULL (预约时间)\n");
+            schema.append("  - doctor_name: varchar NULL (预约医生姓名)\n");
+        }
+        
         return schema.toString();
     }
 
@@ -272,28 +334,31 @@ public class NL2SQLService {
      * @throws RuntimeException 如果发现类型不匹配
      */
     private void validateSQLTypes(String sql) {
-        // 获取所有数值类型的字段
-        List<Map<String, Object>> numericColumns = jdbcTemplate.queryForList(
-            "SELECT TABLE_NAME, COLUMN_NAME, DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS " +
-            "WHERE TABLE_SCHEMA = DATABASE() AND DATA_TYPE IN ('int', 'bigint', 'tinyint', 'smallint', 'decimal', 'float', 'double')");
-
-        // 检查SQL中是否对数值类型字段使用了字符串比较
-        for (Map<String, Object> column : numericColumns) {
-            String tableName = (String) column.get("TABLE_NAME");
-            String columnName = (String) column.get("COLUMN_NAME");
-            String dataType = (String) column.get("DATA_TYPE");
-
-            // 构建可能的匹配模式
-            String pattern1 = String.format("%s\\.%s\\s*=\\s*'[^']*'", tableName, columnName);
-            String pattern2 = String.format("%s\\s*=\\s*'[^']*'", columnName);
-
-            // 检查SQL中是否存在数值字段与字符串的比较
-            if (sql.matches(".*" + pattern1 + ".*") || sql.matches(".*" + pattern2 + ".*")) {
-                log.warn("SQL中对数值字段{}使用了字符串比较: {}", columnName, sql);
-                throw new RuntimeException(String.format(
-                    "SQL中对数值字段 %s (类型: %s) 使用了字符串比较，请检查SQL: %s",
-                    columnName, dataType, sql));
+        // 简化验证：只验证appointment表中的数值字段
+        try {
+            List<Map<String, Object>> numericColumns = jdbcTemplate.queryForList(
+                "SELECT COLUMN_NAME, DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS " +
+                "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'appointment' " +
+                "AND DATA_TYPE IN ('int', 'bigint', 'tinyint', 'smallint', 'decimal', 'float', 'double')");
+            
+            for (Map<String, Object> column : numericColumns) {
+                String columnName = (String) column.get("COLUMN_NAME");
+                String dataType = (String) column.get("DATA_TYPE");
+                
+                // 检查SQL中是否存在数值字段与字符串的比较
+                if (sql.matches(".*appointment\\." + columnName + "\\s*=\\s*'[^']*'.*") ||
+                    sql.matches(".*\\s+" + columnName + "\\s*=\\s*'[^']*'.*")) {
+                    log.warn("SQL中对数值字段{}使用了字符串比较: {}", columnName, sql);
+                    throw new RuntimeException(String.format(
+                        "SQL中对数值字段 %s (类型: %s) 使用了字符串比较，请检查SQL: %s",
+                        columnName, dataType, sql));
+                }
             }
+        } catch (Exception e) {
+            if (e instanceof RuntimeException) {
+                throw e;
+            }
+            log.warn("验证SQL类型时出错: {}", e.getMessage());
         }
     }
 }
