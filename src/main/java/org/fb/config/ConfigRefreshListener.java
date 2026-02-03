@@ -1,6 +1,7 @@
 package org.fb.config;
 
 import jakarta.annotation.PostConstruct;
+import org.fb.service.ModelAwareChatService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -15,6 +16,9 @@ public class ConfigRefreshListener implements ApplicationListener<RefreshScopeRe
 
     @Autowired
     private LLMConfig llmConfig;
+
+    @Autowired
+    private ModelAwareChatService modelAwareChatService;
 
     @Value("${ai.deepSeek.model:unknown}")
     private String currentDeepSeekModel;
@@ -31,7 +35,8 @@ public class ConfigRefreshListener implements ApplicationListener<RefreshScopeRe
         log.info("Current DeepSeek model from @Value: {}", currentDeepSeekModel);
         try {
             llmConfig.refreshAllModels();
-            log.info("All chat models refreshed successfully after config change");
+            modelAwareChatService.refreshAllModels();
+            log.info("All chat models and AI services refreshed successfully after config change");
             log.info("New DeepSeek model should be: {}", currentDeepSeekModel);
         } catch (Exception e) {
             log.error("Failed to refresh chat models after config change", e);

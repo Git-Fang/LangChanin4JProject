@@ -1,8 +1,11 @@
 package org.fb.service.impl;
 
+import org.fb.bean.ModelInfo;
 import org.fb.constant.BusinessConstant;
+import org.fb.context.ModelContext;
 import org.fb.service.ChatSaveService;
 import org.fb.service.ChatService;
+import org.fb.service.ModelAwareChatService;
 import org.fb.service.assistant.*;
 import org.fb.tools.QdrantOperationTools;
 import org.slf4j.Logger;
@@ -47,10 +50,14 @@ public class ChatServiceImpl implements ChatService {
     @Autowired
     private QdrantOperationTools qdrantOperationTools;
 
+    @Autowired
+    private ModelAwareChatService modelAwareChatService;
+
     @Override
     public String chat(Long memoryId, String message) {
         log.info("\n=== ChatServiceImpl.chat 开始调用 processByUserMeanings ===");
         log.info("memoryId：" + memoryId + "; message：" + message);
+        log.info("当前选中的模型: {}", ModelContext.getDebugInfo());
         String result = processByUserMeanings(memoryId, message);
         log.info("processByUserMeanings 返回结果：" + result);
         log.info("=== ChatServiceImpl.chat 调用 processByUserMeanings 完成 ===\n");
@@ -67,12 +74,11 @@ public class ChatServiceImpl implements ChatService {
     private String processByUserMeanings(Long memoryId, String userMessage) {
         log.info("\n========== processByUserMeanings 方法开始 ==========");
         log.info("memoryId：{}；userMessage：{}", memoryId, userMessage);
+        log.info("当前选中模型：{}", ModelContext.getDebugInfo());
 
         // 检查是否配置了LLM模型
-        if (chatTypeAssistant == null || chatAssistant == null) {
-            log.warn("未配置 LLM 模型（chatTypeAssistant: {} 或 chatAssistant: {}），使用默认响应",
-                    chatTypeAssistant == null ? "null" : "available",
-                    chatAssistant == null ? "null" : "available");
+        if ((chatTypeAssistant == null && modelAwareChatService == null) || chatAssistant == null) {
+            log.warn("未配置 LLM 模型，使用默认响应");
 
             // 保存聊天信息到数据库
             saveChatInfo(memoryId, userMessage, BusinessConstant.DEFAULT_TYPE);
@@ -84,10 +90,24 @@ public class ChatServiceImpl implements ChatService {
         Long tempMemoryId = System.currentTimeMillis();
         log.info("tempMemoryId：{}", tempMemoryId);
 
-        // 调用AI模型进行意图识别
-        log.info("开始调用 chatTypeAssistant.chat 进行意图识别");
-        String aiResponse = chatTypeAssistant.chat(tempMemoryId, userMessage);
-        log.info("意图识别原始响应：{}", aiResponse);
+        // 调用AI模型进行意图识别（优先使用ModelAwareChatService，支持模型切换）
+        log.info("开始调用意图识别模型进行意图识别");
+        String aiResponse;
+        String selectedModel = ModelContext.getModel();
+        
+        if (modelAwareChatService != null && selectedModel != null) {
+            // 使用模型切换功能
+            aiResponse = modelAwareChatService.chatWithModel(selectedModel, tempMemoryId, userMessage);
+            log.info("意图识别响应（模型: {}）：{}", selectedModel, aiResponse);
+        } else if (chatTypeAssistant != null) {
+            // 使用默认意图识别
+            aiResponse = chatTypeAssistant.chat(tempMemoryId, userMessage);
+            log.info("意图识别响应（默认）：{}", aiResponse);
+        } else {
+            // 如果都没有配置，返回默认
+            saveChatInfo(memoryId, userMessage, BusinessConstant.DEFAULT_TYPE);
+            return "抱歉，聊天服务暂时不可用，请配置 LLM 模型后重试。";
+        }
 
         String lowerResponse = aiResponse.toLowerCase();
         log.info("aiResponse：{}；lowerResponse：{}", aiResponse, lowerResponse);
@@ -182,10 +202,18 @@ public class ChatServiceImpl implements ChatService {
                            "建议：请尝试用更清晰、更具体的方式描述您的查询需求。";
                 }
             }
-        } else if (chatAssistant != null) {
+        } else if (chatAssistant != null || modelAwareChatService != null) {
             // 默认业务，使用普通聊天助手（个人助手），无论是否明确识别为general
             log.info("选择业务处理服务：ChatAssistant");
-            result = chatAssistant.chat(memoryId, userMessage);
+            
+            // 使用模型切换功能
+            if (modelAwareChatService != null && selectedModel != null) {
+                result = modelAwareChatService.chatGeneralWithModel(selectedModel, memoryId, userMessage);
+                log.info("普通聊天响应（模型: {}）：{}", selectedModel, result);
+            } else {
+                result = chatAssistant.chat(memoryId, userMessage);
+                log.info("普通聊天响应（默认）：{}", result);
+            }
         } else {
             // 未配置聊天助手
             result = "抱歉，聊天服务暂时不可用，请配置 LLM 模型后重试。";

@@ -1027,6 +1027,141 @@
             0%, 100% { opacity: 1; }
             50% { opacity: 0.7; }
         }
+
+        /* 大模型选择器样式 */
+        .model-selector {
+            position: relative;
+            margin-left: 10px;
+        }
+
+        .model-selector-btn {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 12px;
+            background-color: #f5f5f5;
+            border: 1px solid #e0e0e0;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 13px;
+            color: #666;
+            transition: all 0.2s;
+        }
+
+        .model-selector-btn:hover {
+            background-color: #e8e8e8;
+            border-color: #d0d0d0;
+        }
+
+        .model-selector-btn .model-icon {
+            font-size: 16px;
+        }
+
+        .model-selector-btn .model-name {
+            font-weight: 500;
+        }
+
+        .model-selector-dropdown {
+            position: absolute;
+            bottom: 100%;
+            left: 0;
+            margin-bottom: 8px;
+            min-width: 180px;
+            background-color: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            display: none;
+            z-index: 1000;
+            overflow: hidden;
+        }
+
+        .model-selector-dropdown.show {
+            display: block;
+            animation: slideUp 0.2s ease;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .model-selector-header {
+            padding: 10px 12px;
+            border-bottom: 1px solid #e0e0e0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: #f9f9f9;
+        }
+
+        .model-selector-header span {
+            font-size: 12px;
+            color: #999;
+        }
+
+        .model-refresh-btn {
+            padding: 4px 8px;
+            background-color: transparent;
+            border: 1px solid #667eea;
+            border-radius: 4px;
+            color: #667eea;
+            font-size: 11px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .model-refresh-btn:hover {
+            background-color: #667eea;
+            color: white;
+        }
+
+        .model-option {
+            padding: 10px 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: background-color 0.2s;
+        }
+
+        .model-option:hover {
+            background-color: #f5f5f5;
+        }
+
+        .model-option.selected {
+            background-color: #667eea;
+            color: white;
+        }
+
+        .model-option.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .model-option .model-icon {
+            font-size: 18px;
+        }
+
+        .model-option .model-info {
+            flex: 1;
+        }
+
+        .model-option .model-name {
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .model-option .model-status {
+            font-size: 11px;
+            opacity: 0.8;
+        }
     </style>
 </head>
 <body>
@@ -1162,6 +1297,25 @@
                         <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path>
                     </svg>
                 </button>
+                
+                <!-- 大模型选择器 -->
+                <div class="model-selector" id="modelSelector">
+                    <button class="model-selector-btn" onclick="toggleModelSelector()">
+                        <span class="model-icon">🤖</span>
+                        <span class="model-name" id="currentModelName">加载中...</span>
+                        <span class="dropdown-arrow">▼</span>
+                    </button>
+                    <div class="model-selector-dropdown" id="modelSelectorDropdown">
+                        <div class="model-selector-header">
+                            <span>选择大模型</span>
+                            <button class="model-refresh-btn" onclick="event.stopPropagation(); refreshModels()">刷新</button>
+                        </div>
+                        <div id="modelOptionsContainer">
+                            <!-- 模型选项将通过JavaScript动态添加 -->
+                        </div>
+                    </div>
+                </div>
+                
                 <button class="send-btn" id="sendBtn" onclick="sendMessage()">发送</button>
             </div>
         </div>
@@ -1913,10 +2067,12 @@
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
+                            'X-Selected-Model': getCurrentModelId()
                         },
                         body: JSON.stringify({
                             memoryId: memoryId,
                             message: message,
+                            model: getCurrentModelId(),
                             extractedTexts: extractedTexts.length > 0 ? extractedTexts : null
                         }),
                         signal: controller.signal
@@ -3145,8 +3301,225 @@
             }
         });
 
+        // ==================== 大模型选择器功能 ====================
+        
+        // 模型图标映射
+        const MODEL_ICONS = {
+            'deepseek': '🔵',
+            'qwen': '🟣',
+            'kimi': '🟠',
+            'ollama': '🟢'
+        };
+
+        // 初始化模型选择器
+        async function initModelSelector() {
+            await loadModels();
+            // 恢复之前选择的模型
+            const savedModel = sessionStorage.getItem('selectedModel');
+            if (savedModel) {
+                selectModel(savedModel, false);
+            }
+        }
+
+        // 加载可用模型列表
+        async function loadModels() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/xiaozhi/models`);
+                const models = await response.json();
+                
+                const container = document.getElementById('modelOptionsContainer');
+                container.innerHTML = '';
+
+                if (models.length === 0) {
+                    container.innerHTML = '<div class="model-option disabled"><span>暂无可用模型</span></div>';
+                    return;
+                }
+
+                models.forEach(model => {
+                    const option = document.createElement('div');
+                    option.className = 'model-option' + (model.available ? '' : ' disabled');
+                    option.dataset.modelId = model.id;
+                    
+                    const icon = MODEL_ICONS[model.id] || '🤖';
+                    const statusText = model.available ? (model.defaultModel ? '默认' : '可用') : model.description;
+                    
+                    option.innerHTML = `
+                        <span class="model-icon">${icon}</span>
+                        <div class="model-info">
+                            <div class="model-name">${model.name}</div>
+                            <div class="model-status">${statusText}</div>
+                        </div>
+                    `;
+
+                    if (model.available) {
+                        option.onclick = () => selectModel(model.id, true);
+                    }
+
+                    container.appendChild(option);
+                });
+
+                // 更新当前模型显示
+                const currentModel = sessionStorage.getItem('selectedModel') || 'qwen';
+                updateCurrentModelDisplay(currentModel, models);
+
+            } catch (error) {
+                console.error('加载模型列表失败:', error);
+                document.getElementById('modelOptionsContainer').innerHTML = 
+                    '<div class="model-option disabled"><span>加载失败，请刷新重试</span></div>';
+            }
+        }
+
+        // 刷新模型列表
+        async function refreshModels() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/xiaozhi/models/refresh`, {
+                    method: 'POST'
+                });
+                const result = await response.json();
+                
+                if (result.success) {
+                    await loadModels();
+                    console.log('模型列表已刷新');
+                } else {
+                    console.error('刷新模型列表失败:', result.message);
+                }
+            } catch (error) {
+                console.error('刷新模型列表失败:', error);
+            }
+        }
+
+        // 选择模型
+        async function selectModel(modelId, saveAndNotify) {
+            // 查找模型信息
+            const container = document.getElementById('modelOptionsContainer');
+            const options = container.querySelectorAll('.model-option');
+
+            let selectedModelInfo = null;
+            options.forEach(option => {
+                if (option.dataset.modelId === modelId) {
+                    option.classList.add('selected');
+                } else {
+                    option.classList.remove('selected');
+                }
+            });
+
+            // 查找模型详细信息用于显示
+            try {
+                const response = await fetch(`${API_BASE_URL}/xiaozhi/models`);
+                const models = await response.json();
+                selectedModelInfo = models.find(m => m.id === modelId);
+            } catch (error) {
+                console.error('获取模型信息失败:', error);
+            }
+
+            // 保存到sessionStorage
+            sessionStorage.setItem('selectedModel', modelId);
+
+            // 更新当前模型显示
+            updateCurrentModelDisplay(modelId, selectedModelInfo ? [selectedModelInfo] : null);
+
+            // 关闭下拉菜单
+            document.getElementById('modelSelectorDropdown').classList.remove('show');
+
+            if (saveAndNotify) {
+                // 通知后端选择模型，并保存到sessionStorage用于后续请求
+                try {
+                    await fetch(`${API_BASE_URL}/xiaozhi/models/select`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ model: modelId })
+                    });
+                    console.log('已选择模型:', modelId);
+                } catch (error) {
+                    console.error('通知后端模型选择失败:', error);
+                }
+            }
+        }
+
+        // 更新当前模型显示
+        function updateCurrentModelDisplay(modelId, models) {
+            const nameEl = document.getElementById('currentModelName');
+            const icon = MODEL_ICONS[modelId] || '🤖';
+            
+            if (models && models.length > 0) {
+                const model = models.find(m => m.id === modelId);
+                if (model) {
+                    nameEl.textContent = model.name;
+                    return;
+                }
+            }
+
+            // 默认名称
+            const modelNames = {
+                'deepseek': 'DeepSeek',
+                'qwen': '通义千问',
+                'kimi': 'Kimi',
+                'ollama': 'Ollama'
+            };
+            nameEl.textContent = modelNames[modelId] || modelId;
+        }
+
+        // 切换模型选择器下拉菜单
+        function toggleModelSelector() {
+            const dropdown = document.getElementById('modelSelectorDropdown');
+            dropdown.classList.toggle('show');
+        }
+
+        // 点击外部关闭下拉菜单
+        document.addEventListener('click', function(e) {
+            const selector = document.getElementById('modelSelector');
+            if (selector && !selector.contains(e.target)) {
+                document.getElementById('modelSelectorDropdown').classList.remove('show');
+            }
+        });
+
+        // 获取当前选中的模型ID
+        function getCurrentModelId() {
+            return sessionStorage.getItem('selectedModel') || 'qwen';
+        }
+
+        // Nacos配置监听 - 定期检查配置是否更新
+        let lastConfigTimestamp = null;
+        let nacosCheckInterval = null;
+
+        async function checkNacosConfigUpdate() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/config/refresh`, {
+                    method: 'POST'
+                });
+                const result = await response.json();
+                if (result.success) {
+                    // 配置已刷新，重新加载模型列表
+                    await loadModels();
+                    console.log('Nacos配置已更新，模型列表已刷新');
+                }
+            } catch (error) {
+                // 忽略网络错误，可能是后端未启动
+            }
+        }
+
+        // 启动Nacos配置监听（每60秒检查一次）
+        function startNacosConfigListener() {
+            // 每60秒自动刷新配置和模型列表
+            nacosCheckInterval = setInterval(async () => {
+                await checkNacosConfigUpdate();
+            }, 60000);
+        }
+
+        // 初始化模型选择器
+        initModelSelector().then(() => {
+            // 启动Nacos配置监听
+            startNacosConfigListener();
+        });
+
         window.addEventListener('beforeunload', () => {
             TextToSpeech.stop();
+            // 清理定时器
+            if (nacosCheckInterval) {
+                clearInterval(nacosCheckInterval);
+            }
         });
     </script>
 </body>

@@ -19,6 +19,7 @@ import dev.langchain4j.store.embedding.qdrant.QdrantEmbeddingStore;
 import io.qdrant.client.QdrantClient;
 import io.qdrant.client.QdrantGrpcClient;
 import jakarta.annotation.PostConstruct;
+import org.fb.bean.ModelInfo;
 import org.fb.tools.MongoChatMemoryStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,7 +31,10 @@ import org.springframework.context.annotation.Configuration;
 
 import java.io.IOException;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 @Configuration
@@ -95,6 +99,8 @@ public class LLMConfig {
     private volatile ChatModel qwenChatModel;
     private volatile ChatModel qwenVisionChatModel;
     private volatile StreamingChatModel streamingChatModel;
+    private volatile StreamingChatModel deepSeekStreamingChatModel;
+    private volatile StreamingChatModel qwenStreamingChatModel;
     private volatile ChatModel ollamaChatModel;
     private volatile ChatModel kimiChatModel;
 
@@ -108,6 +114,8 @@ public class LLMConfig {
         refreshQwenChatModel();
         refreshQwenVisionChatModel();
         refreshStreamingChatModel();
+        refreshDeepSeekStreamingChatModel();
+        refreshQwenStreamingChatModel();
         refreshOllamaChatModel();
         refreshKimiChatModel();
         log.info("All chat models refreshed successfully");
@@ -182,6 +190,38 @@ public class LLMConfig {
         }
     }
 
+    private void refreshDeepSeekStreamingChatModel() {
+        if (deepSeekApiKey == null || deepSeekApiKey.isEmpty()) {
+            log.warn("DeepSeek API Key未配置，DeepSeek Streaming模型不可用");
+            this.deepSeekStreamingChatModel = null;
+        } else {
+            this.deepSeekStreamingChatModel = OpenAiStreamingChatModel.builder()
+                    .apiKey(deepSeekApiKey)
+                    .modelName(deepSeekModel)
+                    .logRequests(true)
+                    .logResponses(true)
+                    .baseUrl(deepSeekUrl)
+                    .timeout(READ_TIMEOUT)
+                    .build();
+        }
+    }
+
+    private void refreshQwenStreamingChatModel() {
+        if (dashscopeApiKey == null || dashscopeApiKey.isEmpty() || dashscopeApiKey.equals("demo")) {
+            log.warn("DashScope API Key未配置，Qwen Streaming模型不可用");
+            this.qwenStreamingChatModel = null;
+        } else {
+            this.qwenStreamingChatModel = OpenAiStreamingChatModel.builder()
+                    .apiKey(dashscopeApiKey)
+                    .modelName(dashscopeModel)
+                    .logRequests(true)
+                    .logResponses(true)
+                    .baseUrl(dashscopeUrl)
+                    .timeout(READ_TIMEOUT)
+                    .build();
+        }
+    }
+
     private void refreshOllamaChatModel() {
         this.ollamaChatModel = OllamaChatModel.builder()
                 .baseUrl(ollamaUrl)
@@ -233,6 +273,16 @@ public class LLMConfig {
     @Bean
     public StreamingChatModel streamingChatModel() {
         return streamingChatModel;
+    }
+
+    @Bean
+    public StreamingChatModel deepSeekStreamingChatModel() {
+        return deepSeekStreamingChatModel;
+    }
+
+    @Bean
+    public StreamingChatModel qwenStreamingChatModel() {
+        return qwenStreamingChatModel;
     }
 
     @Bean
@@ -291,5 +341,102 @@ public class LLMConfig {
         return WanxImageModel.builder()
                 .apiKey(dashscopeApiKey)
                 .build();
+    }
+
+    /**
+     * 获取所有可用的大模型列表
+     * @return 模型信息列表
+     */
+    public List<ModelInfo> getAvailableModels() {
+        List<ModelInfo> models = new ArrayList<>();
+
+        // Qwen (默认模型)
+        boolean qwenAvailable = qwenChatModel != null;
+        models.add(ModelInfo.createQwen(dashscopeModel, dashscopeUrl, qwenAvailable));
+
+        // DeepSeek
+        boolean deepSeekAvailable = deepSeekChatModel != null;
+        models.add(ModelInfo.createDeepSeek(deepSeekModel, deepSeekUrl, deepSeekAvailable));
+
+        // Kimi
+        boolean kimiAvailable = kimiChatModel != null;
+        models.add(ModelInfo.createKimi(kimiModel, kimiUrl, kimiAvailable));
+
+        // Ollama
+        boolean ollamaAvailable = ollamaChatModel != null;
+        models.add(ModelInfo.createOllama(ollamaModel, ollamaUrl, ollamaAvailable));
+
+        return models;
+    }
+
+    /**
+     * 根据模型ID获取对应的ChatModel
+     * @param modelId 模型ID (deepseek, qwen, kimi, ollama)
+     * @return 对应的ChatModel，如果未配置则返回默认的qwenChatModel
+     */
+    public ChatModel getChatModel(String modelId) {
+        if (modelId == null || modelId.isEmpty()) {
+            return qwenChatModel;
+        }
+
+        switch (modelId.toLowerCase()) {
+            case "deepseek":
+                return deepSeekChatModel;
+            case "qwen":
+                return qwenChatModel;
+            case "kimi":
+                return kimiChatModel;
+            case "ollama":
+                return ollamaChatModel;
+            default:
+                log.warn("未知的模型ID: {}，使用默认模型", modelId);
+                return qwenChatModel;
+        }
+    }
+
+    /**
+      * 检查指定模型是否可用
+      * @param modelId 模型ID
+      * @return 是否可用
+      */
+    public boolean isModelAvailable(String modelId) {
+        if (modelId == null || modelId.isEmpty()) {
+            return qwenChatModel != null;
+        }
+
+        switch (modelId.toLowerCase()) {
+            case "deepseek":
+                return deepSeekChatModel != null;
+            case "qwen":
+                return qwenChatModel != null;
+            case "kimi":
+                return kimiChatModel != null;
+            case "ollama":
+                return ollamaChatModel != null;
+            default:
+                return false;
+        }
+    }
+
+    /**
+     * 根据模型ID获取对应的StreamingChatModel
+     * @param modelId 模型ID (deepseek, qwen, kimi, ollama)
+     * * @return 对应的StreamingChatModel，如果未配置则返回默认的qwenStreamingChatModel
+     */
+    public StreamingChatModel getStreamingChatModel(String modelId) {
+        if (modelId == null || modelId.isEmpty()) {
+            return qwenStreamingChatModel;
+        }
+
+        switch (modelId.toLowerCase()) {
+            case "deepseek":
+                return deepSeekStreamingChatModel;
+            case "qwen":
+                return qwenStreamingChatModel;
+            // 其他模型暂时不支持流式，返回Qwen
+            default:
+                log.warn("模型 {} 暂不支持流式切换，使用Qwen流式模型", modelId);
+                return qwenStreamingChatModel;
+        }
     }
 }

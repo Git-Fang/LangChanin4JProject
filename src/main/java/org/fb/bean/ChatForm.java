@@ -10,6 +10,11 @@ public class ChatForm {
 
    private List<String> extractedTexts;
 
+   /**
+    * 选中的大模型ID（可选，如果不传则使用默认模型）
+    */
+   private String model;
+
    public Long getMemoryId() {
        return memoryId;
    }
@@ -32,5 +37,13 @@ public class ChatForm {
 
    public void setExtractedTexts(List<String> extractedTexts) {
        this.extractedTexts = extractedTexts;
+   }
+
+   public String getModel() {
+       return model;
+   }
+
+   public void setModel(String model) {
+       this.model = model;
    }
 }

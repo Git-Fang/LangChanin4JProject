@@ -42,7 +42,13 @@ public class ChatRequestMessage implements Serializable {
     
     @JsonProperty("metadata")
     private RequestMetadata metadata;
-    
+
+    /**
+     * 用户选择的大模型ID
+     */
+    @JsonProperty("model")
+    private String model;
+
     public enum MessageType {
         CHAT, TRANSLATION, MEDICAL, TERM_EXTRACT, SQL_QUERY, UNKNOWN
     }

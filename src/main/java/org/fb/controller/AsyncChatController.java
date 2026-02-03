@@ -43,6 +43,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.fb.config.RedisHealthIndicator;
+import org.fb.context.ModelContext;
 
 @Slf4j
 @RestController
@@ -1164,8 +1165,9 @@ flux.publishOn(Schedulers.boundedElastic())
         Long memoryId = chatForm.getMemoryId();
         String userMessage = chatForm.getMessage();
         java.util.List<String> extractedTexts = chatForm.getExtractedTexts();
+        String selectedModel = chatForm.getModel();
 
-        log.info("收到HTTP流式聊天请求, memoryId: {}, message: {}", memoryId, userMessage);
+        log.info("收到HTTP流式聊天请求, memoryId: {}, message: {}, model: {}", memoryId, userMessage, selectedModel);
         if (extractedTexts != null && !extractedTexts.isEmpty()) {
             log.info("附带文件提取内容数量: {}", extractedTexts.size());
         }
@@ -1175,6 +1177,7 @@ flux.publishOn(Schedulers.boundedElastic())
 
         try {
             ChatRequestMessage request = ChatRequestMessage.create(memoryId, fullMessage);
+            request.setModel(selectedModel);  // 保存用户选择的模型
             String requestJson = objectMapper.writeValueAsString(request);
             boolean redisSaved = safeSetRedisValue("chat:request:" + requestId, requestJson, RESULT_TTL);
             safeSetRedisValue(STREAM_CACHE_PREFIX + requestId, "", RESULT_TTL);
@@ -1286,6 +1289,15 @@ flux.publishOn(Schedulers.boundedElastic())
             if (request != null) {
                 memoryCache.remove(requestId);
                 log.debug("清理内存缓存, requestId: {}", requestId);
+            }
+            
+            // 设置模型选择到ModelContext（支持模型切换）
+            String selectedModel = request != null ? request.getModel() : null;
+            if (selectedModel != null && !selectedModel.isEmpty()) {
+                ModelContext.setModel(selectedModel);
+                log.info("设置模型选择: {}, requestId: {}", selectedModel, requestId);
+            } else {
+                log.debug("未指定模型选择，使用默认模型, requestId: {}", requestId);
             }
             
             // 声明为final变量，供lambda表达式使用

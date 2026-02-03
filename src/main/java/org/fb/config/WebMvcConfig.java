@@ -3,6 +3,7 @@ package org.fb.config;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import org.fb.interceptor.ModelInterceptor;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpInputMessage;
 import org.springframework.http.HttpOutputMessage;
@@ -12,6 +13,7 @@ import org.springframework.http.converter.HttpMessageConverter;
 import org.springframework.http.converter.HttpMessageNotWritableException;
 import org.springframework.http.converter.StringHttpMessageConverter;
 import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
+import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 import java.io.IOException;
@@ -34,6 +36,13 @@ public class WebMvcConfig implements WebMvcConfigurer {
         converters.add(jacksonConverter);
         
         converters.add(new SseHttpMessageConverter());
+    }
+
+    @Override
+    public void addInterceptors(InterceptorRegistry registry) {
+        registry.addInterceptor(new ModelInterceptor())
+                .addPathPatterns("/xiaozhi/**")
+                .order(1);
     }
     
     private static class SseHttpMessageConverter extends AbstractHttpMessageConverter<Object> {

@@ -25,10 +25,10 @@ import java.util.regex.Pattern;
 public class StreamingDispatchService {
 
     @Autowired
-    private ChatTypeAssistantStream chatTypeAssistantStream;
+    private DynamicChatTypeAssistantStream dynamicChatTypeAssistantStream;
 
     @Autowired
-    private ChatAssistantStream chatAssistantStream;
+    private DynamicChatAssistantStream dynamicChatAssistantStream;
 
     @Autowired
     private DoctorAgent doctorAgent;
@@ -67,11 +67,15 @@ public class StreamingDispatchService {
         log.info("memoryId: {}, userMessage: {}", memoryId, userMessage);
         long overallStartTime = System.currentTimeMillis();
 
+        // 在线程切换前保存当前选择的模型
+        String selectedModel = org.fb.context.ModelContext.getModel();
+        log.info("StreamingDispatchService 获取到 ModelContext.getModel() = {}", selectedModel);
+
         // 检查服务是否可用
-        if (chatTypeAssistantStream == null) {
-            log.warn("ChatTypeAssistantStream 未配置，使用默认general类型");
+        if (dynamicChatTypeAssistantStream == null) {
+            log.warn("DynamicChatTypeAssistantStream 未配置，使用默认general类型");
             chatSaveService.saveChatInfo(memoryId, userMessage, BusinessConstant.DEFAULT_TYPE);
-            return chatAssistantStream.chat(memoryId, userMessage);
+            return dynamicChatAssistantStream.chat(memoryId, userMessage);
         }
 
         // 第一步：进行意图识别
@@ -80,7 +84,10 @@ public class StreamingDispatchService {
         log.info("待识别消息: {}", userMessage);
         long intentRecognitionStart = System.currentTimeMillis();
 
-        return chatTypeAssistantStream.chat(tempMemoryId, userMessage)
+        // 保存模型ID供后续使用
+        final String finalSelectedModel = selectedModel;
+
+        return dynamicChatTypeAssistantStream.chat(tempMemoryId, userMessage)
                 .collectList()
                 .flatMapMany(intentChunks -> {
                     // 合并意图识别的结果
@@ -116,7 +123,7 @@ public class StreamingDispatchService {
                     } else if (BusinessConstant.TRANSLATION_TYPE.equals(intent)) {
                         log.info("选择业务处理服务: TranslaterService");
                         if (translaterService == null) {
-                            resultFlux = chatAssistantStream.chat(memoryId, userMessage);
+                            resultFlux = dynamicChatAssistantStream.chat(memoryId, userMessage);
                         } else {
                             resultFlux = processWithTranslaterService(memoryId, userMessage);
                         }
@@ -127,8 +134,9 @@ public class StreamingDispatchService {
                         log.info("选择业务处理服务: NaturalLanguageSQLAgent");
                         resultFlux = processWithNaturalLanguageSQLAgent(userMessage);
                     } else {
-                        log.info("选择业务处理服务: ChatAssistantStream (默认-general)");
-                        resultFlux = chatAssistantStream.chat(memoryId, userMessage);
+                        log.info("选择业务处理服务: DynamicChatAssistantStream (默认-general)");
+                        // 如果有选择的模型，使用DynamicChatAssistantStream处理
+                        resultFlux = dynamicChatAssistantStream.chat(memoryId, userMessage);
                     }
 
                     log.info("========== StreamingDispatchService 处理完成 ==========");

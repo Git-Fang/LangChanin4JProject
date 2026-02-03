@@ -8,6 +8,9 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.fb.bean.ChatForm;
 import org.fb.bean.MessageDTO;
+import org.fb.bean.ModelInfo;
+import org.fb.config.LLMConfig;
+import org.fb.context.ModelContext;
 import org.fb.service.ChatService;
 import org.fb.tools.MongoChatMemoryStore;
 import org.slf4j.Logger;
@@ -16,6 +19,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -33,16 +37,26 @@ public class ChatController {
     @Autowired
     private MongoChatMemoryStore mongoChatMemoryStore;
 
+    @Autowired
+    private LLMConfig llmConfig;
+
     @Operation(summary = "智能对话（同步）", description = "传统的同步对话方式，请求后会阻塞等待AI响应(2-5秒)")
     @PostMapping("/chat")
     public String chat(@RequestBody ChatForm chatForm) {
         Long memoryId = chatForm.getMemoryId();
         String userMessage = chatForm.getMessage();
         java.util.List<String> extractedTexts = chatForm.getExtractedTexts();
+        String selectedModel = chatForm.getModel();
 
         log.info("收到聊天请求，memoryId：{}，用户消息：{}", memoryId, userMessage);
         if (extractedTexts != null && !extractedTexts.isEmpty()) {
             log.info("附带文件提取内容数量: {}", extractedTexts.size());
+        }
+
+        // 设置模型选择（优先使用请求中的模型，其次使用请求头中的模型）
+        if (selectedModel != null && !selectedModel.trim().isEmpty()) {
+            ModelContext.setModel(selectedModel.trim());
+            log.info("使用请求中指定的模型: {}", selectedModel);
         }
 
         try {
@@ -50,6 +64,7 @@ public class ChatController {
             System.out.println("\n=== ChatController.chat 开始调用 chatService.chat ===");
             System.out.println("memoryId：" + memoryId);
             System.out.println("userMessage：" + fullMessage);
+            System.out.println("model：" + ModelContext.getDebugInfo());
             String result = chatService.chat(memoryId, fullMessage);
             System.out.println("chatService.chat 返回结果：" + result);
             System.out.println("=== ChatController.chat 调用 chatService.chat 完成 ===\n");
@@ -194,6 +209,68 @@ public class ChatController {
         } catch (Exception e) {
             log.error("保存历史会话异常, error={}", e.getMessage(), e);
             return false;
+        }
+    }
+
+    @GetMapping("/models")
+    @Operation(summary = "获取可用的大模型列表")
+    public List<ModelInfo> getAvailableModels() {
+        try {
+            return llmConfig.getAvailableModels();
+        } catch (Exception e) {
+            log.error("获取可用模型列表异常, error={}", e.getMessage(), e);
+            return new ArrayList<>();
+        }
+    }
+
+    @PostMapping("/models/select")
+    @Operation(summary = "选择大模型")
+    public Map<String, Object> selectModel(@RequestBody Map<String, String> request) {
+        Map<String, Object> result = new HashMap<>();
+        try {
+            String modelId = request.get("model");
+            if (modelId == null || modelId.trim().isEmpty()) {
+                result.put("success", false);
+                result.put("message", "模型ID不能为空");
+                return result;
+            }
+
+            // 检查模型是否可用
+            if (!llmConfig.isModelAvailable(modelId)) {
+                result.put("success", false);
+                result.put("message", "模型不可用，请检查配置");
+                return result;
+            }
+
+            // 设置模型到ModelContext（通过响应头返回给前端）
+            log.info("选择模型: {}", modelId);
+            result.put("success", true);
+            result.put("message", "模型选择成功");
+            result.put("model", modelId);
+            return result;
+        } catch (Exception e) {
+            log.error("选择模型异常, error={}", e.getMessage(), e);
+            result.put("success", false);
+            result.put("message", "选择模型失败: " + e.getMessage());
+            return result;
+        }
+    }
+
+    @PostMapping("/models/refresh")
+    @Operation(summary = "刷新模型列表")
+    public Map<String, Object> refreshModels() {
+        Map<String, Object> result = new HashMap<>();
+        try {
+            log.info("刷新模型配置");
+            result.put("success", true);
+            result.put("message", "模型配置已刷新");
+            result.put("models", llmConfig.getAvailableModels());
+            return result;
+        } catch (Exception e) {
+            log.error("刷新模型配置异常, error={}", e.getMessage(), e);
+            result.put("success", false);
+            result.put("message", "刷新模型配置失败: " + e.getMessage());
+            return result;
         }
     }
 
