@@ -3,6 +3,7 @@ package org.fb.service;
 import dev.langchain4j.memory.chat.ChatMemoryProvider;
 import lombok.extern.slf4j.Slf4j;
 import org.fb.constant.BusinessConstant;
+import org.fb.context.TracingContextSnapshot;
 import org.fb.service.assistant.*;
 import org.fb.service.impl.NL2SQLService;
 import org.fb.tools.QdrantOperationTools;
@@ -87,62 +88,71 @@ public class StreamingDispatchService {
         // 保存模型ID供后续使用
         final String finalSelectedModel = selectedModel;
 
-        return dynamicChatTypeAssistantStream.chat(tempMemoryId, userMessage)
-                .collectList()
-                .flatMapMany(intentChunks -> {
-                    // 合并意图识别的结果
-                    String intentResponse = String.join("", intentChunks);
-                    long intentRecognitionDuration = System.currentTimeMillis() - intentRecognitionStart;
-                    
-                    log.info("步骤2：意图识别原始响应: {}", intentResponse);
-                    metricsService.recordIntentRecognitionDuration(memoryId.toString(), intentRecognitionDuration);
+        // 在collectList操作前捕获当前trace上下文（解决ForkJoinPool线程中traceId丢失问题）
+        final Map<String, String> traceContext = TracingContextSnapshot.capture();
 
-                    // 提取意图
-                    String intent = extractIntent(intentResponse);
-                    log.info("步骤3：解析出的意图: {}, 原始响应: {}", intent, intentResponse);
-                    log.info("当前使用的服务: {}", getServiceName(intent));
+        return TracingContextSnapshot.contextWrite(
+                dynamicChatTypeAssistantStream.chat(tempMemoryId, userMessage)
+                        .collectList()
+                        .flatMapMany(intentChunks -> {
+                            // 在flatMap中恢复trace上下文（因为collectList切换到了ForkJoinPool线程）
+                            return TracingContextSnapshot.executeWithContext(() -> {
+                                // 合并意图识别的结果
+                                String intentResponse = String.join("", intentChunks);
+                                long intentRecognitionDuration = System.currentTimeMillis() - intentRecognitionStart;
+                                
+                                log.info("步骤2：意图识别原始响应: {}", intentResponse);
+                                metricsService.recordIntentRecognitionDuration(memoryId.toString(), intentRecognitionDuration);
 
-                    metricsService.recordChatRequestByIntent(memoryId.toString(), intent);
+                                // 提取意图
+                                String intent = extractIntent(intentResponse);
+                                log.info("步骤3：解析出的意图: {}, 原始响应: {}", intent, intentResponse);
+                                log.info("当前使用的服务: {}", getServiceName(intent));
 
-                    // 第二步：根据意图选择业务处理服务
-                    log.info("步骤4：根据意图选择业务处理服务, intent: {}", intent);
+                                metricsService.recordChatRequestByIntent(memoryId.toString(), intent);
 
-                    Flux<String> resultFlux;
+                                // 第二步：根据意图选择业务处理服务
+                                log.info("步骤4：根据意图选择业务处理服务, intent: {}", intent);
 
-                    // 保存聊天信息到数据库
-                    log.info("准备调用chatSaveService.saveChatInfo方法，memoryId：{}，用户消息：{}，聊天类型：{}", memoryId, userMessage, intent);
-                    long dbStartTime = System.currentTimeMillis();
-                    chatSaveService.saveChatInfo(memoryId, userMessage, intent);
-                    long dbDuration = System.currentTimeMillis() - dbStartTime;
-                    metricsService.recordDatabaseOperationDuration(memoryId.toString(), dbDuration);
-                    log.info("chatSaveService.saveChatInfo方法调用完成, 耗时: {}ms", dbDuration);
+                                Flux<String> resultFlux;
 
-                    if (BusinessConstant.MEDICAL_TYPE.equals(intent)) {
-                        log.info("选择业务处理服务: DoctorAgent");
-                        resultFlux = processWithDoctorAgent(memoryId, userMessage);
-                    } else if (BusinessConstant.TRANSLATION_TYPE.equals(intent)) {
-                        log.info("选择业务处理服务: TranslaterService");
-                        if (translaterService == null) {
-                            resultFlux = dynamicChatAssistantStream.chat(memoryId, userMessage);
-                        } else {
-                            resultFlux = processWithTranslaterService(memoryId, userMessage);
-                        }
-                    } else if (BusinessConstant.TERM_EXTRACTION_TYPE.equals(intent)) {
-                        log.info("选择业务处理服务: TermExtractionAgent");
-                        resultFlux = processWithTermExtractionAgent(userMessage);
-                    } else if (BusinessConstant.SQL_OPERATION_TYPE.equals(intent)) {
-                        log.info("选择业务处理服务: NaturalLanguageSQLAgent");
-                        resultFlux = processWithNaturalLanguageSQLAgent(userMessage);
-                    } else {
-                        log.info("选择业务处理服务: DynamicChatAssistantStream (默认-general)");
-                        // 如果有选择的模型，使用DynamicChatAssistantStream处理
-                        resultFlux = dynamicChatAssistantStream.chat(memoryId, userMessage);
-                    }
+                                // 保存聊天信息到数据库
+                                log.info("准备调用chatSaveService.saveChatInfo方法，memoryId：{}，用户消息：{}，聊天类型：{}", memoryId, userMessage, intent);
+                                long dbStartTime = System.currentTimeMillis();
+                                chatSaveService.saveChatInfo(memoryId, userMessage, intent);
+                                long dbDuration = System.currentTimeMillis() - dbStartTime;
+                                metricsService.recordDatabaseOperationDuration(memoryId.toString(), dbDuration);
+                                log.info("chatSaveService.saveChatInfo方法调用完成, 耗时: {}ms", dbDuration);
 
-                    log.info("========== StreamingDispatchService 处理完成 ==========");
-                    return resultFlux;
-                })
-                .doOnComplete(() -> {
+                                if (BusinessConstant.MEDICAL_TYPE.equals(intent)) {
+                                    log.info("选择业务处理服务: DoctorAgent");
+                                    resultFlux = processWithDoctorAgent(memoryId, userMessage);
+                                } else if (BusinessConstant.TRANSLATION_TYPE.equals(intent)) {
+                                    log.info("选择业务处理服务: TranslaterService");
+                                    if (translaterService == null) {
+                                        resultFlux = dynamicChatAssistantStream.chat(memoryId, userMessage);
+                                    } else {
+                                        resultFlux = processWithTranslaterService(memoryId, userMessage);
+                                    }
+                                } else if (BusinessConstant.TERM_EXTRACTION_TYPE.equals(intent)) {
+                                    log.info("选择业务处理服务: TermExtractionAgent");
+                                    resultFlux = processWithTermExtractionAgent(userMessage);
+                                } else if (BusinessConstant.SQL_OPERATION_TYPE.equals(intent)) {
+                                    log.info("选择业务处理服务: NaturalLanguageSQLAgent");
+                                    resultFlux = processWithNaturalLanguageSQLAgent(userMessage);
+                                } else {
+                                    log.info("选择业务处理服务: DynamicChatAssistantStream (默认-general)");
+                                    // 如果有选择的模型，使用DynamicChatAssistantStream处理
+                                    resultFlux = dynamicChatAssistantStream.chat(memoryId, userMessage);
+                                }
+
+                                log.info("========== StreamingDispatchService 处理完成 ==========");
+                                return resultFlux;
+                            });
+                        }),
+                traceContext
+        )
+        .doOnComplete(() -> {
                     long overallDuration = System.currentTimeMillis() - overallStartTime;
                     metricsService.recordChatProcessingDuration(memoryId.toString(), overallDuration);
                     log.info("StreamingDispatchService整体处理耗时: {}ms", overallDuration);
