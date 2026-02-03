@@ -192,7 +192,12 @@ public class ChatController {
                 return false;
             }
 
-            List<ChatMessage> chatMessages = new ArrayList<>();
+            // 获取已有的消息
+            List<ChatMessage> existingMessages = mongoChatMemoryStore.getMessages(memoryId);
+            log.info("获取已有消息, memoryId={}, 已有消息数量={}", memoryId, existingMessages.size());
+
+            // 将新消息添加到已有消息列表中
+            List<ChatMessage> chatMessages = new ArrayList<>(existingMessages);
             for (Map<String, String> msg : messages) {
                 String role = msg.get("role");
                 String content = msg.get("content");
@@ -204,7 +209,7 @@ public class ChatController {
             }
 
             mongoChatMemoryStore.updateMessages(memoryId, chatMessages);
-            log.info("保存历史会话成功, memoryId={}, 消息数量={}", memoryId, chatMessages.size());
+            log.info("保存历史会话成功, memoryId={}, 总消息数量={}", memoryId, chatMessages.size());
             return true;
         } catch (Exception e) {
             log.error("保存历史会话异常, error={}", e.getMessage(), e);

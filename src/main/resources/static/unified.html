@@ -1436,10 +1436,14 @@
                                 const resultData = JSON.parse(textContent.text);
                                 if (resultData.chatResult) {
                                     addMessage(resultData.chatResult, false);
+                                    // 保存助手消息到历史会话
+                                    saveMessageToHistory('ASSISTANT', resultData.chatResult);
                                 }
                             } catch (e) {
                                 // 如果不是 JSON，直接显示文本
                                 addMessage(textContent.text, false);
+                                // 保存助手消息到历史会话
+                                saveMessageToHistory('ASSISTANT', textContent.text);
                             }
                         }
                     }
@@ -2043,6 +2047,10 @@
             sendBtn.textContent = '发送中...';
 
             addMessage(lastUserMessage, true);
+            
+            // 保存用户消息到历史会话
+            await saveMessageToHistory('USER', message);
+            
             input.value = '';
 
             clearAttachedFiles();
@@ -2159,6 +2167,9 @@
                                 processingTimeDiv.textContent = '处理耗时: ' + (result.processingTimeMs || 0) + 'ms';
                                 contentDiv.appendChild(processingTimeDiv);
                                 
+                                // 保存助手消息到历史会话
+                                saveMessageToHistory('ASSISTANT', accumulatedContent);
+                                
                                 lastMessage = null;
                             } else {
                                 addMessage('处理失败: ' + (result.error || '未知错误'), false);
@@ -2187,6 +2198,8 @@
 
                             if (accumulatedContent) {
                                 contentDiv.innerHTML = marked.parse(accumulatedContent);
+                                // 保存助手消息到历史会话（当没有result事件时）
+                                saveMessageToHistory('ASSISTANT', accumulatedContent);
                             }
                             eventSource.close();
                             loadingDiv._eventSource = null;
@@ -2214,6 +2227,11 @@
                         eventSource.close();
                         loadingDiv._eventSource = null;
                         loadingDiv._controller = null;
+                        
+                        // 如果有累积的内容，也保存到历史会话（即使出错）
+                        if (accumulatedContent && accumulatedContent.trim() !== '') {
+                            saveMessageToHistory('ASSISTANT', accumulatedContent);
+                        }
                     });
                     
                     eventSource.onerror = (error) => {
@@ -2729,6 +2747,41 @@
             } catch (error) {
                 console.error('删除会话失败:', error);
                 alert('删除会话失败，请重试');
+            }
+        }
+        
+        // 保存消息到历史会话
+        async function saveMessageToHistory(type, content) {
+            try {
+                // 根据消息类型转换为 role
+                const role = type === 'USER' ? 'user' : 'ai';
+                
+                console.log(`保存消息到历史会话: type=${type}, role=${role}, memoryId=${memoryId}, contentLength=${content.length}`);
+                
+                const response = await fetch(`${API_BASE_URL}/xiaozhi/chat/saveHistory`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        memoryId: memoryId,
+                        messages: [
+                            { role: role, content: content }
+                        ]
+                    })
+                });
+                
+                if (!response.ok) {
+                    console.error('保存消息失败:', response.status, response.statusText);
+                    return false;
+                }
+                
+                const result = await response.json();
+                console.log('保存消息结果:', result);
+                return result === true;
+            } catch (error) {
+                console.error('保存消息到历史会话失败:', error);
+                return false;
             }
         }
         
