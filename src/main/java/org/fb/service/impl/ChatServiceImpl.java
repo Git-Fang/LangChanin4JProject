@@ -173,11 +173,29 @@ public class ChatServiceImpl implements ChatService {
             // 自然语言转为sql
             log.info("选择业务处理服务：NL2SQLService");
             try {
-                List<Map<String, Object>> sqlResult = nl2SQLService.executeNaturalLanguageQuery(userMessage);
-                if (sqlResult == null || sqlResult.isEmpty()) {
-                    result = "查询结果为空，请检查查询条件或数据库中是否有相关数据";
+                // 预判断是否需要查询数据库
+                if (!nl2SQLService.shouldQueryDatabase(userMessage)) {
+                    log.info("NL2SQLService预判断不需要查询数据库，转为general类型处理");
+                    chatType = BusinessConstant.DEFAULT_TYPE;
+                    // 保存聊天信息到数据库
+                    saveChatInfo(memoryId, userMessage, BusinessConstant.DEFAULT_TYPE);
+                    // 改为使用general处理
+                    if (modelAwareChatService != null && selectedModel != null) {
+                        result = modelAwareChatService.chatGeneralWithModel(selectedModel, memoryId, userMessage);
+                        log.info("普通聊天响应（模型: {}）：{}", selectedModel, result);
+                    } else if (chatAssistant != null) {
+                        result = chatAssistant.chat(memoryId, userMessage);
+                        log.info("普通聊天响应（默认）：{}", result);
+                    } else {
+                        result = "抱歉，聊天服务暂时不可用，请配置 LLM 模型后重试。";
+                    }
                 } else {
-                    result = formatQueryResult(sqlResult);
+                    List<Map<String, Object>> sqlResult = nl2SQLService.executeNaturalLanguageQuery(userMessage);
+                    if (sqlResult == null || sqlResult.isEmpty()) {
+                        result = "查询结果为空，请检查查询条件或数据库中是否有相关数据";
+                    } else {
+                        result = formatQueryResult(sqlResult);
+                    }
                 }
             } catch (Exception e) {
                 log.error("SQL查询执行失败", e);

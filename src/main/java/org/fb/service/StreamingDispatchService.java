@@ -298,6 +298,14 @@ public class StreamingDispatchService {
     private Flux<String> processWithNaturalLanguageSQLAgent(String userMessage) {
         log.info("调用NL2SQLService.executeNaturalLanguageQuery, message: {}", userMessage);
         Long memoryId = System.currentTimeMillis();
+        
+        // 预判断是否需要查询数据库
+        if (!nl2SQLService.shouldQueryDatabase(userMessage)) {
+            log.info("NL2SQLService预判断不需要查询数据库，转为general类型处理");
+            // 改为使用general处理
+            return dynamicChatAssistantStream.chat(memoryId, userMessage);
+        }
+        
         long serviceStartTime = System.currentTimeMillis();
         try {
             List<Map<String, Object>> sqlResult = nl2SQLService.executeNaturalLanguageQuery(userMessage);

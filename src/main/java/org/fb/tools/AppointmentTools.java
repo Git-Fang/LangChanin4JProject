@@ -4,6 +4,8 @@ import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
 import org.fb.bean.Appointment;
 import org.fb.service.AppointmentService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -11,28 +13,40 @@ import java.util.List;
 
 @Component
 public class AppointmentTools {
+    private static final Logger log = LoggerFactory.getLogger(AppointmentTools.class);
 
     @Autowired
     private AppointmentService appointmentService;
 
     @Tool(name="book_appointment", value = "预约挂号：根据参数，先执行工具方法queryDepartment查询是否可预约，并直接给用户回答是否可预约，并让用户确认所有预约信息，用户确认后再进行预约。")
     public String bookAppointment(Appointment appointment){
+        log.info("【预约工具】开始处理预约请求");
+        log.info("【预约工具】接收到的预约参数: username={}, idCard={}, department={}, date={}, time={}, doctorName={}",
+                appointment.getUsername(), appointment.getIdCard(), appointment.getDepartment(),
+                appointment.getDate(), appointment.getTime(), appointment.getDoctorName());
+
         if (appointment.getUsername() == null || appointment.getUsername().trim().isEmpty()) {
+            log.warn("【预约工具】预约失败：患者姓名为空");
             return "预约信息不完整，请提供您的姓名";
         }
         if (appointment.getIdCard() == null || appointment.getIdCard().trim().isEmpty()) {
+            log.warn("【预约工具】预约失败：身份证号为空");
             return "预约信息不完整，请提供您的身份证号";
         }
         if (appointment.getDepartment() == null || appointment.getDepartment().trim().isEmpty()) {
+            log.warn("【预约工具】预约失败：预约科室为空");
             return "预约信息不完整，请提供预约科室";
         }
         if (appointment.getDate() == null || appointment.getDate().trim().isEmpty()) {
+            log.warn("【预约工具】预约失败：预约日期为空");
             return "预约信息不完整，请提供预约日期（格式：2025-04-14）";
         }
         if (appointment.getTime() == null || appointment.getTime().trim().isEmpty()) {
+            log.warn("【预约工具】预约失败：预约时间为空");
             return "预约信息不完整，请提供预约时间（上午 或 下午）";
         }
         if (appointment.getDoctorName() == null || appointment.getDoctorName().trim().isEmpty()) {
+            log.warn("【预约工具】预约失败：预约医生姓名为空");
             return "预约信息不完整，请提供预约医生姓名";
         }
 
@@ -43,22 +57,42 @@ public class AppointmentTools {
             appointment.setTime("上午");
         }
 
+        log.info("【预约工具】开始查询是否已存在相同预约");
         Appointment appointmentDB = appointmentService.getOne(appointment);
 
         if(appointmentDB == null){
             appointment.setId(null);
-            if(appointmentService.save(appointment)){
-                return "预约成功！\n预约详情：\n患者姓名：" + appointment.getUsername() + 
-                       "\n身份证号：" + appointment.getIdCard() + 
-                       "\n预约科室：" + appointment.getDepartment() + 
-                       "\n预约日期：" + appointment.getDate() + 
-                       "\n预约时间：" + appointment.getTime() + 
-                       "\n预约医生：" + appointment.getDoctorName();
+            log.info("【预约工具】未找到相同预约，开始保存预约信息到数据库");
+            boolean saveResult = appointmentService.save(appointment);
+            log.info("【预约工具】数据库保存结果: saveResult={}", saveResult);
+
+            if(saveResult){
+                // 获取自增ID
+                Long generatedId = appointment.getId();
+                log.info("【预约工具】预约成功！生成的预约ID: {}", generatedId);
+
+                return "✅ 预约成功！\n\n" +
+                       "📋 预约详情：\n" +
+                       "━━━━━━━━━━━━━━━━\n" +
+                       "👤 患者姓名：" + appointment.getUsername() + "\n" +
+                       "🔢 身份证号：" + appointment.getIdCard() + "\n" +
+                       "🏥 预约科室：" + appointment.getDepartment() + "\n" +
+                       "📅 预约日期：" + appointment.getDate() + "\n" +
+                       "⏰ 预约时间：" + appointment.getTime() + "\n" +
+                       "👨‍⚕️ 预约医生：" + appointment.getDoctorName() + "\n" +
+                       "📝 预约编号：AP" + generatedId + "\n" +
+                       "━━━━━━━━━━━━━━━━\n\n" +
+                       "✅ 请您在预约当天按时前往医院就诊，\n" +
+                       "   并携带好身份证和相关资料。\n" +
+                       "   如有疑问，请随时联系我！\n" +
+                       "   祝您早日康复！🌸";
             }else{
-                return "预约失败，请稍后重试";
+                log.error("【预约工具】预约失败：数据库保存返回false");
+                return "❌ 预约失败，请稍后重试\n\n建议：\n1. 请检查网络连接是否正常\n2. 请稍后重新尝试预约\n3. 如果问题持续，请联系客服";
             }
         }
-        return "您在相同的科室、日期、时间和医生已有预约，无需重复预约";
+        log.warn("【预约工具】预约失败：已存在相同预约");
+        return "⚠️ 您在相同的科室、日期、时间和医生已有预约，无需重复预约";
     }
 
     @Tool(name="cancel_appointment", value = "取消预约挂号:根据参数，查询预约是否存在，如果存在则删除预约记录并返回取 消预约成功，否则返回取消预约失败")
