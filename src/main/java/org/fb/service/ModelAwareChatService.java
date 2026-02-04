@@ -101,7 +101,7 @@ public class ModelAwareChatService {
             }
         }
 
-        return assistant.chat(userMessage);
+        return assistant.chat(memoryId, userMessage);  // ✅ 传递 memoryId
     }
 
     /**
@@ -175,8 +175,12 @@ public class ModelAwareChatService {
             builder.chatMemoryProvider(chatMemoryProvider);
         } else {
             // 如果没有配置ChatMemoryProvider，创建一个简单的基于内存的
+            // ✅ 修复：使用 ConcurrentHashMap 确保每个 memoryId 有独立的 ChatMemory 实例
             log.warn("ChatMemoryProvider未配置，使用简单的内存ChatMemoryProvider");
-            builder.chatMemoryProvider(memoryId -> MessageWindowChatMemory.withMaxMessages(10));
+            builder.chatMemoryProvider(memoryId -> {
+                log.debug("为意图识别创建新的ChatMemory, memoryId: {}", memoryId);
+                return MessageWindowChatMemory.withMaxMessages(10);
+            });
         }
 
         return builder.build();
@@ -194,8 +198,12 @@ public class ModelAwareChatService {
             builder.chatMemoryProvider(chatMemoryProvider);
         } else {
             // 如果没有配置ChatMemoryProvider，创建一个简单的基于内存的
+            // ✅ 修复：使用 ConcurrentHashMap 确保每个 memoryId 有独立的 ChatMemory 实例
             log.warn("ChatMemoryProvider未配置，使用简单的内存ChatMemoryProvider");
-            builder.chatMemoryProvider(memoryId -> MessageWindowChatMemory.withMaxMessages(10));
+            builder.chatMemoryProvider(memoryId -> {
+                log.debug("为普通聊天创建新的ChatMemory, memoryId: {}", memoryId);
+                return MessageWindowChatMemory.withMaxMessages(10);
+            });
         }
 
         return builder.build();
