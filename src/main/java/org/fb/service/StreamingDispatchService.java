@@ -56,6 +56,9 @@ public class StreamingDispatchService {
     @Autowired
     private BusinessMetricsService metricsService;
 
+    @Autowired(required = false)
+    private DynamicKnowledgeBaseAssistantStream knowledgeBaseAssistantStream;
+
     /**
      * 流式处理用户消息
      * 包含意图识别和业务分发逻辑
@@ -141,6 +144,9 @@ public class StreamingDispatchService {
                                 } else if (BusinessConstant.SQL_OPERATION_TYPE.equals(intent)) {
                                     log.info("选择业务处理服务: NaturalLanguageSQLAgent");
                                     resultFlux = processWithNaturalLanguageSQLAgent(userMessage);
+                                } else if (BusinessConstant.KNOWLEDGE_BASE_TYPE.equals(intent)) {
+                                    log.info("选择业务处理服务: KnowledgeBaseAssistant");
+                                    resultFlux = processWithKnowledgeBaseAssistant(memoryId, userMessage);
                                 } else {
                                     log.info("选择业务处理服务: DynamicChatAssistantStream (默认-general)");
                                     // 如果有选择的模型，使用DynamicChatAssistantStream处理
@@ -166,6 +172,7 @@ public class StreamingDispatchService {
             case "translation" -> "TranslaterService";
             case "term_extraction" -> "TermExtractionAgent";
             case "sql_transfer" -> "NaturalLanguageSQLAgent";
+            case "knowledge_base" -> "KnowledgeBaseAssistant";
             default -> "ChatAssistantStream (general)";
         };
     }
@@ -443,10 +450,40 @@ public class StreamingDispatchService {
             return BusinessConstant.TERM_EXTRACTION_TYPE;
         } else if (lowerResponse.contains(BusinessConstant.SQL_OPERATION_TYPE)) {
             return BusinessConstant.SQL_OPERATION_TYPE;
+        } else if (lowerResponse.contains(BusinessConstant.KNOWLEDGE_BASE_TYPE)) {
+            return BusinessConstant.KNOWLEDGE_BASE_TYPE;
         } else if (lowerResponse.contains(BusinessConstant.DEFAULT_TYPE)) {
             return BusinessConstant.DEFAULT_TYPE;
         }
 
         return BusinessConstant.DEFAULT_TYPE;
+    }
+
+    /**
+     * 使用知识库问答助手处理
+     */
+    private Flux<String> processWithKnowledgeBaseAssistant(Long memoryId, String userMessage) {
+        log.info("调用DynamicKnowledgeBaseAssistantStream.chat, memoryId: {}, message: {}", memoryId, userMessage);
+        long serviceStartTime = System.currentTimeMillis();
+
+        if (knowledgeBaseAssistantStream == null) {
+            log.warn("DynamicKnowledgeBaseAssistantStream 未配置，回退到普通聊天");
+            metricsService.recordError(memoryId.toString(), "knowledge_base_assistant_not_configured");
+            return dynamicChatAssistantStream.chat(memoryId, userMessage);
+        }
+
+        try {
+            Flux<String> resultFlux = knowledgeBaseAssistantStream.chat(memoryId, userMessage);
+            long serviceDuration = System.currentTimeMillis() - serviceStartTime;
+            log.info("DynamicKnowledgeBaseAssistantStream返回结果, 耗时: {}ms", serviceDuration);
+            metricsService.recordBusinessServiceDuration(memoryId.toString(), serviceDuration, "knowledge_base_assistant");
+
+            return resultFlux;
+        } catch (Exception e) {
+            log.error("知识库问答助手处理失败，回退到普通聊天", e);
+            metricsService.recordError(memoryId.toString(), "knowledge_base_assistant_error");
+            // 回退到普通聊天
+            return dynamicChatAssistantStream.chat(memoryId, userMessage);
+        }
     }
 }

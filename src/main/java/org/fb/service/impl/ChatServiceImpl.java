@@ -55,6 +55,9 @@ public class ChatServiceImpl implements ChatService {
     @Autowired
     private ModelAwareChatService modelAwareChatService;
 
+    @Autowired(required = false)
+    private DynamicKnowledgeBaseAssistantStream knowledgeBaseAssistantStream;
+
     @Override
     public String chat(Long memoryId, String message) {
         log.info("\n=== ChatServiceImpl.chat 开始调用 processByUserMeanings ===");
@@ -131,6 +134,8 @@ public class ChatServiceImpl implements ChatService {
             chatType = BusinessConstant.TERM_EXTRACTION_TYPE;
         } else if (BusinessConstant.SQL_OPERATION_TYPE.equals(intent)) {
             chatType = BusinessConstant.SQL_OPERATION_TYPE;
+        } else if (BusinessConstant.KNOWLEDGE_BASE_TYPE.equals(intent)) {
+            chatType = BusinessConstant.KNOWLEDGE_BASE_TYPE;
         } else if (BusinessConstant.DEFAULT_TYPE.equals(intent)) {
             chatType = BusinessConstant.DEFAULT_TYPE;
         }
@@ -255,6 +260,30 @@ public class ChatServiceImpl implements ChatService {
                             "3. 如果问题持续，请联系管理员";
                 }
             }
+        } else if (BusinessConstant.KNOWLEDGE_BASE_TYPE.equals(intent)) {
+            // 知识库问答
+            log.info("选择业务处理服务：KnowledgeBaseAssistant");
+            try {
+                if (knowledgeBaseAssistantStream != null) {
+                    result = knowledgeBaseAssistantStream.chat(memoryId, userMessage).blockFirst();
+                    log.info("知识库问答响应：{}", result);
+                } else {
+                    // 回退到普通聊天
+                    log.warn("DynamicKnowledgeBaseAssistantStream 未配置，回退到普通聊天");
+                    if (modelAwareChatService != null && selectedModel != null) {
+                        result = modelAwareChatService.chatGeneralWithModel(selectedModel, memoryId, userMessage);
+                        log.info("普通聊天响应（模型: {}）：{}", selectedModel, result);
+                    } else {
+                        result = chatAssistant.chat(memoryId, userMessage);
+                        log.info("普通聊天响应（默认）：{}", result);
+                    }
+                }
+                saveChatInfo(memoryId, userMessage, BusinessConstant.KNOWLEDGE_BASE_TYPE);
+                log.info("知识库问答完成，聊天信息已保存");
+            } catch (Exception e) {
+                log.error("知识库问答处理失败", e);
+                result = "抱歉，知识库问答处理时出现错误：" + e.getMessage();
+            }
         } else if (chatAssistant != null || modelAwareChatService != null) {
             // 默认业务，使用普通聊天助手（个人助手），无论是否明确识别为general
             log.info("选择业务处理服务：ChatAssistant");
@@ -311,6 +340,8 @@ public class ChatServiceImpl implements ChatService {
             return BusinessConstant.TERM_EXTRACTION_TYPE;
         } else if (lowerResponse.contains(BusinessConstant.SQL_OPERATION_TYPE)) {
             return BusinessConstant.SQL_OPERATION_TYPE;
+        } else if (lowerResponse.contains(BusinessConstant.KNOWLEDGE_BASE_TYPE)) {
+            return BusinessConstant.KNOWLEDGE_BASE_TYPE;
         } else if (lowerResponse.contains(BusinessConstant.DEFAULT_TYPE)) {
             return BusinessConstant.DEFAULT_TYPE;
         }

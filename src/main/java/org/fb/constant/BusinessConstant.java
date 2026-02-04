@@ -18,6 +18,8 @@ public class BusinessConstant {
 
     public static final String SQL_OPERATION_TYPE = "sql_transfer";
 
+    public static final String KNOWLEDGE_BASE_TYPE = "knowledge_base";
+
     public static final String DEFAULT_TYPE = "general";
 
 

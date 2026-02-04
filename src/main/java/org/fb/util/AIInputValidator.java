@@ -114,8 +114,88 @@ public class AIInputValidator {
     }
 
     /**
-     * 验证结果封装类
+     * 智能截断用户输入，保留问题关键信息
+     * 当输入过长时，优先保留问题的核心内容（如"XXX有哪些？"、"XXX是什么？"等）
+     * @param input 输入字符串
+     * @param maxLength 最大长度
+     * @return 截断后的字符串
      */
+    public static String smartTruncate(String input, int maxLength) {
+        if (input == null || input.length() <= maxLength) {
+            return input;
+        }
+
+        // 尝试找到问题的核心部分
+        // 常见模式：问题核心通常在问号之后、句号之后，或者以特定关键词开头
+        String trimmedInput = input.trim();
+
+        // 策略1：查找问号，保留问号之后的内容（通常是问题的核心）
+        int questionMarkIndex = trimmedInput.lastIndexOf('？');
+        if (questionMarkIndex == -1) {
+            questionMarkIndex = trimmedInput.lastIndexOf('?');
+        }
+
+        if (questionMarkIndex != -1 && questionMarkIndex < trimmedInput.length() - 1) {
+            // 找到问号，尝试保留问号后面的核心问题
+            String coreQuestion = trimmedInput.substring(questionMarkIndex + 1).trim();
+            if (!coreQuestion.isEmpty() && coreQuestion.length() <= maxLength * 0.3) {
+                // 核心问题较短，可以保留
+                // 但如果太短，可能不完整，尝试获取更多上下文
+                int startIndex = Math.max(0, questionMarkIndex - maxLength / 3);
+                String truncated = trimmedInput.substring(startIndex, Math.min(startIndex + maxLength, trimmedInput.length()));
+                log.info("智能截断：找到问号，保留核心问题内容");
+                return truncated;
+            }
+        }
+
+        // 策略2：查找常见的知识库查询关键词，保留关键词之后的内容
+        String[] knowledgeKeywords = {"请结合知识库", "知识库中", "查询知识库", "从知识库", "基于知识库"};
+        int earliestKeywordIndex = -1;
+        for (String keyword : knowledgeKeywords) {
+            int index = trimmedInput.indexOf(keyword);
+            if (index != -1 && (earliestKeywordIndex == -1 || index < earliestKeywordIndex)) {
+                earliestKeywordIndex = index;
+            }
+        }
+
+        if (earliestKeywordIndex != -1 && earliestKeywordIndex < trimmedInput.length() - 1) {
+            // 找到知识库关键词，尝试从关键词位置开始截断
+            int startIndex = Math.max(0, earliestKeywordIndex - maxLength / 5);
+            String truncated = trimmedInput.substring(startIndex, Math.min(startIndex + maxLength, trimmedInput.length()));
+            log.info("智能截断：找到知识库关键词，从关键词位置开始截断");
+            return truncated;
+        }
+
+        // 策略3：查找句号，保留最后一个句号之后的内容
+        int lastPeriodIndex = Math.max(trimmedInput.lastIndexOf('。'), trimmedInput.lastIndexOf('.'));
+        if (lastPeriodIndex != -1 && lastPeriodIndex < trimmedInput.length() - 1) {
+            String lastSentence = trimmedInput.substring(lastPeriodIndex + 1).trim();
+            if (lastSentence.length() <= maxLength * 0.4) {
+                // 最后一句较短，可能是问题的核心
+                int startIndex = Math.max(0, lastPeriodIndex - maxLength / 2);
+                String truncated = trimmedInput.substring(startIndex, Math.min(startIndex + maxLength, trimmedInput.length()));
+                log.info("智能截断：保留最后一句核心内容");
+                return truncated;
+            }
+        }
+
+        // 策略4：如果以上策略都不适用，直接从开头截断
+        log.info("智能截断：使用默认截断策略，从开头截断");
+        return trimmedInput.substring(0, maxLength);
+    }
+
+    /**
+     * 智能截断用户输入（使用默认最大长度）
+     * @param input 输入字符串
+     * @return 截断后的字符串
+     */
+    public static String smartTruncate(String input) {
+        return smartTruncate(input, DEFAULT_MAX_INPUT_LENGTH);
+    }
+
+    /**
+      * 验证结果封装类
+      */
     public static class ValidationResult {
         private final boolean valid;
         private final String message;
