@@ -94,7 +94,8 @@ public class LLMConfig {
     private volatile MongoChatMemoryStore mongoChatMemoryStore;
 
     private static final Duration READ_TIMEOUT = Duration.ofSeconds(300);
-    private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(30);
+    private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(60);  // ✅ 增加连接超时时间
+    private static final Duration CONNECT_REQUEST_TIMEOUT = Duration.ofSeconds(30);  // ✅ 新增连接请求超时
     private volatile ChatModel deepSeekChatModel;
     private volatile ChatModel qwenChatModel;
     private volatile ChatModel qwenVisionChatModel;
@@ -223,11 +224,12 @@ public class LLMConfig {
     }
 
     private void refreshOllamaChatModel() {
+        // ✅ Ollama 不支持 connectTimeout，仅使用 timeout 配置
         this.ollamaChatModel = OllamaChatModel.builder()
                 .baseUrl(ollamaUrl)
                 .modelName(ollamaModel)
                 .temperature(0.8)
-                .timeout(READ_TIMEOUT)
+                .timeout(READ_TIMEOUT)  // Ollama 使用统一的 timeout 配置
                 .logRequests(true)
                 .logResponses(true)
                 .build();

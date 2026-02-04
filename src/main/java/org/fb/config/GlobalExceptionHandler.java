@@ -16,6 +16,7 @@ import org.springframework.web.context.request.WebRequest;
 
 import java.io.EOFException;
 import java.io.IOException;
+import java.net.ConnectException;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -40,6 +41,32 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(response);
     }
 
+    @ExceptionHandler(ConnectException.class)
+    public ResponseEntity<Map<String, Object>> handleConnectException(
+            ConnectException ex, WebRequest request) {
+        log.error("发生ConnectException (连接失败): {} - 可能原因: 外部服务暂时不可达或网络问题", 
+                  ex.getMessage(), ex);
+
+        boolean isSseRequest = isSseRequest(request);
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("error", "连接失败");
+        response.put("message", isSseRequest 
+                ? "AI服务暂时无法连接，请检查网络后重试，或联系管理员确认服务状态" 
+                : "无法连接到AI服务，请稍后重试");
+        response.put("status", "RETRY");
+        response.put("errorType", "ConnectException");
+        response.put("retryable", true);
+        response.put("timestamp", System.currentTimeMillis());
+        
+        if (isSseRequest) {
+            response.put("suggestion", "请刷新页面或稍后重试");
+        }
+
+        log.warn("ConnectException处理完成，返回{}响应", isSseRequest ? "SSE兼容" : "普通");
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(response);
+    }
+
     @ExceptionHandler(IOException.class)
     public ResponseEntity<Map<String, Object>> handleIOException(
             IOException ex, WebRequest request) {
@@ -49,6 +76,7 @@ public class GlobalExceptionHandler {
         Map<String, Object> response = new HashMap<>();
         String userMessage;
         String status;
+        String errorType = "IOException";
 
         if (errorMessage != null && errorMessage.contains(HEADER_PARSER_NO_BYTES_ERROR)) {
             userMessage = "连接错误，请检查网络后重试";
@@ -56,22 +84,33 @@ public class GlobalExceptionHandler {
             log.warn("检测到HTTP header解析错误，可能的网络问题");
         } else if (errorMessage != null && (errorMessage.contains("Connection reset") ||
                 errorMessage.contains("Broken pipe") ||
-                errorMessage.contains("Connection refused"))) {
-            userMessage = "与AI服务的连接被拒绝，请稍后重试";
-            status = "CONNECTION_REFUSED";
+                errorMessage.contains("Connection refused") ||
+                errorMessage.contains("channel is closed") ||
+                errorMessage.contains("closed channel"))) {
+            userMessage = "与AI服务的连接被中断，请稍后重试";
+            status = "CONNECTION_INTERRUPTED";
+            errorType = "ConnectionInterruptedException";
+            log.warn("检测到连接中断错误");
         } else if (errorMessage != null && errorMessage.contains("timeout")) {
             userMessage = "连接超时，请稍后重试";
             status = "TIMEOUT";
+            errorType = "TimeoutException";
         } else {
             userMessage = "网络通信异常，请检查网络连接后重试";
             status = "RETRY";
         }
 
+        boolean isSseRequest = isSseRequest(request);
+        if (isSseRequest) {
+            response.put("suggestion", "请刷新页面或重新提交问题");
+        }
+
         response.put("error", "IO异常");
         response.put("message", userMessage);
         response.put("status", status);
-        response.put("errorType", "IOException");
-        response.put("path", request.getDescription(false).replace("uri=", ""));
+        response.put("errorType", errorType);
+        response.put("retryable", true);
+        response.put("timestamp", System.currentTimeMillis());
 
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(response);
     }
