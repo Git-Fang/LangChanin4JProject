@@ -1,8 +1,10 @@
 package org.fb.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.fb.bean.mcpbean.McpMessage;
 import org.fb.bean.mcpbean.McpToolCallParams;
+import org.fb.util.JsonParseErrorHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -76,6 +78,34 @@ public class McpSseService {
                 emitter.send(SseEmitter.event().data(jsonMessage));
             } catch (IOException e) {
                 logger.error("发送SSE消息失败: sessionId={}, message={}", sessionId, message, e);
+            } catch (Exception e) {
+                Throwable cause = e.getCause();
+                if (cause instanceof JsonProcessingException) {
+                    JsonProcessingException jsonEx = (JsonProcessingException) cause;
+                    logger.error("JSON处理错误（发送消息失败）: sessionId={}, error={}", sessionId, jsonEx.getMessage());
+
+                    JsonParseErrorHandler.CleanJsonResult cleanResult = JsonParseErrorHandler.cleanInvalidUnicodeEscapes(
+                        message.toString()
+                    );
+
+                    if (cleanResult.wasCleaned) {
+                        try {
+                            logger.warn("尝试发送清理后的JSON消息: sessionId={}", sessionId);
+                            emitter.send(SseEmitter.event().data(cleanResult.cleanedJson));
+                        } catch (IOException ioException) {
+                            logger.error("发送清理后的消息仍然失败: sessionId={}", sessionId, ioException);
+                        }
+                    } else {
+                        McpMessage errorMsg = McpMessage.error(message.getId(), -32603, "JSON序列化错误");
+                        try {
+                            emitter.send(SseEmitter.event().data(objectMapper.writeValueAsString(errorMsg)));
+                        } catch (IOException ioException) {
+                            logger.error("发送错误消息失败: sessionId={}", sessionId, ioException);
+                        }
+                    }
+                } else {
+                    logger.error("发送SSE消息时发生未知错误: sessionId={}", sessionId, e);
+                }
             }
         } else {
             logger.warn("SSE会话不存在: sessionId={}", sessionId);

@@ -1,5 +1,6 @@
 package org.fb.util;
 
+import com.fasterxml.jackson.core.JsonParseException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
@@ -255,6 +256,46 @@ public class AIAPIErrorHandler {
             return message;
         }
         return message.substring(0, 200) + "...";
+    }
+
+    /**
+     * 处理JSON解析异常
+     * @param ex 异常
+     * @return 解析后的错误信息
+     */
+    public static AIErrorResult handleJsonParseException(Throwable ex) {
+        String message = ex.getMessage();
+        log.error("JSON解析异常: {}", message);
+
+        if ((message != null && message.contains("顼")) || (message != null && message.contains("0x987c"))) {
+            return new AIErrorResult(
+                ErrorType.INVALID_REQUEST,
+                "JSON解析错误：检测到无效的Unicode转义序列（字符 '顼'）",
+                "这可能是由于AI服务返回的数据格式异常或网络传输过程中的编码问题导致。\n" +
+                "建议：\n" +
+                "1. 请重新描述您的问题\n" +
+                "2. 避免使用特殊符号或非标准字符\n" +
+                "3. 如果问题持续，请联系管理员"
+            );
+        } else if (message != null && message.contains("expected a hex-digit")) {
+            return new AIErrorResult(
+                ErrorType.INVALID_REQUEST,
+                "JSON解析错误：无效的字符转义序列",
+                "AI服务返回的数据格式异常。\n" +
+                "建议：\n" +
+                "1. 请重新提交您的问题\n" +
+                "2. 如果问题持续，请联系管理员"
+            );
+        } else {
+            return new AIErrorResult(
+                ErrorType.INVALID_REQUEST,
+                "JSON解析错误: " + truncateMessage(message),
+                "系统无法解析AI服务的响应数据。\n" +
+                "建议：\n" +
+                "1. 请重新提交您的问题\n" +
+                "2. 如果问题持续，请联系管理员"
+            );
+        }
     }
 
     /**

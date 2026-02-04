@@ -1,6 +1,8 @@
 package org.fb.config;
 
+import com.fasterxml.jackson.core.JsonParseException;
 import lombok.extern.slf4j.Slf4j;
+import org.fb.util.JsonParseErrorHandler;
 import org.fb.util.SseRequestDetector;
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.RedisConnectionFailureException;
@@ -98,6 +100,33 @@ public class GlobalExceptionHandler {
         response.put("path", request.getDescription(false).replace("uri=", ""));
 
         return ResponseEntity.ok(response);
+    }
+
+    @ExceptionHandler(JsonParseException.class)
+    public ResponseEntity<Map<String, Object>> handleJsonParseException(
+            JsonParseException ex, WebRequest request) {
+        log.error("JSON解析异常: {}", ex.getMessage(), ex);
+
+        String userFriendlyMessage = JsonParseErrorHandler.handleJsonParseException(ex);
+
+        boolean isSseRequest = isSseRequest(request);
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("error", "JSON解析错误");
+        response.put("message", userFriendlyMessage);
+        response.put("status", "ERROR");
+        response.put("errorType", "JSON_PARSE_ERROR");
+        response.put("retryable", true);
+
+        if (isSseRequest) {
+            response.put("fallback", "请重新提交您的问题");
+        }
+
+        log.warn("JSON解析错误已转换为用户友好消息");
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(response);
     }
 
     @ExceptionHandler(HttpMessageNotWritableException.class)
