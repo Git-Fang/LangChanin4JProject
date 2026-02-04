@@ -3,6 +3,7 @@ package org.fb.service.assistant;
 import dev.langchain4j.service.MemoryId;
 import dev.langchain4j.service.SystemMessage;
 import dev.langchain4j.service.UserMessage;
+import dev.langchain4j.service.V;
 import dev.langchain4j.service.spring.AiService;
 import dev.langchain4j.service.spring.AiServiceWiringMode;
 import dev.langchain4j.memory.chat.ChatMemoryProvider;
@@ -21,8 +22,10 @@ import reactor.core.publisher.Flux;
 public interface KnowledgeBaseAssistantStream {
 
     @SystemMessage(fromResource = "knowledge-base-prompt.txt")
-    public Flux<String> chat(@MemoryId long memoryId, @UserMessage String userMessage);
+    @UserMessage("{{userMessage}}")
+    public Flux<String> chat(@MemoryId long memoryId, @V("userMessage") String userMessage);
 
     @SystemMessage(fromResource = "knowledge-base-prompt.txt")
-    public Flux<String> chat(String userMessage);
+    @UserMessage("{{userMessage}}")
+    public Flux<String> chat(@V("userMessage") String userMessage);
 }
