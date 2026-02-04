@@ -123,6 +123,13 @@
             <artifactId>langchain4j-easy-rag</artifactId>
         </dependency>
 
+        <!-- Apache Tika for PDF parsing -->
+        <dependency>
+            <groupId>org.apache.pdfbox</groupId>
+            <artifactId>pdfbox</artifactId>
+            <version>3.0.3</version>
+        </dependency>
+
         <!-- 链路追踪依赖 -->
         <dependency>
             <groupId>io.micrometer</groupId>

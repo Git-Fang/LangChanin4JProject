@@ -20,6 +20,11 @@ COPY target/*.jar app.jar
 # 复制环境变量文件
 COPY .env /app/.env
 
+# 复制本地知识库目录（.agent 和 knowledge）
+# 这些目录用于本地知识库检索功能
+COPY .agent /app/.agent
+COPY knowledge /app/knowledge
+
 EXPOSE 8000
 
 # 启动应用（支持通过SPRING_PROFILES_ACTIVE环境变量覆盖profile）
