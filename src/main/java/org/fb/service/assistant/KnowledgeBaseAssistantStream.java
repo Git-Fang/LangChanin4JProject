@@ -17,7 +17,8 @@ import reactor.core.publisher.Flux;
 @AiService(wiringMode = AiServiceWiringMode.EXPLICIT,
         streamingChatModel = "streamingChatModel",
         chatMemoryProvider = "chatMemoryProvider",
-        contentRetriever = "contentRetriever"
+        contentRetriever = "contentRetriever",
+        tools = {"commonTools", "mongoDBTools", "personalDataTools"}
 )
 public interface KnowledgeBaseAssistantStream {
 
