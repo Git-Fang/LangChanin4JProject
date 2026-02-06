@@ -1,6 +1,7 @@
 package org.fb.config;
 
 import dev.langchain4j.community.model.dashscope.WanxImageModel;
+import dev.langchain4j.community.model.dashscope.QwenStreamingChatModel;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.memory.chat.ChatMemoryProvider;
@@ -171,13 +172,10 @@ public class LLMConfig {
             log.warn("DashScope API Key未配置，Streaming模型不可用");
             this.streamingChatModel = null;
         } else {
-            this.streamingChatModel = OpenAiStreamingChatModel.builder()
+            // 使用DashScope原生的QwenStreamingChatModel，避免OpenAI兼容模式的序列化问题
+            this.streamingChatModel = QwenStreamingChatModel.builder()
                     .apiKey(dashscopeApiKey)
                     .modelName(dashscopeModel)
-                    .logRequests(true)
-                    .logResponses(true)
-                    .baseUrl(dashscopeUrl)
-                    .timeout(READ_TIMEOUT)
                     .build();
         }
     }
