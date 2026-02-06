@@ -263,7 +263,7 @@ public class LLMConfig {
     @Bean(name = "chatMemoryProvider")
     public ChatMemoryProvider chatMemoryProvider() {
         return memoryId -> {
-            MessageWindowChatMemory chatMemory = MessageWindowChatMemory.withMaxMessages(10);
+            MessageWindowChatMemory chatMemory =             MessageWindowChatMemory.withMaxMessages(20);  // 支持约10轮对话（用户+AI各1条=2条消息/轮）
             
             // 从MongoDB加载历史消息
             if (mongoChatMemoryStore != null) {
