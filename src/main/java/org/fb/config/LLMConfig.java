@@ -20,6 +20,7 @@ import dev.langchain4j.store.embedding.qdrant.QdrantEmbeddingStore;
 import io.qdrant.client.QdrantClient;
 import io.qdrant.client.QdrantGrpcClient;
 import jakarta.annotation.PostConstruct;
+import org.fb.service.assistant.NaturalLanguageSQLAgent;
 import org.fb.tools.MongoChatMemoryStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

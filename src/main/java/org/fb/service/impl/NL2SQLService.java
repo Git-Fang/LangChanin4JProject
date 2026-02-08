@@ -26,33 +26,56 @@ public class NL2SQLService {
         try {
             log.info("用户输入：{}", naturalLanguage);
             String sql = naturalLanguageToSQL(naturalLanguage);
-            log.info("生成的SQL: {}", sql);
+            log.info("原始生成的SQL: {}", sql);
+
+            // 清理 SQL（去除 markdown 代码块、反引号等）
+            String cleanSql = cleanSQL(sql);
+            log.info("清理后的SQL: {}", cleanSql);
 
             // 验证SQL语句的合法性
-            if (sql == null || sql.trim().isEmpty()) {
+            if (cleanSql == null || cleanSql.trim().isEmpty()) {
                 throw new RuntimeException("生成的SQL语句为空");
             }
 
-            // 检查SQL是否包含危险操作
-            String upperSql = sql.toUpperCase();
-            if (upperSql.contains("DROP") || upperSql.contains("DELETE") || 
-                upperSql.contains("UPDATE") || upperSql.contains("INSERT") ||
-                upperSql.contains("ALTER") || upperSql.contains("TRUNCATE")) {
-                throw new RuntimeException("不允许执行修改数据的SQL操作");
+            // 再次验证必须是 SELECT 语句
+            String upperSql = cleanSql.trim().toUpperCase();
+            if (!upperSql.startsWith("SELECT")) {
+                log.error("AI生成了非SELECT语句: {}", cleanSql);
+                throw new RuntimeException("AI生成了非查询语句: " + cleanSql);
             }
 
-            // 检查SQL中是否包含不合理的字符串字面量（如'default'、'null'等）
-            if (sql.contains("'default'") || sql.contains("'DEFAULT'") || 
-                sql.contains("'null'") || sql.contains("'NULL'")) {
-                log.warn("SQL中包含不合理的字符串字面量，尝试重新生成");
-                throw new RuntimeException("生成的SQL包含不合理的字符串字面量，请重新表述查询需求");
+            // 检查SQL是否包含危险操作（SELECT 语句中也不允许某些操作）
+            if (upperSql.contains("DROP") || upperSql.contains("DELETE") || 
+                upperSql.contains("UPDATE") || upperSql.contains("INSERT") ||
+                upperSql.contains("ALTER") || upperSql.contains("TRUNCATE") ||
+                upperSql.contains("CREATE ") || upperSql.contains("GRANT ") ||
+                upperSql.contains("REVOKE ") || upperSql.contains("EXECUTE")) {
+                log.error("SQL中包含危险操作: {}", cleanSql);
+                throw new RuntimeException("不允许执行包含危险操作的SQL");
+            }
+
+            // 检查SQL中是否包含不合理的字符串字面量
+            if (cleanSql.contains("'default'") || cleanSql.contains("'DEFAULT'") || 
+                cleanSql.contains("'null'") || cleanSql.contains("'NULL'")) {
+                log.warn("SQL中包含不合理的字符串字面量，尝试修正");
+                throw new RuntimeException("生成的SQL包含不合理的字符串字面量");
             }
 
             // 验证SQL中的类型匹配
-            validateSQLTypes(sql);
+            validateSQLTypes(cleanSql);
 
-            // 执行SQL查询
-            List<Map<String, Object>> result = jdbcTemplate.queryForList(sql);
+            // 执行SQL查询 - 根据SQL类型选择正确的方法
+            List<Map<String, Object>> result;
+            if (upperSql.contains("COUNT(")) {
+                // COUNT 查询返回单个值
+                log.info("执行 COUNT 查询");
+                Long count = jdbcTemplate.queryForObject(cleanSql, Long.class);
+                result = List.of(Map.of("count", count));
+            } else {
+                // 普通 SELECT 查询
+                log.info("执行普通 SELECT 查询");
+                result = jdbcTemplate.queryForList(cleanSql);
+            }
             log.info("查询结果: {}", result);
 
             return result;
@@ -63,6 +86,31 @@ public class NL2SQLService {
             log.error("执行自然语言查询失败", e);
             throw new RuntimeException("查询失败: " + e.getMessage());
         }
+    }
+
+    /**
+     * 清理 SQL 语句，去除 markdown 代码块、反引号等
+     */
+    private String cleanSQL(String sql) {
+        if (sql == null) return null;
+        
+        String cleaned = sql.trim();
+        
+        // 去除 markdown 代码块标记
+        if (cleaned.startsWith("```")) {
+            // 去除 ```sql 或 ```
+            cleaned = cleaned.replaceAll("^```\\w*\\n?", "");
+            // 去除结尾的 ```
+            cleaned = cleaned.replaceAll("\\n?```$", "");
+        }
+        
+        // 去除单行反引号
+        cleaned = cleaned.replaceAll("`([^`]+)`", "$1");
+        
+        // 去除 "sql" 关键字（如果有）
+        cleaned = cleaned.replaceAll("(?i)^SQL:\\s*", "");
+        
+        return cleaned.trim();
     }
 
     
@@ -88,6 +136,8 @@ public class NL2SQLService {
             10. 如果字段类型是BIGINT、INT等数值类型，不要使用字符串比较
             11. 查询表数量时，使用: SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE()
             12. 查询数据行数时，使用: SELECT COUNT(*) FROM 表名
+            13. 特别强调：查询某个表有多少条数据时，必须使用 SELECT COUNT(*) FROM 表名 格式
+            14. 绝对不要在 COUNT 查询中使用 WHERE 条件，除非用户明确指定筛选条件
             
             数据库结构：
             %s
@@ -96,7 +146,9 @@ public class NL2SQLService {
             
             SQL语句：""", schemaInfo, naturalLanguage);
         
-        return languageSQLService.convertToSQL(prompt);
+        String sql = languageSQLService.convertToSQL(prompt);
+        log.info("AI生成的SQL: {}", sql);
+        return sql;
     }
 
     
