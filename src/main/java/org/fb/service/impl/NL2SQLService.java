@@ -32,6 +32,12 @@ public class NL2SQLService {
             String cleanSql = cleanSQL(sql);
             log.info("清理后的SQL: {}", cleanSql);
 
+            // 检查是否是"NOT_A_QUERY"标记（非查询请求）
+            if ("NOT_A_QUERY".equals(cleanSql.trim())) {
+                log.warn("AI判断该请求不是数据库查询请求: {}", naturalLanguage);
+                throw new RuntimeException("该请求不是数据库查询请求，请使用通用对话模式处理");
+            }
+
             // 验证SQL语句的合法性
             if (cleanSql == null || cleanSql.trim().isEmpty()) {
                 throw new RuntimeException("生成的SQL语句为空");
@@ -131,7 +137,7 @@ public class NL2SQLService {
             5. 对于字符串字段，使用单引号包裹值，但值必须是实际的数据内容，不能是关键字
             6. 对于数值字段，不要使用引号，直接使用数字
             7. 对于日期字段，使用标准的日期格式，如'2024-01-01'
-            8. 如果不确定如何转换，返回SELECT 1语句
+            8. 如果用户问题不是数据库查询请求（如询问概念、知识、方案、建议等），请返回"NOT_A_QUERY"作为标记
             9. 检查生成的SQL，确保WHERE条件中的值与字段类型匹配
             10. 如果字段类型是BIGINT、INT等数值类型，不要使用字符串比较
             11. 查询表数量时，使用: SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE()
