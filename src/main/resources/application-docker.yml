@@ -122,6 +122,9 @@ mybatis-plus:
       table-underline: true
 
 ai:
+  tavily:
+    api-key: ${TAVILY_API_KEY:}
+
   deepSeek:
     base-url: https://api.deepseek.com/v1
     model: deepseek-chat
