@@ -241,9 +241,14 @@ if errorlevel 1 (
 echo       Image built: %IMAGE_NAME%:latest
 
 echo.
-echo [9/9] Check .env file for environment variables...
-if not exist ".env" (
-    echo [WARNING] .env file not found, using default values
+echo       Starting application container...
+
+if "%USE_LOCAL_MYSQL%"=="1" (
+    echo       Using local MySQL (localhost:3306)
+    docker run -d --name %CONTAINER_NAME% --network ai-network -p %APP_PORT%:%APP_PORT% --env-file .env --add-host=host.docker.internal:host-gateway -e SPRING_PROFILES_ACTIVE=docker -e NACOS_SERVER_ADDR=nacos:8848 -e SPRING_DATASOURCE_URL=jdbc:mysql://host.docker.internal:3306/mydocker?useUnicode=true^&characterEncoding=UTF-8^&serverTimezone=Asia/Shanghai^&useSSL=false^&allowPublicKeyRetrieval=true -e SPRING_DATA_MONGODB_URI=mongodb://host.docker.internal:27017/chat_db -e SPRING_REDIS_HOST=redis -e SPRING_REDIS_PORT=6379 -e AI_EMBEDDINGSTORE_QDRANT_HOST=qdrant -e AI_EMBEDDINGSTORE_QDRANT_PORT=6334 -e spring.kafka.bootstrap-servers=kafka:9092 -e TZ=Asia/Shanghai --dns=8.8.8.8 --dns=114.114.114.114 %IMAGE_NAME%:latest
+) else (
+    echo       Using Docker MySQL (mysql:3306)
+    docker run -d --name %CONTAINER_NAME% --network ai-network -p %APP_PORT%:%APP_PORT% --env-file .env --add-host=host.docker.internal:host-gateway -e SPRING_PROFILES_ACTIVE=docker -e NACOS_SERVER_ADDR=nacos:8848 -e SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/mydocker?useUnicode=true^&characterEncoding=UTF-8^&serverTimezone=Asia/Shanghai^&useSSL=false^&allowPublicKeyRetrieval=true -e SPRING_DATA_MONGODB_URI=mongodb://host.docker.internal:27017/chat_db -e SPRING_REDIS_HOST=redis -e SPRING_REDIS_PORT=6379 -e AI_EMBEDDINGSTORE_QDRANT_HOST=qdrant -e AI_EMBEDDINGSTORE_QDRANT_PORT=6334 -e spring.kafka.bootstrap-servers=kafka:9092 -e TZ=Asia/Shanghai --dns=8.8.8.8 --dns=114.114.114.114 %IMAGE_NAME%:latest
 )
 
 echo.
@@ -280,7 +285,7 @@ if "%USE_LOCAL_MYSQL%"=="1" (
     docker run -d --name %CONTAINER_NAME% --network ai-network -p %APP_PORT%:%APP_PORT% --env-file .env --add-host=host.docker.internal:host-gateway -e SPRING_PROFILES_ACTIVE=docker -e NACOS_SERVER_ADDR=nacos:8848 -e SPRING_DATASOURCE_URL=jdbc:mysql://host.docker.internal:3306/mydocker?useUnicode=true^&characterEncoding=UTF-8^&serverTimezone=Asia/Shanghai^&useSSL=false^&allowPublicKeyRetrieval=true -e SPRING_DATA_MONGODB_URI=mongodb://host.docker.internal:27017/chat_db -e SPRING_REDIS_HOST=redis -e SPRING_REDIS_PORT=6379 -e AI_EMBEDDINGSTORE_QDRANT_HOST=qdrant -e AI_EMBEDDINGSTORE_QDRANT_PORT=6334 -e spring.kafka.bootstrap-servers=kafka:9092 -e TZ=Asia/Shanghai --dns=8.8.8.8 --dns=114.114.114.114 -v %CD%/knowledge:/app/knowledge %IMAGE_NAME%:latest
 ) else (
     echo       Using Docker MySQL (mysql:3306)
-    docker run -d --name %CONTAINER_NAME% --network ai-network -p %APP_PORT%:%APP_PORT% --env-file .env --add-host=host.docker.internal:host-gateway -e SPRING_PROFILES_ACTIVE=docker -e NACOS_SERVER_ADDR=nacos:8848 -e SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/mydocker?useUnicode=true^&characterEncoding=UTF-8^&serverTimezone=Asia/Shanghai^&useSSL=false^&allowPublicKeyRetrieval=true -e SPRING_DATA_MONGODB_URI=mongodb://host.docker.internal:27017/chat_db -e SPRING_REDIS_HOST=redis -e SPRING_REDIS_PORT=6379 -e AI_EMBEDDINGSTORE_QDRANT_HOST=qdrant -e AI_EMBEDDINGSTORE_QDRANT_PORT=6334 -e spring.kafka.bootstrap-servers=kafka:9092 -e TZ=Asia/Shanghai --dns=8.8.8.8 --dns=114.114.114.114 -v %CD%/knowledge:/app/knowledge %IMAGE_NAME%:latest
+    docker run -d --name %CONTAINER_NAME% --network ai-network -p %APP_PORT%:%APP_PORT% --env-file .env --add-host=host.docker.internal:host-gateway -e SPRING_PROFILES_ACTIVE=docker -e NACOS_SERVER_ADDR=nacos:8848 -e SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/mydocker?useUnicode=true^&characterEncoding=UTF-8^&serverTimezone=Asia/Shanghai^&useSSL=false^&allowPublicKeyRetrieval=true -e SPRING_DATA_MONGODB_URI=mongodb://host.docker.internal:27017/chat_db -e SPRING_REDIS_HOST=redis -e SPRING_REDIS_PORT=6379 -e AI_EMBEDDINGSTORE_QDRANT_HOST=qdrant -e AI_EMBEDDINGSTORE_QDRANT_PORT=6334 -e spring.kafka.bootstrap-servers=kafka:9092 -e TZ=Asia/Shanghai --dns=8.8.8.8 --dns=114.114.114.114 %IMAGE_NAME%:latest
 )
 
 if errorlevel 1 (
@@ -291,9 +296,9 @@ if errorlevel 1 (
     
     echo       Retrying container start...
     if "%USE_LOCAL_MYSQL%"=="1" (
-        docker run -d --name %CONTAINER_NAME% --network ai-network -p %APP_PORT%:%APP_PORT% --env-file .env --add-host=host.docker.internal:host-gateway -e SPRING_PROFILES_ACTIVE=docker -e NACOS_SERVER_ADDR=nacos:8848 -e SPRING_DATASOURCE_URL=jdbc:mysql://host.docker.internal:3306/mydocker?useUnicode=true^&characterEncoding=UTF-8^&serverTimezone=Asia/Shanghai^&useSSL=false^&allowPublicKeyRetrieval=true -e SPRING_DATA_MONGODB_URI=mongodb://host.docker.internal:27017/chat_db -e SPRING_REDIS_HOST=redis -e SPRING_REDIS_PORT=6379 -e AI_EMBEDDINGSTORE_QDRANT_HOST=qdrant -e AI_EMBEDDINGSTORE_QDRANT_PORT=6334 -e spring.kafka.bootstrap-servers=kafka:9092 -e TZ=Asia/Shanghai --dns=8.8.8.8 --dns=114.114.114.114 -v %CD%/knowledge:/app/knowledge %IMAGE_NAME%:latest
+        docker run -d --name %CONTAINER_NAME% --network ai-network -p %APP_PORT%:%APP_PORT% --env-file .env --add-host=host.docker.internal:host-gateway -e SPRING_PROFILES_ACTIVE=docker -e NACOS_SERVER_ADDR=nacos:8848 -e SPRING_DATASOURCE_URL=jdbc:mysql://host.docker.internal:3306/mydocker?useUnicode=true^&characterEncoding=UTF-8^&serverTimezone=Asia/Shanghai^&useSSL=false^&allowPublicKeyRetrieval=true -e SPRING_DATA_MONGODB_URI=mongodb://host.docker.internal:27017/chat_db -e SPRING_REDIS_HOST=redis -e SPRING_REDIS_PORT=6379 -e AI_EMBEDDINGSTORE_QDRANT_HOST=qdrant -e AI_EMBEDDINGSTORE_QDRANT_PORT=6334 -e spring.kafka.bootstrap-servers=kafka:9092 -e TZ=Asia/Shanghai --dns=8.8.8.8 --dns=114.114.114.114 %IMAGE_NAME%:latest
     ) else (
-        docker run -d --name %CONTAINER_NAME% --network ai-network -p %APP_PORT%:%APP_PORT% --env-file .env --add-host=host.docker.internal:host-gateway -e SPRING_PROFILES_ACTIVE=docker -e NACOS_SERVER_ADDR=nacos:8848 -e SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/mydocker?useUnicode=true^&characterEncoding=UTF-8^&serverTimezone=Asia/Shanghai^&useSSL=false^&allowPublicKeyRetrieval=true -e SPRING_DATA_MONGODB_URI=mongodb://host.docker.internal:27017/chat_db -e SPRING_REDIS_HOST=redis -e SPRING_REDIS_PORT=6379 -e AI_EMBEDDINGSTORE_QDRANT_HOST=qdrant -e AI_EMBEDDINGSTORE_QDRANT_PORT=6334 -e spring.kafka.bootstrap-servers=kafka:9092 -e TZ=Asia/Shanghai --dns=8.8.8.8 --dns=114.114.114.114 -v %CD%/knowledge:/app/knowledge %IMAGE_NAME%:latest
+        docker run -d --name %CONTAINER_NAME% --network ai-network -p %APP_PORT%:%APP_PORT% --env-file .env --add-host=host.docker.internal:host-gateway -e SPRING_PROFILES_ACTIVE=docker -e NACOS_SERVER_ADDR=nacos:8848 -e SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/mydocker?useUnicode=true^&characterEncoding=UTF-8^&serverTimezone=Asia/Shanghai^&useSSL=false^&allowPublicKeyRetrieval=true -e SPRING_DATA_MONGODB_URI=mongodb://host.docker.internal:27017/chat_db -e SPRING_REDIS_HOST=redis -e SPRING_REDIS_PORT=6379 -e AI_EMBEDDINGSTORE_QDRANT_HOST=qdrant -e AI_EMBEDDINGSTORE_QDRANT_PORT=6334 -e spring.kafka.bootstrap-servers=kafka:9092 -e TZ=Asia/Shanghai --dns=8.8.8.8 --dns=114.114.114.114 %IMAGE_NAME%:latest
     )
     
     if errorlevel 1 (
