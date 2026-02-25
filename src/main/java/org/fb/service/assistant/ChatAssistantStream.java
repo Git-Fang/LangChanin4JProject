@@ -12,11 +12,14 @@ import reactor.core.publisher.Flux;
 
 /**
  * 流式调用agent
+ * 配置了 contentRetriever 自动进行 RAG 检索
+ * 同时注入 tools 支持手动调用知识库检索工具
  * */
 @AiService(wiringMode = AiServiceWiringMode.EXPLICIT,
         streamingChatModel = "streamingChatModel",
         chatMemoryProvider = "chatMemoryProvider",
-        contentRetriever = "contentRetriever"
+        contentRetriever = "contentRetriever",
+        tools = {"knowledgeBaseRetrievalService", "commonTools", "personalDataTools", "mongoDBTools", "webSearchTools"}
 )
 public interface ChatAssistantStream {
 

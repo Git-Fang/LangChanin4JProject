@@ -20,6 +20,11 @@ public class BusinessConstant {
 
     public static final String DEFAULT_TYPE = "general";
 
+    /**
+     * 知识库检索类型 - 需要从向量数据库检索内容后回答
+     */
+    public static final String RAG_RETRIEVAL_TYPE = "rag_retrieval";
+
 
     //  业务使用常量信息
     public static final int MAX_PARAGRAPH_LENGTH = 1500;

@@ -3,6 +3,7 @@ package org.fb.service;
 import dev.langchain4j.memory.chat.ChatMemoryProvider;
 import lombok.extern.slf4j.Slf4j;
 import org.fb.constant.BusinessConstant;
+import org.fb.engine.IntentRecognitionEngine;
 import org.fb.service.assistant.*;
 import org.fb.service.impl.NL2SQLService;
 import org.fb.tools.QdrantOperationTools;
@@ -54,6 +55,9 @@ public class StreamingDispatchService {
     @Autowired
     private BusinessMetricsService metricsService;
 
+    @Autowired
+    private IntentRecognitionEngine intentRecognitionEngine;
+
     /**
      * 流式处理用户消息
      * 包含意图识别和业务分发逻辑
@@ -67,73 +71,59 @@ public class StreamingDispatchService {
         log.info("memoryId: {}, userMessage: {}", memoryId, userMessage);
         long overallStartTime = System.currentTimeMillis();
 
-        // 检查服务是否可用
-        if (chatTypeAssistantStream == null) {
-            log.warn("ChatTypeAssistantStream 未配置，使用默认general类型");
-            chatSaveService.saveChatInfo(memoryId, userMessage, BusinessConstant.DEFAULT_TYPE);
-            return chatAssistantStream.chat(memoryId, userMessage);
+        // 第一步：使用规则引擎进行意图识别
+        long intentRecognitionStart = System.currentTimeMillis();
+        String intent = intentRecognitionEngine.recognize(userMessage);
+        long intentRecognitionDuration = System.currentTimeMillis() - intentRecognitionStart;
+        
+        log.info("步骤1：规则引擎意图识别完成, intent: {}, 耗时: {}ms", intent, intentRecognitionDuration);
+        metricsService.recordIntentRecognitionDuration(memoryId.toString(), intentRecognitionDuration);
+        metricsService.recordChatRequestByIntent(memoryId.toString(), intent);
+
+        // 判断是否需要启用 RAG 检索
+        boolean shouldRetrieve = intentRecognitionEngine.shouldRetrieve(intent);
+        log.info("步骤2：是否需要RAG检索: {}", shouldRetrieve);
+
+        // 第二步：根据意图选择业务处理服务
+        log.info("步骤3：根据意图选择业务处理服务, intent: {}", intent);
+        log.info("当前使用的服务: {}", getServiceName(intent));
+
+        Flux<String> resultFlux;
+
+        // 保存聊天信息到数据库
+        log.info("准备调用chatSaveService.saveChatInfo方法，memoryId：{}，用户消息：{}，聊天类型：{}", memoryId, userMessage, intent);
+        long dbStartTime = System.currentTimeMillis();
+        chatSaveService.saveChatInfo(memoryId, userMessage, intent);
+        long dbDuration = System.currentTimeMillis() - dbStartTime;
+        metricsService.recordDatabaseOperationDuration(memoryId.toString(), dbDuration);
+        log.info("chatSaveService.saveChatInfo方法调用完成, 耗时: {}ms", dbDuration);
+
+        if (BusinessConstant.RAG_RETRIEVAL_TYPE.equals(intent)) {
+            log.info("选择业务处理服务: ChatAssistantStream (启用RAG检索)");
+            resultFlux = processWithRAG(memoryId, userMessage, shouldRetrieve);
+        } else if (BusinessConstant.MEDICAL_TYPE.equals(intent)) {
+            log.info("选择业务处理服务: DoctorAgent");
+            resultFlux = processWithDoctorAgent(memoryId, userMessage);
+        } else if (BusinessConstant.TRANSLATION_TYPE.equals(intent)) {
+            log.info("选择业务处理服务: TranslaterService");
+            if (translaterService == null) {
+                resultFlux = chatAssistantStream.chat(memoryId, userMessage);
+            } else {
+                resultFlux = processWithTranslaterService(memoryId, userMessage);
+            }
+        } else if (BusinessConstant.TERM_EXTRACTION_TYPE.equals(intent)) {
+            log.info("选择业务处理服务: TermExtractionAgent");
+            resultFlux = processWithTermExtractionAgent(userMessage);
+        } else if (BusinessConstant.SQL_OPERATION_TYPE.equals(intent)) {
+            log.info("选择业务处理服务: NaturalLanguageSQLAgent");
+            resultFlux = processWithNaturalLanguageSQLAgent(userMessage);
+        } else {
+            log.info("选择业务处理服务: ChatAssistantStream (默认-general)");
+            resultFlux = chatAssistantStream.chat(memoryId, userMessage);
         }
 
-        // 第一步：进行意图识别
-        Long tempMemoryId = System.currentTimeMillis();
-        log.info("步骤1：开始意图识别, tempMemoryId: {}", tempMemoryId);
-        log.info("待识别消息: {}", userMessage);
-        long intentRecognitionStart = System.currentTimeMillis();
-
-        return chatTypeAssistantStream.chat(tempMemoryId, userMessage)
-                .collectList()
-                .flatMapMany(intentChunks -> {
-                    // 合并意图识别的结果
-                    String intentResponse = String.join("", intentChunks);
-                    long intentRecognitionDuration = System.currentTimeMillis() - intentRecognitionStart;
-                    
-                    log.info("步骤2：意图识别原始响应: {}", intentResponse);
-                    metricsService.recordIntentRecognitionDuration(memoryId.toString(), intentRecognitionDuration);
-
-                    // 提取意图
-                    String intent = extractIntent(intentResponse);
-                    log.info("步骤3：解析出的意图: {}, 原始响应: {}", intent, intentResponse);
-                    log.info("当前使用的服务: {}", getServiceName(intent));
-
-                    metricsService.recordChatRequestByIntent(memoryId.toString(), intent);
-
-                    // 第二步：根据意图选择业务处理服务
-                    log.info("步骤4：根据意图选择业务处理服务, intent: {}", intent);
-
-                    Flux<String> resultFlux;
-
-                    // 保存聊天信息到数据库
-                    log.info("准备调用chatSaveService.saveChatInfo方法，memoryId：{}，用户消息：{}，聊天类型：{}", memoryId, userMessage, intent);
-                    long dbStartTime = System.currentTimeMillis();
-                    chatSaveService.saveChatInfo(memoryId, userMessage, intent);
-                    long dbDuration = System.currentTimeMillis() - dbStartTime;
-                    metricsService.recordDatabaseOperationDuration(memoryId.toString(), dbDuration);
-                    log.info("chatSaveService.saveChatInfo方法调用完成, 耗时: {}ms", dbDuration);
-
-                    if (BusinessConstant.MEDICAL_TYPE.equals(intent)) {
-                        log.info("选择业务处理服务: DoctorAgent");
-                        resultFlux = processWithDoctorAgent(memoryId, userMessage);
-                    } else if (BusinessConstant.TRANSLATION_TYPE.equals(intent)) {
-                        log.info("选择业务处理服务: TranslaterService");
-                        if (translaterService == null) {
-                            resultFlux = chatAssistantStream.chat(memoryId, userMessage);
-                        } else {
-                            resultFlux = processWithTranslaterService(memoryId, userMessage);
-                        }
-                    } else if (BusinessConstant.TERM_EXTRACTION_TYPE.equals(intent)) {
-                        log.info("选择业务处理服务: TermExtractionAgent");
-                        resultFlux = processWithTermExtractionAgent(userMessage);
-                    } else if (BusinessConstant.SQL_OPERATION_TYPE.equals(intent)) {
-                        log.info("选择业务处理服务: NaturalLanguageSQLAgent");
-                        resultFlux = processWithNaturalLanguageSQLAgent(userMessage);
-                    } else {
-                        log.info("选择业务处理服务: ChatAssistantStream (默认-general)");
-                        resultFlux = chatAssistantStream.chat(memoryId, userMessage);
-                    }
-
-                    log.info("========== StreamingDispatchService 处理完成 ==========");
-                    return resultFlux;
-                })
+        log.info("========== StreamingDispatchService 处理完成 ==========");
+        return resultFlux
                 .doOnComplete(() -> {
                     long overallDuration = System.currentTimeMillis() - overallStartTime;
                     metricsService.recordChatProcessingDuration(memoryId.toString(), overallDuration);
@@ -143,12 +133,34 @@ public class StreamingDispatchService {
 
     private String getServiceName(String intent) {
         return switch (intent) {
+            case "rag_retrieval" -> "ChatAssistantStream (RAG检索)";
             case "medical" -> "DoctorAgent";
             case "translation" -> "TranslaterService";
             case "term_extraction" -> "TermExtractionAgent";
             case "sql_transfer" -> "NaturalLanguageSQLAgent";
             default -> "ChatAssistantStream (general)";
         };
+    }
+
+    /**
+     * 使用 RAG 方式处理（从知识库检索后回答）
+     */
+    private Flux<String> processWithRAG(Long memoryId, String userMessage, boolean shouldRetrieve) {
+        log.info("调用RAG处理, memoryId: {}, message: {}, shouldRetrieve: {}", memoryId, userMessage, shouldRetrieve);
+        long serviceStartTime = System.currentTimeMillis();
+        
+        try {
+            // ChatAssistantStream 已配置 contentRetriever，会自动进行知识库检索
+            // 这里直接调用即可
+            Flux<String> resultFlux = chatAssistantStream.chat(memoryId, userMessage);
+            
+            log.info("RAG处理已启动, 耗时: {}ms", System.currentTimeMillis() - serviceStartTime);
+            return resultFlux;
+        } catch (Exception e) {
+            log.error("RAG处理失败", e);
+            metricsService.recordError(memoryId.toString(), "rag_error");
+            return Flux.just("抱歉，处理您的知识库查询请求时出现错误: " + e.getMessage());
+        }
     }
 
     /**
