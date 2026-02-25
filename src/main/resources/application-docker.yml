@@ -145,11 +145,11 @@ ai:
     timeout: 300s
     max-retries: 3
 
-  # Qdrant向量数据库配置 - 支持环境变量覆盖
+  # Qdrant向量数据库配置 - Docker环境下使用服务名qdrant
   embeddingStore:
     qdrant:
       collectionName: ${AI_EMBEDDINGSTORE_QDRANT_COLLECTIONNAME:ragTranslation-1226}
-      host: ${AI_EMBEDDINGSTORE_QDRANT_HOST:localhost}
+      host: ${AI_EMBEDDINGSTORE_QDRANT_HOST:qdrant}
       port: ${AI_EMBEDDINGSTORE_QDRANT_PORT:6334}
 
   dashscope:

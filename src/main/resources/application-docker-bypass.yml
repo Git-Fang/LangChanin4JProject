@@ -88,7 +88,7 @@ ai:
   embeddingStore:
     qdrant:
       collectionName: ragTranslation-1226
-      host: ${AI_EMBEDDINGSTORE_QDRANT_HOST:localhost}
+      host: ${AI_EMBEDDINGSTORE_QDRANT_HOST:qdrant}
       port: ${AI_EMBEDDINGSTORE_QDRANT_PORT:6334}
 
   dashscope:
