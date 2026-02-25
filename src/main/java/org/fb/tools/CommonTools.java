@@ -19,8 +19,10 @@ import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -71,8 +73,9 @@ public class CommonTools {
             return "NO_TERMS_FOUND";
         }
 
-        StringBuilder result = new StringBuilder();
-        int matchCount = 0;
+        // 找到相似度最高的术语
+        double bestScore = 0;
+        String bestTerm = null;
         int totalMatches = searchResult.matches().size();
 
         log.info("【术语翻译查询】: 向量数据库共返回 {} 个匹配", totalMatches);
@@ -82,18 +85,28 @@ public class CommonTools {
             double score = embeddingMatch.score();
             String matchedText = embeddingMatch.embedded().text();
             
-            log.info("  - 术语: '{}' | 相似度: {} | 类型: TERMS", matchedText, score);
+            // 解析JSON格式，提取实际术语
+            String actualTerm = parseTermFromJson(matchedText);
+            log.info("  - 原始存储: '{}' | 提取术语: '{}' | 相似度: {} | 类型: TERMS", matchedText, actualTerm, score);
             
-            result.append("【术语翻译匹配").append(i + 1).append("】\n");
-            result.append("术语: ").append(matchedText).append("\n");
-            result.append("相似度: ").append(score).append("\n\n");
-            matchCount++;
+            // 只处理相似度>=0.8的匹配，保留相似度最高的术语
+            if (score >= 0.8 && actualTerm != null && !actualTerm.isEmpty()) {
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestTerm = actualTerm;
+                }
+            }
         }
 
-        log.info("【术语翻译查询结果】: 找到 {} 个术语翻译", matchCount);
+        log.info("【术语翻译查询结果】: 最高相似度: {}, 命中术语: {}", bestScore, bestTerm);
         log.info("========== embedding_search_for_terms 完成 ==========");
 
-        return result.toString().trim();
+        if (bestTerm == null) {
+            return "NO_TERMS_FOUND";
+        }
+        
+        // 返回相似度最高的术语
+        return bestTerm;
     }
 
 
@@ -123,7 +136,7 @@ public class CommonTools {
             EmbeddingSearchRequest searchRequest = EmbeddingSearchRequest.builder()
                     .queryEmbedding(queryEmbedding)
                     .maxResults(30)
-                    .minScore(0.7)
+                    .minScore(0.8)
                     .filter(typeFilter)
                     .build();
 
@@ -154,38 +167,31 @@ public class CommonTools {
         String correctedText = sourceText;
         String matchedTerms = "无";
 
+        // 如果terms参数为空，尝试直接从向量数据库查询相似术语
+        if (terms == null || terms.isEmpty() || terms.equals("NO_SIMILAR_TERMS_FOUND")) {
+            log.info("【术语参数为空，尝试直接从向量数据库查询】");
+            try {
+                String directTerms = findSimilarTerms(sourceText);
+                if (directTerms != null && !directTerms.equals("NO_SIMILAR_TERMS_FOUND")) {
+                    terms = directTerms;
+                    log.info("【直接查询到术语】: {}", terms);
+                }
+            } catch (Exception e) {
+                log.warn("直接查询术语失败: {}", e.getMessage());
+            }
+        }
+
+        // 处理命中的相似术语
         if (terms != null && !terms.isEmpty() && !terms.equals("NO_SIMILAR_TERMS_FOUND")) {
             matchedTerms = terms;
             log.info("【术语库命中处理】: 命中 {} 个术语", terms.split("\\|").length);
+            
+            // 用正确的标准术语替换原文中的相似词
+            correctedText = correctTermInText(sourceText, terms);
+            
+            log.info("【术语纠正后语句】: {}", correctedText);
         } else {
             log.info("【术语库命中处理】: 无命中术语");
-        }
-
-        if (terms != null && !terms.isEmpty() && termTranslations != null && !termTranslations.isEmpty() && !termTranslations.equals("NO_TERMS_FOUND")) {
-            try {
-                Pattern jsonPattern = Pattern.compile("\"([^\"]+)\":\"([^\"]+)\"");
-                Matcher matcher = jsonPattern.matcher(termTranslations);
-
-                Map<String, String> termMap = new HashMap<>();
-                int termReplaceCount = 0;
-                while (matcher.find()) {
-                    String cnTerm = matcher.group(1);
-                    String enTerm = matcher.group(2);
-                    termMap.put(cnTerm, enTerm);
-                    log.info("【术语替换对照】: {} -> {}", cnTerm, enTerm);
-                    termReplaceCount++;
-                }
-
-                log.info("【术语替换】开始，共 {} 个术语需要替换", termReplaceCount);
-                for (Map.Entry<String, String> entry : termMap.entrySet()) {
-                    correctedText = correctedText.replace(entry.getKey(), entry.getValue());
-                }
-                log.info("【术语替换后语句】: {}", correctedText);
-            } catch (Exception e) {
-                log.warn("术语解析失败: {}", e.getMessage());
-            }
-        } else {
-            log.info("【术语替换】: 无术语翻译对照，跳过替换");
         }
 
         log.info("【最终翻译语句】: {}", correctedText);
@@ -193,6 +199,145 @@ public class CommonTools {
         log.info("========== doTranslation 完成 ==========");
 
         return String.format("RESULT|原文:%s|纠正后:%s|命中术语:%s|目标语言:%s", originalText, correctedText, matchedTerms, targetLanguage);
+    }
+
+    /**
+     * 纠正原文中的错误术语
+     * 使用相似度匹配找到原文中的错误词，并用正确的标准术语替换
+     * 
+     * 例如：原文 "火中取碳是一个成语" + 标准术语 "火中取栗"
+     *      结果："火中取栗是一个成语"
+     */
+    private String correctTermInText(String text, String standardTerms) {
+        if (text == null || standardTerms == null || text.isEmpty() || standardTerms.isEmpty()) {
+            return text;
+        }
+
+        // 支持多个标准术语（用 | 分隔）
+        String[] terms = standardTerms.split("\\|");
+        
+        for (String standardTerm : terms) {
+            standardTerm = standardTerm.trim();
+            if (standardTerm.isEmpty()) continue;
+            
+            // 查找原文中最相似的子串并替换
+            String replacement = findAndReplaceSimilarTerm(text, standardTerm);
+            if (!replacement.equals(text)) {
+                log.info("【术语替换成功】: 原文本 '{}' -> '{}'", text, replacement);
+                return replacement;
+            }
+        }
+        
+        return text;
+    }
+
+    /**
+     * 找到原文中最相似的子串并替换为标准术语
+     * 使用滑动窗口 + 字符重叠检测
+     */
+    private String findAndReplaceSimilarTerm(String text, String standardTerm) {
+        int termLen = standardTerm.length();
+        int textLen = text.length();
+        
+        if (termLen > textLen) {
+            // 标准术语比原文还长，尝试在原文首尾添加前后文进行匹配
+            // 例如：原文 "火中取碳" -> 尝试匹配 "火中取碳"
+            // 标准术语 "火中取栗" -> 比较两者的相似度
+            return findAndReplaceBySimilarity(text, standardTerm);
+        }
+        
+        // 滑动窗口检查
+        // 从长度差异最小的开始尝试匹配
+        for (int windowSize = termLen; windowSize >= 2; windowSize--) {
+            for (int i = 0; i <= textLen - windowSize; i++) {
+                String substring = text.substring(i, i + windowSize);
+                
+                // 如果子串与标准术语有共同字符（至少50%的字符重叠）
+                // 且不完全相同（说明是错误的写法）
+                if (!substring.equals(standardTerm) && isSimilar(substring, standardTerm, 0.4)) {
+                    // 替换这个子串为标准术语
+                    String result = text.substring(0, i) + standardTerm + text.substring(i + windowSize);
+                    log.info("【相似术语替换】 '{}' -> '{}'", substring, standardTerm);
+                    return result;
+                }
+            }
+        }
+        
+        // 如果窗口匹配没找到，尝试整体相似度匹配
+        return findAndReplaceBySimilarity(text, standardTerm);
+    }
+
+    /**
+     * 通过整体相似度匹配进行替换
+     */
+    private String findAndReplaceBySimilarity(String text, String standardTerm) {
+        // 提取所有可能的词（2-6个字符）
+        // 例如：从 "火中取碳是一个成语" 中提取 "火中取碳"
+        List<String> candidates = new ArrayList<>();
+        
+        // 提取连续的中文字符序列
+        Pattern chinesePattern = Pattern.compile("[\\u4e00-\\u9fa5]{2,8}");
+        Matcher matcher = chinesePattern.matcher(text);
+        while (matcher.find()) {
+            candidates.add(matcher.group());
+        }
+        
+        // 找到最相似的候选词并替换
+        double bestSimilarity = 0;
+        String bestCandidate = null;
+        int bestIndex = -1;
+        
+        for (String candidate : candidates) {
+            double similarity = calculateSimilarity(candidate, standardTerm);
+            if (similarity > bestSimilarity && similarity < 1.0) { // < 1.0 表示不是完全匹配
+                bestSimilarity = similarity;
+                bestCandidate = candidate;
+                bestIndex = text.indexOf(candidate);
+            }
+        }
+        
+        // 如果找到相似度足够高的候选词（>50%）且不是完全匹配
+        if (bestCandidate != null && bestSimilarity > 0.5 && bestIndex >= 0) {
+            String result = text.substring(0, bestIndex) + standardTerm + text.substring(bestIndex + bestCandidate.length());
+            log.info("【相似度替换】 '{}' (相似度{}) -> '{}'", bestCandidate, String.format("%.2f", bestSimilarity), standardTerm);
+            return result;
+        }
+        
+        return text;
+    }
+
+    /**
+     * 计算两个字符串的相似度（简单实现：字符重叠率）
+     */
+    private double calculateSimilarity(String s1, String s2) {
+        if (s1 == null || s2 == null || s1.isEmpty() || s2.isEmpty()) {
+            return 0;
+        }
+        
+        // 计算字符重叠数
+        Set<Character> set1 = new HashSet<>();
+        Set<Character> set2 = new HashSet<>();
+        
+        for (char c : s1.toCharArray()) set1.add(c);
+        for (char c : s2.toCharArray()) set2.add(c);
+        
+        // 计算 Jaccard 相似度
+        Set<Character> intersection = new HashSet<>(set1);
+        intersection.retainAll(set2);
+        
+        Set<Character> union = new HashSet<>(set1);
+        union.addAll(set2);
+        
+        if (union.isEmpty()) return 0;
+        
+        return (double) intersection.size() / union.size();
+    }
+
+    /**
+     * 检查两个字符串是否相似（基于字符重叠）
+     */
+    private boolean isSimilar(String s1, String s2, double threshold) {
+        return calculateSimilarity(s1, s2) >= threshold;
     }
 
     @Tool(name = "correct_and_translate", value = "术语纠正式翻译:先对原文进行术语纠正(相似度>0.85的术语匹配)，然后翻译成目标语言")
@@ -244,7 +389,7 @@ public class CommonTools {
         return "待翻译文本：" + correctedText;
     }
 
-    @Tool(name = "find_similar_terms", value = "查找相似术语:从向量数据库中查找与输入文本相似的术语，返回相似度>=0.85的匹配结果")
+    @Tool(name = "find_similar_terms", value = "查找相似术语:从向量数据库中查找与输入文本相似的术语，返回相似度>=0.8的匹配结果")
     public String findSimilarTerms(@P(value="text", required = true) String text) {
         log.info("========== findSimilarTerms 开始 ==========");
         log.info("待匹配文本: {}", text);
@@ -257,8 +402,9 @@ public class CommonTools {
                 return "NO_SIMILAR_TERMS_FOUND";
             }
 
-            StringBuilder result = new StringBuilder();
-            int matchCount = 0;
+            // 找到相似度最高的术语
+            double bestScore = 0;
+            String bestTerm = null;
             int totalMatches = searchResult.matches().size();
 
             log.info("向量数据库匹配结果（共{}个匹配）:", totalMatches);
@@ -266,31 +412,61 @@ public class CommonTools {
             for (EmbeddingMatch<TextSegment> embeddingMatch : searchResult.matches()) {
                 double score = embeddingMatch.score();
                 String matchedText = embeddingMatch.embedded().text();
+                
+                // 解析JSON格式的存储内容，提取实际术语
+                String actualTerm = parseTermFromJson(matchedText);
+                log.info("  - 原始存储: '{}' | 提取术语: '{}' | 相似度: {} | 是否命中: {}", 
+                    matchedText, actualTerm, score, score >= 0.8 ? "是" : "否");
 
-                log.info("  - 术语: '{}' | 相似度: {} | 是否命中: {}", matchedText, score, score >= 0.85 ? "是" : "否");
-
-                if (score >= 0.85) {
-                    if (matchCount > 0) {
-                        result.append(" | ");
+                // 阈值0.8，保留相似度最高的术语
+                if (score >= 0.8 && actualTerm != null && !actualTerm.isEmpty()) {
+                    if (score > bestScore) {
+                        bestScore = score;
+                        bestTerm = actualTerm;
                     }
-                    result.append(matchedText);
-                    matchCount++;
                 }
             }
 
-            log.info("向量数据库命中术语数量: {} (相似度>=0.85)", matchCount);
+            log.info("向量数据库最高相似度: {}, 命中术语: {}", bestScore, bestTerm);
 
-            if (matchCount == 0) {
-                log.info("向量数据库中无命中术语");
+            if (bestTerm == null || bestScore < 0.8) {
+                log.info("向量数据库中无符合阈值的术语");
                 return "NO_SIMILAR_TERMS_FOUND";
             }
 
-            log.info("向量数据库命中术语: {}", result.toString());
-            return result.toString();
+            log.info("【最终返回术语】: {} (相似度: {})", bestTerm, bestScore);
+            return bestTerm;
         } catch (Exception e) {
             log.error("查找相似术语失败: {}", e.getMessage(), e);
             return "ERROR: " + e.getMessage();
         }
+    }
+    
+    /**
+     * 从JSON格式的存储内容中提取实际术语
+     * 例如: {"terms":"火中取栗","term_count":1} -> "火中取栗"
+     */
+    private String parseTermFromJson(String storedText) {
+        if (storedText == null || storedText.isEmpty()) {
+            return storedText;
+        }
+        
+        // 尝试解析JSON格式
+        if (storedText.startsWith("{")) {
+            try {
+                // 提取 "terms":"xxx" 部分
+                Pattern termPattern = Pattern.compile("\"terms\"\\s*:\\s*\"([^\"]+)\"");
+                Matcher matcher = termPattern.matcher(storedText);
+                if (matcher.find()) {
+                    return matcher.group(1);
+                }
+            } catch (Exception e) {
+                log.warn("JSON解析失败: {}", e.getMessage());
+            }
+        }
+        
+        // 如果不是JSON格式，直接返回原文本
+        return storedText;
     }
 
 
