@@ -152,8 +152,19 @@ public class KnowledgeBaseRetrievalService {
      */
     private String searchFromQdrant(String query) {
         try {
-            log.info("Qdrant检索 - 查询: {}", query);
-            String result = commonTools.embeddingSearch(query);
+            // 【修复1】优化Query构建：从原问题中提取关键检索词
+            String optimizedQuery = extractSearchKeywords(query);
+            log.info("Qdrant检索 - 原始Query: {}", query);
+            log.info("Qdrant检索 - 优化后Query: {}", optimizedQuery);
+            
+            // 优先使用优化后的Query检索
+            String result = commonTools.embeddingSearch(optimizedQuery);
+            
+            // 如果优化Query未找到结果，尝试原始Query作为fallback
+            if (result != null && result.contains("查无相关数据")) {
+                log.info("优化Query未命中，尝试原始Query检索...");
+                result = commonTools.embeddingSearch(query);
+            }
             
             if (result != null && !result.contains("查无相关数据")) {
                 return result;
@@ -164,6 +175,58 @@ public class KnowledgeBaseRetrievalService {
             log.warn("Qdrant检索失败: {}", e.getMessage());
             return "Qdrant检索失败: " + e.getMessage();
         }
+    }
+    
+    /**
+     * 【修复1】从用户问题中提取关键检索词
+     * 目的：解决query太长导致向量检索效果差的问题
+     */
+    private String extractSearchKeywords(String query) {
+        if (query == null || query.isEmpty()) {
+            return query;
+        }
+        
+        // 常见的人名模式
+        String[] namePatterns = {"方彪", "张三", "李四", "王五", "赵六", "钱七", "孙八", "周九", "吴十"};
+        
+        // 常见关键词后缀
+        String[] suffixes = {"简历", "个人", "项目", "经历", "经验", "工作", "履历", "背景", "简介", "介绍"};
+        
+        StringBuilder keywords = new StringBuilder();
+        
+        // 1. 首先检查是否包含人名
+        for (String name : namePatterns) {
+            if (query.contains(name)) {
+                keywords.append(name);
+                break;
+            }
+        }
+        
+        // 2. 如果没有人名，提取query中最有意义的中文词汇（2-4个字）
+        if (keywords.length() == 0) {
+            // 提取连续的中文字符序列
+            java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("[\\u4e00-\\u9fa5]{2,4}");
+            java.util.regex.Matcher matcher = pattern.matcher(query);
+            while (matcher.find()) {
+                String word = matcher.group();
+                // 跳过常见无意义词
+                if (!word.contains("关于") && !word.contains("结合") && !word.contains("请") 
+                    && !word.contains("需要") && !word.contains("什么") && !word.contains("哪些")) {
+                    keywords.append(word);
+                    break;
+                }
+            }
+        }
+        
+        // 3. 添加项目相关后缀（针对个人项目经历查询）
+        if (query.contains("项目") || query.contains("经历") || query.contains("经验")) {
+            keywords.append(" 项目 经验");
+        } else if (query.contains("简历") || query.contains("个人")) {
+            keywords.append(" 简历 个人");
+        }
+        
+        String result = keywords.toString().trim();
+        return result.isEmpty() ? query : result;
     }
 
     /**
@@ -177,26 +240,39 @@ public class KnowledgeBaseRetrievalService {
         StringBuilder result = new StringBuilder();
         result.append("【个人项目经验查询结果 - ").append(name).append("】\n\n");
         
-        // 构建查询关键词
-        String[] keywords = {name, name + "项目", name + "工作", name + "经历", name + "经验"};
-        
+        // 【修复2】优化关键词构建 - 优先使用人名直接检索
         // 从MongoDB优先检索
-        for (String keyword : keywords) {
-            String mongoResult = searchFromMongoDB(keyword);
+        String mongoResult = searchFromMongoDB(name);
+        if (mongoResult != null && !mongoResult.contains("未找到") && !mongoResult.contains("暂无")) {
+            result.append("【MongoDB个人信息】\n");
+            result.append(mongoResult).append("\n\n");
+            log.info("MongoDB找到个人信息");
+        } else {
+            // 尝试带项目的组合查询
+            mongoResult = searchFromMongoDB(name + " 项目");
             if (mongoResult != null && !mongoResult.contains("未找到") && !mongoResult.contains("暂无")) {
                 result.append("【MongoDB个人信息】\n");
                 result.append(mongoResult).append("\n\n");
-                log.info("MongoDB找到个人信息");
-                break;
+                log.info("MongoDB找到个人信息(组合查询)");
             }
         }
         
-        // 从Qdrant检索
-        String qdrantResult = searchFromQdrant(name + " 项目 经验");
+        // 【修复3】从Qdrant检索 - 优先使用精简Query
+        String optimizedQdrantQuery = name + " 项目 经验";
+        String qdrantResult = searchFromQdrant(optimizedQdrantQuery);
         if (qdrantResult != null && !qdrantResult.contains("查无相关数据")) {
             result.append("【Qdrant向量库个人信息】\n");
             result.append(qdrantResult).append("\n\n");
             log.info("Qdrant找到个人信息");
+        } else {
+            // 如果精简Query失败，尝试只用人名
+            log.info("精简Query未命中，尝试仅用人名检索...");
+            qdrantResult = searchFromQdrant(name);
+            if (qdrantResult != null && !qdrantResult.contains("查无相关数据")) {
+                result.append("【Qdrant向量库个人信息】\n");
+                result.append(qdrantResult).append("\n\n");
+                log.info("Qdrant找到个人信息(仅人名)");
+            }
         }
         
         // 如果都没有结果，尝试从MySQL检索
@@ -213,13 +289,19 @@ public class KnowledgeBaseRetrievalService {
             }
         }
         
-        // 检查是否有任何结果
+        // 【修复4】检查是否有任何结果 - 如果没有明确告知用户
         if (!result.toString().contains("找到") && !result.toString().contains("记录")) {
-            result.append("未在知识库中找到与[").append(name).append("]相关的项目经验信息。");
-            result.append("\n建议：\n");
-            result.append("1. 确认该人员的相关信息已录入知识库\n");
+            result.append("【查询结果】\n");
+            result.append("未在当前知识库中查询到与[").append(name).append("]相关的项目经验信息。\n");
+            result.append("\n【可能原因】\n");
+            result.append("1. 该人员的信息尚未导入知识库\n");
+            result.append("2. 知识库中该人员信息命名方式与查询词不匹配\n");
+            result.append("3. 向量数据库中该人员信息的embedding质量较低\n");
+            result.append("\n【建议操作】\n");
+            result.append("1. 确认该人员的相关信息已正确导入MongoDB或Qdrant\n");
             result.append("2. 检查MongoDB的personal_data集合是否有数据\n");
             result.append("3. 检查Qdrant向量数据库是否已导入相关文档\n");
+            result.append("4. 可尝试使用网络搜索获取该人员更多信息\n");
         }
         
         log.info("========== 个人项目经验查询完成 ==========");
