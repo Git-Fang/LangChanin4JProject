@@ -114,10 +114,13 @@ public class CommonTools {
     public EmbeddingSearchResult<TextSegment> getMatchWords(String question) {
         Embedding queryEmbedding = embeddingModel.embed(question).content();
 
+        // 【优化】提高 minScore 阈值，减少噪声数据干扰
+        // 原值 0.1 过低，导致大量不相关文档被召回
+        // 调整原因：all-MiniLM-L6-v2 模型对中文支持有限，需要更高阈值过滤噪声
         EmbeddingSearchRequest searchRequest = EmbeddingSearchRequest.builder()
                 .queryEmbedding(queryEmbedding)
                 .maxResults(30)
-                .minScore(0.1)
+                .minScore(0.6)  // 从 0.1 提升到 0.6，过滤低相关度结果
                 .build();
 
         return embeddingStore.search(searchRequest);

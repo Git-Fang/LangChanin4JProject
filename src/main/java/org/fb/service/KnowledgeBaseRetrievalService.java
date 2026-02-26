@@ -10,8 +10,14 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * 知识库检索服务
@@ -148,7 +154,7 @@ public class KnowledgeBaseRetrievalService {
     }
 
     /**
-     * 从Qdrant向量数据库检索
+     * 从Qdrant向量数据库检索（支持多路召回）
      */
     private String searchFromQdrant(String query) {
         try {
@@ -157,14 +163,79 @@ public class KnowledgeBaseRetrievalService {
             log.info("Qdrant检索 - 原始Query: {}", query);
             log.info("Qdrant检索 - 优化后Query: {}", optimizedQuery);
             
-            // 优先使用优化后的Query检索
-            String result = commonTools.embeddingSearch(optimizedQuery);
+            // 【新增】多路召回策略：尝试多个检索词
+            List<String> searchQueries = generateMultipleSearchQueries(query, optimizedQuery);
+            log.info("Qdrant检索 - 多路召回查询词: {}", searchQueries);
             
-            // 如果优化Query未找到结果，尝试原始Query作为fallback
-            if (result != null && result.contains("查无相关数据")) {
-                log.info("优化Query未命中，尝试原始Query检索...");
-                result = commonTools.embeddingSearch(query);
+            // 用于去重和收集结果
+            Set<String> dedup = new HashSet<>();
+            List<String> allResults = new ArrayList<>();
+            double maxScore = 0.0;
+            
+            // 多路召回执行
+            for (String sq : searchQueries) {
+                log.info("Qdrant检索 - 执行查询: {}", sq);
+                String result = commonTools.embeddingSearch(sq);
+                
+                if (result != null && !result.contains("查无相关数据") && !result.contains("未查询到")) {
+                    // 解析相似度信息
+                    if (result.contains("相似度score：")) {
+                        Pattern scorePattern = Pattern.compile("相似度score：([0-9.]+)");
+                        Matcher scoreMatcher = scorePattern.matcher(result);
+                        while (scoreMatcher.find()) {
+                            try {
+                                double score = Double.parseDouble(scoreMatcher.group(1));
+                                if (score > maxScore) {
+                                    maxScore = score;
+                                }
+                            } catch (NumberFormatException e) {
+                                // 忽略解析错误
+                            }
+                        }
+                    }
+                    
+                    // 简单去重：将每行作为去重 key
+                    String[] lines = result.split("\n");
+                    for (String line : lines) {
+                        String trimmed = line.trim();
+                        if (!trimmed.isEmpty() && !dedup.contains(trimmed)) {
+                            dedup.add(trimmed);
+                            allResults.add(trimmed);
+                        }
+                    }
+                    log.info("Qdrant检索 - 查询 '{}' 找到结果，当前去重后: {} 条", sq, allResults.size());
+                }
             }
+            
+            // 如果多路召回有结果
+            if (!allResults.isEmpty()) {
+                log.info("Qdrant多路召回完成，共 {} 条结果，最高相似度: {}", allResults.size(), maxScore);
+                
+                // 构建返回结果
+                StringBuilder resultBuilder = new StringBuilder();
+                resultBuilder.append("共找到").append(allResults.size()).append("条相关结果（多路召回）:\n\n");
+                
+                int count = 1;
+                for (String line : allResults) {
+                    if (line.contains("【相关数据") || line.startsWith("【")) {
+                        resultBuilder.append(line).append("\n\n");
+                    } else {
+                        resultBuilder.append("【相关数据").append(count++).append("】\n");
+                        resultBuilder.append(line).append("\n\n");
+                    }
+                }
+                
+                // 添加最高相似度信息
+                if (maxScore > 0) {
+                    resultBuilder.append("【最高相似度】").append(String.format("%.2f", maxScore)).append("\n");
+                }
+                
+                return resultBuilder.toString();
+            }
+            
+            // 如果多路召回都未找到结果，尝试原始Query作为fallback
+            log.info("多路召回未命中，尝试原始Query检索...");
+            String result = commonTools.embeddingSearch(query);
             
             if (result != null && !result.contains("查无相关数据")) {
                 return result;
@@ -178,54 +249,154 @@ public class KnowledgeBaseRetrievalService {
     }
     
     /**
+     * 【新增】生成多个检索查询词，实现多路召回
+     * 针对不同类型的查询，生成多个可能匹配的检索词
+     */
+    private List<String> generateMultipleSearchQueries(String originalQuery, String optimizedQuery) {
+        List<String> queries = new ArrayList<>();
+        
+        // 1. 首先添加优化后的查询词
+        if (optimizedQuery != null && !optimizedQuery.isEmpty()) {
+            queries.add(optimizedQuery);
+        }
+        
+        // 2. 提取人名
+        String[] namePatterns = {"方彪", "张三", "李四", "王五", "赵六", "钱七", "孙八", "周九", "吴十"};
+        String extractedName = null;
+        for (String name : namePatterns) {
+            if (originalQuery.contains(name)) {
+                extractedName = name;
+                break;
+            }
+        }
+        
+        // 3. 如果有人名，生成多种组合查询
+        if (extractedName != null) {
+            queries.add(extractedName);  // 仅人名
+            queries.add(extractedName + " 项目");  // 人名+项目
+            queries.add(extractedName + " 工作");  // 人名+工作
+            queries.add(extractedName + " 简历");  // 人名+简历
+            queries.add(extractedName + " 项目经验");  // 人名+项目经验
+            queries.add(extractedName + " 工作经历");  // 人名+工作经历
+        }
+        
+        // 4. 添加核心关键词变体
+        if (originalQuery.contains("项目") || originalQuery.contains("经验")) {
+            queries.add("项目经验");
+            queries.add("工作项目");
+            queries.add("过往项目");
+        }
+        if (originalQuery.contains("工作") || originalQuery.contains("任职")) {
+            queries.add("工作经历");
+            queries.add("任职经历");
+        }
+        if (originalQuery.contains("简历") || originalQuery.contains("个人")) {
+            queries.add("个人简历");
+            queries.add("简历信息");
+        }
+        
+        // 5. 去重
+        Set<String> uniqueQueries = new LinkedHashSet<>(queries);
+        
+        return new ArrayList<>(uniqueQueries);
+    }
+    
+    /**
      * 【修复1】从用户问题中提取关键检索词
      * 目的：解决query太长导致向量检索效果差的问题
+     * 优化：更智能地提取人名、核心实体，构建多检索词策略
      */
     private String extractSearchKeywords(String query) {
         if (query == null || query.isEmpty()) {
             return query;
         }
         
-        // 常见的人名模式
-        String[] namePatterns = {"方彪", "张三", "李四", "王五", "赵六", "钱七", "孙八", "周九", "吴十"};
+        log.info("开始提取检索关键词，原Query: {}", query);
         
         StringBuilder keywords = new StringBuilder();
         
-        // 1. 首先检查是否包含人名
+        // 1. 提取人名（扩展匹配模式）
+        String[] namePatterns = {"方彪", "张三", "李四", "王五", "赵六", "钱七", "孙八", "周九", "吴十", 
+                                  "刘一", "刘二", "刘三", "陈一", "陈二", "杨一", "杨二"};
+        
+        String extractedName = null;
         for (String name : namePatterns) {
             if (query.contains(name)) {
+                extractedName = name;
                 keywords.append(name);
                 break;
             }
         }
         
-        // 2. 如果没有人名，提取query中最有意义的中文词汇（2-4个字）
-        if (keywords.length() == 0) {
-            // 提取连续的中文字符序列
-            java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("[\\u4e00-\\u9fa5]{2,4}");
-            java.util.regex.Matcher matcher = pattern.matcher(query);
+        // 2. 提取核心实体（项目、技术、公司等）
+        List<String> entities = new ArrayList<>();
+        
+        // 项目相关
+        if (query.contains("项目") || query.contains("经验") || query.contains("经历")) {
+            entities.add("项目经验");
+            entities.add("项目经历");
+        }
+        // 工作相关
+        if (query.contains("工作") || query.contains("任职") || query.contains("职位")) {
+            entities.add("工作经历");
+            entities.add("任职");
+        }
+        // 简历相关
+        if (query.contains("简历") || query.contains("个人") || query.contains("介绍")) {
+            entities.add("简历");
+            entities.add("个人");
+        }
+        // 技能相关
+        if (query.contains("技能") || query.contains("技术") || query.contains("能力")) {
+            entities.add("技能");
+            entities.add("技术");
+        }
+        
+        // 3. 构建优化后的查询词
+        if (extractedName != null) {
+            // 优先使用"人名 + 实体"组合
+            if (!entities.isEmpty()) {
+                keywords.append(" ").append(entities.get(0));
+            }
+        } else {
+            // 如果没有提取到人名，提取query中最有意义的中文词汇（2-4个字）
+            Pattern pattern = Pattern.compile("[\\u4e00-\\u9fa5]{2,4}");
+            Matcher matcher = pattern.matcher(query);
             while (matcher.find()) {
                 String word = matcher.group();
                 // 跳过常见无意义词
                 if (!word.contains("关于") && !word.contains("结合") && !word.contains("请") 
-                    && !word.contains("需要") && !word.contains("什么") && !word.contains("哪些")) {
-                    keywords.append(word);
+                    && !word.contains("需要") && !word.contains("什么") && !word.contains("哪些")
+                    && !word.contains("总结") && !word.contains("介绍") && !word.contains("根据")) {
+                    if (keywords.length() == 0) {
+                        keywords.append(word);
+                    }
                     break;
                 }
             }
-        }
-        
-        // 3. 添加相关后缀（针对不同类型的查询）
-        if (query.contains("工作") || query.contains("经历")) {
-            keywords.append(" 工作 经历");
-        } else if (query.contains("项目") || query.contains("经验")) {
-            keywords.append(" 项目 经验");
-        } else if (query.contains("简历") || query.contains("个人")) {
-            keywords.append(" 简历 个人");
+            
+            // 添加相关后缀（针对不同类型的查询）
+            if (!entities.isEmpty() && keywords.length() > 0) {
+                keywords.append(" ").append(entities.get(0));
+            } else if (query.contains("工作") || query.contains("经历")) {
+                keywords.append(" 工作 经历");
+            } else if (query.contains("项目") || query.contains("经验")) {
+                keywords.append(" 项目 经验");
+            } else if (query.contains("简历") || query.contains("个人")) {
+                keywords.append(" 简历 个人");
+            }
         }
         
         String result = keywords.toString().trim();
-        return result.isEmpty() ? query : result;
+        
+        // 4. 如果提取结果太短，使用原始查询
+        if (result.length() < 2) {
+            log.info("关键词提取结果为空，使用原始Query");
+            return query;
+        }
+        
+        log.info("关键词提取完成，优化后Query: {}", result);
+        return result;
     }
 
     /**

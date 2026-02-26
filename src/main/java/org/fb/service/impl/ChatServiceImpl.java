@@ -3,6 +3,7 @@ package org.fb.service.impl;
 import org.fb.constant.BusinessConstant;
 import org.fb.service.ChatSaveService;
 import org.fb.service.ChatService;
+import org.fb.service.KnowledgeBaseRetrievalService;
 import org.fb.service.assistant.*;
 import org.fb.tools.QdrantOperationTools;
 import org.slf4j.Logger;
@@ -46,6 +47,9 @@ public class ChatServiceImpl implements ChatService {
 
     @Autowired
     private QdrantOperationTools qdrantOperationTools;
+
+    @Autowired
+    private KnowledgeBaseRetrievalService knowledgeBaseRetrievalService;
 
     @Override
     public String chat(Long memoryId, String message) {
@@ -96,6 +100,15 @@ public class ChatServiceImpl implements ChatService {
         // 解析AI返回的JSON结果，提取intent字段
         String intent = extractIntent(aiResponse);
         log.info("最终解析出的意图类型：{}", intent);
+        
+        // 如果解析为 rag_retrieval，优先处理
+        if (BusinessConstant.RAG_RETRIEVAL_TYPE.equals(intent)) {
+            log.info("识别为 RAG 知识库检索类型，直接调用知识库检索服务");
+            String result = knowledgeBaseRetrievalService.searchKnowledgeBase(userMessage);
+            saveChatInfo(memoryId, userMessage, BusinessConstant.RAG_RETRIEVAL_TYPE);
+            return result;
+        }
+        
         log.info("========== processByUserMeanings 方法完成 ==========\n");
 
         // 根据解析出的intent确定聊天类型
@@ -222,7 +235,9 @@ public class ChatServiceImpl implements ChatService {
 
         // 如果JSON解析失败，使用旧的方式进行兼容（兜底策略）
         String lowerResponse = aiResponse.toLowerCase();
-        if (lowerResponse.contains(BusinessConstant.MEDICAL_TYPE)) {
+        if (lowerResponse.contains(BusinessConstant.RAG_RETRIEVAL_TYPE)) {
+            return BusinessConstant.RAG_RETRIEVAL_TYPE;
+        } else if (lowerResponse.contains(BusinessConstant.MEDICAL_TYPE)) {
             return BusinessConstant.MEDICAL_TYPE;
         } else if (lowerResponse.contains(BusinessConstant.TRANSLATION_TYPE)) {
             return BusinessConstant.TRANSLATION_TYPE;
