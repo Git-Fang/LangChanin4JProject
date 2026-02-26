@@ -189,9 +189,6 @@ public class KnowledgeBaseRetrievalService {
         // 常见的人名模式
         String[] namePatterns = {"方彪", "张三", "李四", "王五", "赵六", "钱七", "孙八", "周九", "吴十"};
         
-        // 常见关键词后缀
-        String[] suffixes = {"简历", "个人", "项目", "经历", "经验", "工作", "履历", "背景", "简介", "介绍"};
-        
         StringBuilder keywords = new StringBuilder();
         
         // 1. 首先检查是否包含人名
@@ -218,8 +215,10 @@ public class KnowledgeBaseRetrievalService {
             }
         }
         
-        // 3. 添加项目相关后缀（针对个人项目经历查询）
-        if (query.contains("项目") || query.contains("经历") || query.contains("经验")) {
+        // 3. 添加相关后缀（针对不同类型的查询）
+        if (query.contains("工作") || query.contains("经历")) {
+            keywords.append(" 工作 经历");
+        } else if (query.contains("项目") || query.contains("经验")) {
             keywords.append(" 项目 经验");
         } else if (query.contains("简历") || query.contains("个人")) {
             keywords.append(" 简历 个人");
@@ -265,13 +264,23 @@ public class KnowledgeBaseRetrievalService {
             result.append(qdrantResult).append("\n\n");
             log.info("Qdrant找到个人信息");
         } else {
-            // 如果精简Query失败，尝试只用人名
-            log.info("精简Query未命中，尝试仅用人名检索...");
-            qdrantResult = searchFromQdrant(name);
+            // 尝试工作经历相关的查询
+            log.info("项目经验Query未命中，尝试工作经历检索...");
+            String workExperienceQuery = name + " 工作 经历";
+            qdrantResult = searchFromQdrant(workExperienceQuery);
             if (qdrantResult != null && !qdrantResult.contains("查无相关数据")) {
                 result.append("【Qdrant向量库个人信息】\n");
                 result.append(qdrantResult).append("\n\n");
-                log.info("Qdrant找到个人信息(仅人名)");
+                log.info("Qdrant找到个人信息(工作经历)");
+            } else {
+                // 如果精简Query失败，尝试只用人名
+                log.info("工作经历Query未命中，尝试仅用人名检索...");
+                qdrantResult = searchFromQdrant(name);
+                if (qdrantResult != null && !qdrantResult.contains("查无相关数据")) {
+                    result.append("【Qdrant向量库个人信息】\n");
+                    result.append(qdrantResult).append("\n\n");
+                    log.info("Qdrant找到个人信息(仅人名)");
+                }
             }
         }
         
