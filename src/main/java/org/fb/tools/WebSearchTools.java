@@ -6,28 +6,37 @@ import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 
-import java.util.ArrayList;
-import java.util.List;
-
 /**
  * 网络搜索工具类
- * 使用 DuckDuckGo Instant Answer API 进行网络搜索
- * 免费、无需 API Key
+ * 使用 Tavily Search API 进行网络搜索
+ * 支持实时信息查询、新闻追踪等
  */
 @Component
 public class WebSearchTools {
     private static final Logger log = LoggerFactory.getLogger(WebSearchTools.class);
 
-    private static final String DDG_API_URL = "https://api.duckduckgo.com/";
+    private static final String TAVILY_API_URL = "https://api.tavily.com/search";
     
-    @Autowired
-    private WebClient.Builder webClientBuilder;
+    @Value("${TAVILY_API_KEY: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}")
+    private String tavilyApiKey;
     
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    @Value("${ai.tavily.max-results:8}")
+    private int maxResults;
+    
+    private final WebClient webClient;
+    private final ObjectMapper objectMapper;
+
+    public WebSearchTools() {
+        this.webClient = WebClient.builder()
+                .defaultHeader("Content-Type", "application/json")
+                .build();
+        this.objectMapper = new ObjectMapper();
+    }
 
     /**
      * 执行网络搜索
@@ -41,17 +50,27 @@ public class WebSearchTools {
         log.info("========== WebSearchTools.webSearch 开始 ==========");
         log.info("【搜索关键词】: {}", searchQuery);
 
-        try {
-            // 使用 DuckDuckGo Instant Answer API
-            String apiUrl = DDG_API_URL + "?q=" + java.net.URLEncoder.encode(searchQuery, "UTF-8") 
-                    + "&format=json&no_html=1&skip_disambig=1&ia=web";
-            
-            log.info("【API URL】: {}", apiUrl);
+        // 检查 API Key 是否配置
+        if (tavilyApiKey == null || tavilyApiKey.isEmpty()) {
+            log.error("【错误】Tavily API Key 未配置，请检查配置项 ai.tavily.apiKey");
+            return "网络搜索服务未配置，请联系管理员配置 Tavily API Key。\n\n" +
+                   "提示: 需要配置环境变量 TAVILY_API_KEY 或在配置文件中设置 ai.tavily.apiKey";
+        }
 
-            String response = webClientBuilder.build()
-                    .get()
-                    .uri(apiUrl)
-                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+        try {
+            // 构建请求体
+            String requestBody = String.format(
+                    "{\"query\": \"%s\", \"max_results\": %d, \"include_answer\": true, \"include_raw_content\": false}",
+                    searchQuery.replace("\"", "\\\""), maxResults
+            );
+            
+            log.info("【API URL】: {}", TAVILY_API_URL);
+
+            String response = webClient.post()
+                    .uri(TAVILY_API_URL)
+                    .header("Authorization", "Bearer " + tavilyApiKey)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .bodyValue(requestBody)
                     .retrieve()
                     .bodyToMono(String.class)
                     .block();
@@ -71,38 +90,52 @@ public class WebSearchTools {
     }
 
     /**
-     * 解析 DuckDuckGo API 返回的 JSON 结果
+     * 解析 Tavily API 返回的 JSON 结果
      */
     private String parseSearchResults(String jsonResponse, String searchQuery) {
         try {
             JsonNode rootNode = objectMapper.readTree(jsonResponse);
             
-            // 检查是否有即时答案（Instant Answer）
-            JsonNode abstractNode = rootNode.path("AbstractText");
-            if (!abstractNode.isMissingNode() && !abstractNode.asText().isEmpty()) {
-                String abstractText = abstractNode.asText();
-                String abstractSource = rootNode.path("AbstractSource").asText("未知来源");
+            // 检查是否有错误
+            if (rootNode.has("error")) {
+                String errorMsg = rootNode.path("error").asText("未知错误");
+                log.error("【Tavily API 错误】: {}", errorMsg);
+                return "网络搜索服务返回错误: " + errorMsg;
+            }
+
+            // 检查是否有即时答案（Answer）
+            JsonNode answerNode = rootNode.path("answer");
+            if (!answerNode.isMissingNode() && !answerNode.asText().isEmpty()) {
+                String answerText = answerNode.asText();
                 
-                log.info("【即时答案】: {}", abstractText.substring(0, Math.min(100, abstractText.length())));
+                log.info("【即时答案】: {}", answerText.substring(0, Math.min(100, answerText.length())));
                 
                 StringBuilder result = new StringBuilder();
-                result.append("【即时答案】\n");
-                result.append(abstractText).append("\n\n");
-                result.append("来源: ").append(abstractSource).append("\n");
+                result.append("【搜索答案】\n");
+                result.append(answerText).append("\n\n");
                 
-                // 如果有相关主题，也添加进去
-                JsonNode relatedTopics = rootNode.path("RelatedTopics");
-                if (!relatedTopics.isMissingNode() && relatedTopics.isArray() && relatedTopics.size() > 0) {
-                    result.append("\n【相关链接】\n");
+                // 添加搜索结果
+                JsonNode resultsNode = rootNode.path("results");
+                if (!resultsNode.isMissingNode() && resultsNode.isArray() && resultsNode.size() > 0) {
+                    result.append("【相关链接】\n");
                     int count = 0;
-                    for (JsonNode topic : relatedTopics) {
-                        if (count >= 5) break;
-                        String text = topic.path("Text").asText();
-                        String url = topic.path("Url").asText();
-                        if (!text.isEmpty() && !url.isEmpty()) {
-                            result.append("- ").append(text).append("\n");
-                            result.append("  链接: ").append(url).append("\n");
-                            count++;
+                    for (JsonNode resultItem : resultsNode) {
+                        if (count >= maxResults) break;
+                        
+                        String title = resultItem.path("title").asText();
+                        String url = resultItem.path("url").asText();
+                        String content = resultItem.path("content").asText();
+                        
+                        if (!title.isEmpty() && !url.isEmpty()) {
+                            result.append("【结果").append(++count).append("】\n");
+                            result.append("标题: ").append(title).append("\n");
+                            result.append("链接: ").append(url).append("\n");
+                            if (!content.isEmpty()) {
+                                result.append("摘要: ").append(content.substring(0, Math.min(200, content.length())));
+                                if (content.length() > 200) result.append("...");
+                                result.append("\n");
+                            }
+                            result.append("\n");
                         }
                     }
                 }
@@ -110,33 +143,37 @@ public class WebSearchTools {
                 return result.toString();
             }
 
-            // 如果没有即时答案，解析 RelatedTopics
-            JsonNode relatedTopics = rootNode.path("RelatedTopics");
-            if (!relatedTopics.isMissingNode() && relatedTopics.isArray() && relatedTopics.size() > 0) {
+            // 如果没有即时答案，解析 results 数组
+            JsonNode resultsNode = rootNode.path("results");
+            if (!resultsNode.isMissingNode() && resultsNode.isArray() && resultsNode.size() > 0) {
                 StringBuilder result = new StringBuilder();
                 result.append("搜索关键词: ").append(searchQuery).append("\n\n");
                 result.append("【搜索结果】\n");
                 
                 int count = 0;
-                int maxResults = 8;
-                
-                for (JsonNode topic : relatedTopics) {
+                for (JsonNode resultItem : resultsNode) {
                     if (count >= maxResults) break;
                     
-                    String text = topic.path("Text").asText();
-                    String url = topic.path("Url").asText();
+                    String title = resultItem.path("title").asText();
+                    String url = resultItem.path("url").asText();
+                    String content = resultItem.path("content").asText();
                     
                     // 跳过空条目
-                    if (text.isEmpty() || url.isEmpty()) continue;
+                    if (title.isEmpty() && url.isEmpty()) continue;
                     
-                    // DuckDuckGo 相关主题通常以 "T" 开头的图标，筛选掉
-                    if (text.startsWith("T ")) continue;
-                    
-                    log.info("【结果{}】: {} - {}", count + 1, text, url);
+                    log.info("【结果{}】: {} - {}", count + 1, title, url);
                     
                     result.append("【结果").append(++count).append("】\n");
-                    result.append(text).append("\n");
-                    result.append("链接: ").append(url).append("\n\n");
+                    if (!title.isEmpty()) {
+                        result.append("标题: ").append(title).append("\n");
+                    }
+                    result.append("链接: ").append(url).append("\n");
+                    if (!content.isEmpty()) {
+                        result.append("摘要: ").append(content.substring(0, Math.min(200, content.length())));
+                        if (content.length() > 200) result.append("...");
+                        result.append("\n");
+                    }
+                    result.append("\n");
                 }
                 
                 if (count == 0) {
