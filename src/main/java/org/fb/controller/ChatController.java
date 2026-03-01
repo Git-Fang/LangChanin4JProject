@@ -9,6 +9,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import org.fb.bean.ChatForm;
 import org.fb.bean.MessageDTO;
 import org.fb.service.ChatService;
+import org.fb.service.DynamicChatService;
 import org.fb.tools.MongoChatMemoryStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,31 +32,50 @@ public class ChatController {
     private ChatService chatService;
 
     @Autowired
+    private DynamicChatService dynamicChatService;
+
+    @Autowired
     private MongoChatMemoryStore mongoChatMemoryStore;
 
-    @Operation(summary = "智能对话（同步）", description = "传统的同步对话方式，请求后会阻塞等待AI响应(2-5秒)")
+    @Operation(summary = "智能对话（同步）", description = "传统的同步对话方式，支持动态模型切换")
     @PostMapping("/chat")
     public String chat(@RequestBody ChatForm chatForm) {
         Long memoryId = chatForm.getMemoryId();
         String userMessage = chatForm.getMessage();
         java.util.List<String> extractedTexts = chatForm.getExtractedTexts();
+        String modelId = chatForm.getModelId();
 
-        log.info("收到聊天请求，memoryId：{}，用户消息：{}", memoryId, userMessage);
+        log.info("==================== 聊天请求开始 ====================");
+        log.info("【聊天请求】memoryId={}, 模型ID={}, 用户消息={}", 
+                memoryId, 
+                modelId != null ? modelId : "(默认)",
+                userMessage != null && userMessage.length() > 50 ? userMessage.substring(0, 50) + "..." : userMessage);
+        
         if (extractedTexts != null && !extractedTexts.isEmpty()) {
-            log.info("附带文件提取内容数量: {}", extractedTexts.size());
+            log.info("【聊天请求】附带文件提取内容数量: {}", extractedTexts.size());
         }
 
         try {
             String fullMessage = buildFullMessage(userMessage, extractedTexts);
-            System.out.println("\n=== ChatController.chat 开始调用 chatService.chat ===");
-            System.out.println("memoryId：" + memoryId);
-            System.out.println("userMessage：" + fullMessage);
-            String result = chatService.chat(memoryId, fullMessage);
-            System.out.println("chatService.chat 返回结果：" + result);
-            System.out.println("=== ChatController.chat 调用 chatService.chat 完成 ===\n");
+            
+            // 如果指定了模型ID，使用动态路由
+            String result;
+            if (modelId != null && !modelId.isEmpty()) {
+                log.info("【聊天请求】使用动态聊天服务，模型: {}", modelId);
+                result = dynamicChatService.chat(memoryId, fullMessage, modelId);
+            } else {
+                log.info("【聊天请求】使用默认聊天服务");
+                result = chatService.chat(memoryId, fullMessage);
+            }
+            
+            log.info("【聊天响应】结果长度: {}", result != null ? result.length() : 0);
+            log.info("==================== 聊天请求完成 ====================");
+            
             return result;
         } catch (Exception e) {
-            log.error("对话处理异常, memoryId={}, message={}, error={}", memoryId, userMessage, e.getMessage(), e);
+            log.error("【聊天异常】memoryId={}, modelId={}, message={}, error={}", 
+                    memoryId, modelId, userMessage, e.getMessage(), e);
+            log.info("==================== 聊天请求异常结束 ====================");
             return "抱歉，处理您的请求时出现了异常，请稍后重试。";
         }
     }

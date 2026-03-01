@@ -1027,6 +1027,90 @@
             0%, 100% { opacity: 1; }
             50% { opacity: 0.7; }
         }
+
+        /* 模型选择器样式 */
+        .model-selector {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .model-selector label {
+            font-size: 13px;
+            color: #666;
+        }
+
+        .model-selector select {
+            padding: 6px 12px;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 13px;
+            background-color: white;
+            color: #333;
+            cursor: pointer;
+            outline: none;
+            transition: border-color 0.2s;
+            min-width: 120px;
+        }
+
+        .model-selector select:hover {
+            border-color: #667eea;
+        }
+
+        .model-selector select:focus {
+            border-color: #667eea;
+            box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+        }
+
+        .model-badge {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+
+        .model-badge.deepseek {
+            background-color: #1e3a5f;
+            color: #00bcd4;
+        }
+
+        .model-badge.qwen {
+            background-color: #fff3e0;
+            color: #ff9800;
+        }
+
+        .model-badge.ollama {
+            background-color: #e8f5e9;
+            color: #4caf50;
+        }
+
+        .model-badge.kimi {
+            background-color: #fce4ec;
+            color: #e91e63;
+        }
+
+        .refresh-model-btn {
+            padding: 4px 8px;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            background-color: white;
+            color: #666;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s;
+        }
+
+        .refresh-model-btn:hover {
+            background-color: #f0f0f0;
+            border-color: #667eea;
+            color: #667eea;
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
     </style>
 </head>
 <body>
@@ -1084,6 +1168,16 @@
             <div class="chat-header">
                 <div class="mode-indicator">
                     当前模式: <span class="mode-badge http" id="modeBadge">HTTP</span>
+                </div>
+                <div class="header-right">
+                    <!-- 模型选择器 -->
+                    <div class="model-selector">
+                        <label for="modelSelect">AI模型:</label>
+                        <select id="modelSelect" onchange="handleModelChange()">
+                            <option value="">加载中...</option>
+                        </select>
+                        <button class="refresh-model-btn" onclick="refreshModels()" title="刷新模型列表">🔄</button>
+                    </div>
                 </div>
             </div>
             
@@ -1170,6 +1264,8 @@
     <script>
         // 全局状态
         let currentMode = 'http'; // 'http' 或 'sse'
+        let currentModelId = ''; // 当前选中的模型ID
+        let availableModels = []; // 可用模型列表
         let memoryId = null;
         let eventSource = null;
         let sessionId = null;
@@ -1195,6 +1291,88 @@
             console.log('初始化memoryId:', memoryId);
         }
         initMemoryId();
+
+        // 初始化模型列表
+        async function initModels() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/model/list`);
+                const result = await response.json();
+                
+                if (result.code === 200 && result.data) {
+                    availableModels = result.data;
+                    updateModelSelector();
+                    
+                    // 尝试恢复之前选择的模型
+                    const savedModelId = localStorage.getItem('selectedModelId');
+                    if (savedModelId && availableModels.some(m => m.modelId === savedModelId)) {
+                        currentModelId = savedModelId;
+                        document.getElementById('modelSelect').value = savedModelId;
+                    } else if (availableModels.length > 0) {
+                        // 默认选择第一个模型
+                        currentModelId = availableModels[0].modelId;
+                        document.getElementById('modelSelect').value = currentModelId;
+                    }
+                }
+            } catch (error) {
+                console.error('获取模型列表失败:', error);
+            }
+        }
+        initModels();
+
+        // 更新模型选择器
+        function updateModelSelector() {
+            const select = document.getElementById('modelSelect');
+            select.innerHTML = '';
+            
+            if (availableModels.length === 0) {
+                const option = document.createElement('option');
+                option.value = '';
+                option.textContent = '暂无可用模型';
+                select.appendChild(option);
+                return;
+            }
+
+            availableModels.forEach(model => {
+                const option = document.createElement('option');
+                option.value = model.modelId;
+                option.textContent = model.displayName + (model.enabled ? '' : ' (已禁用)');
+                option.disabled = !model.enabled;
+                select.appendChild(option);
+            });
+        }
+
+        // 处理模型切换
+        function handleModelChange() {
+            const select = document.getElementById('modelSelect');
+            currentModelId = select.value;
+            
+            // 保存到localStorage
+            localStorage.setItem('selectedModelId', currentModelId);
+            
+            // 显示提示
+            const selectedModel = availableModels.find(m => m.modelId === currentModelId);
+            if (selectedModel) {
+                console.log('已切换模型:', selectedModel.displayName);
+            }
+        }
+
+        // 刷新模型列表
+        async function refreshModels() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/model/refresh`, {
+                    method: 'POST'
+                });
+                const result = await response.json();
+                
+                if (result.code === 200) {
+                    // 重新获取模型列表
+                    await initModels();
+                    console.log('模型列表已刷新');
+                }
+            } catch (error) {
+                console.error('刷新模型列表失败:', error);
+            }
+        }
 
         // API 配置 - 使用动态地址以支持手机端和不同网络环境访问
         const getApiBaseUrl = () => {
@@ -1909,16 +2087,28 @@
                     loadingDiv._controller = controller;
                     const timeoutId = setTimeout(() => controller.abort(), 300000);
 
+                    // 构建请求参数，包含模型ID
+                    const requestBody = {
+                        memoryId: memoryId,
+                        message: message,
+                        extractedTexts: extractedTexts.length > 0 ? extractedTexts : null
+                    };
+                    
+                    // 如果选择了模型，添加模型ID
+                    if (currentModelId) {
+                        requestBody.modelId = currentModelId;
+                    }
+                    
+                    // 显示当前使用的模型
+                    const currentModel = availableModels.find(m => m.modelId === currentModelId);
+                    console.log('发送请求，使用模型:', currentModel ? currentModel.displayName : '默认');
+
                     const initResponse = await fetch(`${API_BASE_URL}/xiaozhi/chat/http-stream`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
                         },
-                        body: JSON.stringify({
-                            memoryId: memoryId,
-                            message: message,
-                            extractedTexts: extractedTexts.length > 0 ? extractedTexts : null
-                        }),
+                        body: JSON.stringify(requestBody),
                         signal: controller.signal
                     });
 

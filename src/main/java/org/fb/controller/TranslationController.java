@@ -1,8 +1,10 @@
 package org.fb.controller;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.fb.bean.ChatForm;
+import org.fb.service.DynamicChatService;
 import org.fb.service.assistant.ChatAssistant;
 import org.fb.service.assistant.ChatAssistantStream;
 import org.fb.service.assistant.TermExtractionAgent;
@@ -37,6 +39,9 @@ public class TranslationController {
 
     @Autowired
     private QdrantOperationTools qdrantOperationTools;
+
+    @Autowired
+    private DynamicChatService dynamicChatService;
 
     @GetMapping(value = "/chat")
     @Operation(summary = "1-增强式对话")
@@ -84,9 +89,19 @@ public class TranslationController {
     }
 
     @GetMapping(value = "/rag03/trans")
-    @Operation(summary = "3-翻译对话")
-    public Object trans(@RequestParam("content") String content) throws IOException {
+    @Operation(summary = "3-翻译对话", description = "支持动态模型切换")
+    public Object trans(
+            @RequestParam("content") String content,
+            @Parameter(description = "模型ID") @RequestParam(value = "modelId", required = false) String modelId) {
         try {
+            log.info("开始翻译 - content: {}, modelId: {}", content, modelId);
+            
+            // 如果指定了模型ID，使用动态翻译服务
+            if (modelId != null && !modelId.isEmpty()) {
+                String result = dynamicChatService.translate(content, modelId);
+                return result;
+            }
+            
             return translaterService.translate(content);
         } catch (Exception e) {
             log.error("当前翻译出错：", e);
@@ -112,14 +127,23 @@ public class TranslationController {
     }
 
     @GetMapping(value = "/correctAndTranslate")
-    @Operation(summary = "5-术语纠正式翻译")
+    @Operation(summary = "5-术语纠正式翻译", description = "支持动态模型切换")
     public Object correctAndTranslate(
             @RequestParam("content") String content,
-            @RequestParam(value = "targetLanguage", defaultValue = "英文") String targetLanguage) {
+            @Parameter(description = "目标语言") @RequestParam(value = "targetLanguage", defaultValue = "英文") String targetLanguage,
+            @Parameter(description = "模型ID") @RequestParam(value = "modelId", required = false) String modelId) {
         try {
-            log.info("开始术语纠翻译: {} -> {}", content, targetLanguage);
+            log.info("开始术语纠翻译: {} -> {}, modelId: {}", content, targetLanguage, modelId);
             String userMessage = "翻译成" + targetLanguage + "：" + content;
-            String result = translaterService.translate(userMessage);
+            
+            // 如果指定了模型ID，使用动态翻译服务
+            String result;
+            if (modelId != null && !modelId.isEmpty()) {
+                result = dynamicChatService.translate(userMessage, modelId);
+            } else {
+                result = translaterService.translate(userMessage);
+            }
+            
             log.info("术语纠翻译完成: {}", result);
             return result;
         } catch (Exception e) {

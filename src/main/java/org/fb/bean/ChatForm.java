@@ -10,6 +10,12 @@ public class ChatForm {
 
    private List<String> extractedTexts;
 
+   /**
+    * 使用的模型ID (deepseek, qwen, ollama, kimi)
+    * 如果为空则使用默认模型
+    */
+   private String modelId;
+
    public Long getMemoryId() {
        return memoryId;
    }
@@ -31,6 +37,14 @@ public class ChatForm {
    }
 
    public void setExtractedTexts(List<String> extractedTexts) {
-       this.extractedTexts = extractedTexts;
+        this.extractedTexts = extractedTexts;
+   }
+
+   public String getModelId() {
+        return modelId;
+   }
+
+   public void setModelId(String modelId) {
+        this.modelId = modelId;
    }
 }

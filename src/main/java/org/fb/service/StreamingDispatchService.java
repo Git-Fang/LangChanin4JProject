@@ -2,12 +2,16 @@ package org.fb.service;
 
 import dev.langchain4j.memory.chat.ChatMemoryProvider;
 import lombok.extern.slf4j.Slf4j;
+import org.fb.bean.ChatModelInfo;
+import org.fb.config.DynamicStreamingChatModel;
+import org.fb.config.ModelRegistry;
 import org.fb.constant.BusinessConstant;
 import org.fb.engine.IntentRecognitionEngine;
 import org.fb.service.assistant.*;
 import org.fb.service.impl.NL2SQLService;
 import org.fb.tools.QdrantOperationTools;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 
@@ -57,18 +61,60 @@ public class StreamingDispatchService {
 
     @Autowired
     private IntentRecognitionEngine intentRecognitionEngine;
+    
+    @Autowired(required = false)
+    private ModelRegistry modelRegistry;
+    
+    @Autowired(required = false)
+    @Qualifier("dynamicStreamingChatModel")
+    private DynamicStreamingChatModel dynamicStreamingChatModel;
 
     /**
-     * 流式处理用户消息
-     * 包含意图识别和业务分发逻辑
+     * 流式处理用户消息（不支持模型切换）
      *
      * @param memoryId 会话ID
      * @param userMessage 用户消息
      * @return 内容块的Flux流
        */
     public Flux<String> chat(Long memoryId, String userMessage) {
+        return chat(memoryId, userMessage, null);
+    }
+
+    /**
+     * 流式处理用户消息（支持动态模型切换）
+     * 包含意图识别和业务分发逻辑
+     *
+     * @param memoryId 会话ID
+     * @param userMessage 用户消息
+     * @param modelId 模型ID（可选，用于动态模型切换）
+     * @return 内容块的Flux流
+       */
+    public Flux<String> chat(Long memoryId, String userMessage, String modelId) {
+        // 解析模型ID
+        String actualModelId = resolveModelId(modelId);
+        ChatModelInfo modelInfo = modelRegistry != null ? modelRegistry.getModel(actualModelId) : null;
+        
         log.info("========== StreamingDispatchService 开始处理 ==========");
-        log.info("memoryId: {}, userMessage: {}", memoryId, userMessage);
+        log.info("memoryId: {}, userMessage: {}, 模型ID: {}", memoryId, userMessage, actualModelId);
+        
+        // 设置动态模型
+        if (dynamicStreamingChatModel != null && actualModelId != null) {
+            dynamicStreamingChatModel.setCurrentModel(actualModelId);
+            log.info("【动态模型切换】已设置当前模型为: {} ({})", 
+                    actualModelId,
+                    modelInfo != null ? modelInfo.getDisplayName() : "未知");
+        } else if (dynamicStreamingChatModel != null) {
+            dynamicStreamingChatModel.setCurrentModel("qwen");
+            log.warn("【动态模型切换】未指定模型，使用默认: qwen");
+        }
+        
+        // 记录模型切换日志
+        if (modelId != null && !modelId.isEmpty()) {
+            log.info("【模型切换】使用模型: {} ({}) 进行流式聊天", 
+                    modelInfo != null ? modelInfo.getDisplayName() : actualModelId,
+                    modelInfo != null ? modelInfo.getProvider() : "未知");
+        }
+        
         long overallStartTime = System.currentTimeMillis();
 
         // 第一步：使用规则引擎进行意图识别
@@ -395,5 +441,30 @@ public class StreamingDispatchService {
         }
 
         return BusinessConstant.DEFAULT_TYPE;
+    }
+    
+    /**
+     * 解析最终的模型ID
+     * 如果传入的modelId为空或不可用，使用默认模型
+     */
+    private String resolveModelId(String modelId) {
+        if (modelRegistry == null) {
+            log.warn("【模型解析】ModelRegistry 未注入，使用默认");
+            return null;
+        }
+        
+        if (modelId == null || modelId.isEmpty()) {
+            String defaultModelId = modelRegistry.getDefaultModelId();
+            log.warn("【模型解析】未指定模型，使用默认模型: {}", defaultModelId);
+            return defaultModelId;
+        }
+        
+        if (!modelRegistry.isModelAvailable(modelId)) {
+            log.warn("【模型解析】指定的模型 {} 不可用，切换到默认模型", modelId);
+            return modelRegistry.getDefaultModelId();
+        }
+        
+        log.info("【模型解析】成功解析模型ID: {}", modelId);
+        return modelId;
     }
 }

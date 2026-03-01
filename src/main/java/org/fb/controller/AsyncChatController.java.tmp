@@ -171,7 +171,6 @@ public class AsyncChatController implements EnvironmentAware {
         return response;
     }
 
-
     private String buildFullMessage(String userMessage, java.util.List<String> extractedTexts) {
         if (extractedTexts == null || extractedTexts.isEmpty()) {
             return userMessage;
@@ -1188,45 +1187,30 @@ flux.publishOn(Schedulers.boundedElastic())
     }
     
     @PostMapping("/chat/http-stream")
-    @Operation(summary = "HTTP流式聊天", description = "通过POST发送消息，SSE流式返回结果，支持动态模型切换")
+    @Operation(summary = "HTTP流式聊天", description = "通过POST发送消息，SSE流式返回结果")
     public Map<String, Object> startHttpStreamChat(@RequestBody ChatForm chatForm) {
         Long memoryId = chatForm.getMemoryId();
         String userMessage = chatForm.getMessage();
         java.util.List<String> extractedTexts = chatForm.getExtractedTexts();
-        String modelId = chatForm.getModelId();
 
-        log.info("==================== HTTP Stream 请求开始 ====================");
-        log.info("【HTTP Stream】memoryId: {}, 模型ID: {}, 用户消息: {}", 
-                memoryId, 
-                modelId != null ? modelId : "(默认)",
-                userMessage != null && userMessage.length() > 50 ? userMessage.substring(0, 50) + "..." : userMessage);
-        
+        log.info("收到HTTP流式聊天请求, memoryId: {}, message: {}", memoryId, userMessage);
         if (extractedTexts != null && !extractedTexts.isEmpty()) {
-            log.info("【HTTP Stream】附带文件提取内容数量: {}", extractedTexts.size());
-        }
-
-        // 记录模型切换日志
-        if (modelId != null && !modelId.isEmpty()) {
-            log.info("【模型切换】HTTP Stream 使用模型: {}", modelId);
+            log.info("附带文件提取内容数量: {}", extractedTexts.size());
         }
 
         String fullMessage = buildFullMessage(userMessage, extractedTexts);
         String requestId = "http_" + System.currentTimeMillis() + "_" + Thread.currentThread().getId();
 
         try {
-            // 创建请求消息，传入 modelId
-            ChatRequestMessage request = ChatRequestMessage.create(memoryId, fullMessage, modelId);
+            ChatRequestMessage request = ChatRequestMessage.create(memoryId, fullMessage);
             String requestJson = objectMapper.writeValueAsString(request);
             boolean redisSaved = safeSetRedisValue("chat:request:" + requestId, requestJson, RESULT_TTL);
             safeSetRedisValue(STREAM_CACHE_PREFIX + requestId, "", RESULT_TTL);
             
-            // 保存到内存缓存
-            memoryCache.put(requestId, request);
-            log.info("【HTTP Stream】请求数据已保存, requestId: {}, Redis保存: {}", requestId, redisSaved);
-            
             // 当Redis保存失败时，使用内存缓存作为降级方案
             if (!redisSaved) {
                 log.warn("Redis保存失败，使用内存缓存, requestId: {}", requestId);
+                memoryCache.put(requestId, request);
                 // 设置内存缓存过期时间（10分钟）
                 new Thread(() -> {
                     try {
@@ -1238,17 +1222,11 @@ flux.publishOn(Schedulers.boundedElastic())
                     }
                 }).start();
             }
-            
-            // 启动同步处理（传递 modelId）
-            if (isStandalone()) {
-                log.info("[Standalone模式] HTTP Stream 同步处理请求, modelId: {}", modelId);
-                processSynchronously(request, modelId);
-            }
         } catch (Exception e) {
-            log.error("保存请求数据失败, requestId: {}, modelId: {}", requestId, modelId, e);
+            log.error("保存请求数据失败, requestId: {}", requestId, e);
             // 异常时也使用内存缓存作为降级方案
             try {
-                ChatRequestMessage request = ChatRequestMessage.create(memoryId, fullMessage, modelId);
+                ChatRequestMessage request = ChatRequestMessage.create(memoryId, fullMessage);
                 memoryCache.put(requestId, request);
                 log.warn("使用内存缓存作为降级方案, requestId: {}", requestId);
                 // 设置内存缓存过期时间（10分钟）
@@ -1270,7 +1248,6 @@ flux.publishOn(Schedulers.boundedElastic())
         response.put("requestId", requestId);
         response.put("streamUrl", "/xiaozhi/chat/http-stream/" + requestId);
 
-        log.info("==================== HTTP Stream 请求创建成功 ====================");
         return response;
     }
     
@@ -1295,7 +1272,6 @@ flux.publishOn(Schedulers.boundedElastic())
             ChatRequestMessage request = null;
             Long tempMemoryId = null;
             String tempMessage = null;
-            String tempModelId = null;
             
             if (requestJson == null) {
                 log.warn("请求数据不存在或Redis不可用, requestId: {}", requestId);
@@ -1305,7 +1281,6 @@ flux.publishOn(Schedulers.boundedElastic())
                     log.info("从内存缓存中获取请求数据, requestId: {}", requestId);
                     tempMemoryId = request.getMemoryId();
                     tempMessage = request.getMessage();
-                    tempModelId = request.getMetadata() != null ? request.getMetadata().getModelId() : null;
                 } else {
                     // 内存缓存也没有时，使用降级处理
                     log.warn("内存缓存也不存在，使用降级处理, requestId: {}", requestId);
@@ -1318,7 +1293,6 @@ flux.publishOn(Schedulers.boundedElastic())
                     request = objectMapper.readValue(requestJson, ChatRequestMessage.class);
                     tempMemoryId = request.getMemoryId();
                     tempMessage = request.getMessage();
-                    tempModelId = request.getMetadata() != null ? request.getMetadata().getModelId() : null;
                 } catch (Exception e) {
                     log.error("解析请求数据失败, requestId: {}", requestId, e);
                     // 解析失败时，尝试从内存缓存中获取
@@ -1327,7 +1301,6 @@ flux.publishOn(Schedulers.boundedElastic())
                         log.info("解析失败，从内存缓存中获取请求数据, requestId: {}", requestId);
                         tempMemoryId = request.getMemoryId();
                         tempMessage = request.getMessage();
-                        tempModelId = request.getMetadata() != null ? request.getMetadata().getModelId() : null;
                     } else {
                         // 内存缓存也没有时，使用降级处理
                         tempMemoryId = System.currentTimeMillis();
@@ -1346,20 +1319,14 @@ flux.publishOn(Schedulers.boundedElastic())
             // 声明为final变量，供lambda表达式使用
             final Long memoryId = tempMemoryId;
             final String message = tempMessage;
-            final String modelId = tempModelId;
 
-            // 记录模型切换日志
-            if (modelId != null && !modelId.isEmpty()) {
-                log.info("【模型切换】SSE流使用模型: {}", modelId);
-            }
-
-            if (streamingDispatchService != null) {
-                log.info("使用流式分发服务(意图识别+业务分发)处理HTTP请求, requestId: {}, modelId: {}", requestId, modelId);
+ if (streamingDispatchService != null) {
+                log.info("使用流式分发服务(意图识别+业务分发)处理HTTP请求, requestId: {}", requestId);
 
                 // 安全设置Redis值
                 safeSetRedisValue(STREAM_CACHE_PREFIX + requestId, "", RESULT_TTL);
 
-                Flux<String> flux = streamingDispatchService.chat(memoryId, message, modelId);
+                Flux<String> flux = streamingDispatchService.chat(memoryId, message);
 
                 AtomicReference<String> accumulated = new AtomicReference<>("");
                 AtomicReference<Long> startTime = new AtomicReference<>(System.currentTimeMillis());

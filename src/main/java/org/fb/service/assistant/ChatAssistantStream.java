@@ -1,5 +1,6 @@
 package org.fb.service.assistant;
 
+import org.fb.config.DynamicStreamingChatModel;
 import dev.langchain4j.service.MemoryId;
 import dev.langchain4j.service.SystemMessage;
 import dev.langchain4j.service.UserMessage;
@@ -14,9 +15,10 @@ import reactor.core.publisher.Flux;
  * 流式调用agent
  * 配置了 contentRetriever 自动进行 RAG 检索
  * 同时注入 tools 支持手动调用知识库检索工具
+ * 使用 DynamicStreamingChatModel 支持运行时模型切换
  * */
 @AiService(wiringMode = AiServiceWiringMode.EXPLICIT,
-        streamingChatModel = "streamingChatModel",
+        streamingChatModel = "dynamicStreamingChatModel",
         chatMemoryProvider = "chatMemoryProvider",
         contentRetriever = "contentRetriever",
         tools = {"knowledgeBaseRetrievalService", "commonTools", "personalDataTools", "mongoDBTools", "webSearchTools"}

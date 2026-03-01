@@ -13,6 +13,7 @@ import dev.langchain4j.model.embedding.onnx.allminilml6v2.AllMiniLmL6V2Embedding
 import dev.langchain4j.model.openai.OpenAiChatModel;
 import dev.langchain4j.model.openai.OpenAiStreamingChatModel;
 import dev.langchain4j.model.ollama.OllamaChatModel;
+import dev.langchain4j.model.ollama.OllamaStreamingChatModel;
 import dev.langchain4j.service.spring.AiService;
 import dev.langchain4j.service.spring.AiServiceWiringMode;
 import dev.langchain4j.store.embedding.EmbeddingStore;
@@ -73,6 +74,9 @@ public class LLMConfig {
     @Value("${ai.kimi.model:kimi-k2-turbo-preview}")
     private volatile String kimiModel;
 
+    @Value("${ai.kimi.apiKey:}")
+    private volatile String kimiApiKey;
+
     @Value("${ai.kimi.base-url:https://api.moonshot.cn/v1}")
     private volatile String kimiUrl;
 
@@ -97,8 +101,12 @@ public class LLMConfig {
     private volatile ChatModel qwenChatModel;
     private volatile ChatModel qwenVisionChatModel;
     private volatile StreamingChatModel streamingChatModel;
+    private volatile StreamingChatModel deepSeekStreamingChatModel;
+    private volatile StreamingChatModel ollamaStreamingChatModel;
+    private volatile StreamingChatModel kimiStreamingChatModel;
     private volatile ChatModel ollamaChatModel;
     private volatile ChatModel kimiChatModel;
+    private volatile DynamicStreamingChatModel dynamicStreamingChatModel;
 
     @PostConstruct
     public void init() {
@@ -110,9 +118,39 @@ public class LLMConfig {
         refreshQwenChatModel();
         refreshQwenVisionChatModel();
         refreshStreamingChatModel();
+        refreshDeepSeekStreamingChatModel();
+        refreshOllamaStreamingChatModel();
+        refreshKimiStreamingChatModel();
         refreshOllamaChatModel();
         refreshKimiChatModel();
+        refreshDynamicStreamingChatModel();
         log.info("All chat models refreshed successfully");
+    }
+    
+    /**
+     * 初始化动态流式模型代理
+     */
+    private void refreshDynamicStreamingChatModel() {
+        this.dynamicStreamingChatModel = new DynamicStreamingChatModel();
+        
+        // 注册各模型
+        if (streamingChatModel != null) {
+            dynamicStreamingChatModel.registerModel("qwen", streamingChatModel);
+        }
+        if (deepSeekStreamingChatModel != null) {
+            dynamicStreamingChatModel.registerModel("deepseek", deepSeekStreamingChatModel);
+        }
+        if (ollamaStreamingChatModel != null) {
+            dynamicStreamingChatModel.registerModel("ollama", ollamaStreamingChatModel);
+        }
+        if (kimiStreamingChatModel != null) {
+            dynamicStreamingChatModel.registerModel("kimi", kimiStreamingChatModel);
+        }
+        
+        // 设置默认模型
+        dynamicStreamingChatModel.setCurrentModel("qwen");
+        
+        log.info("【动态流式模型】初始化完成，已注册模型: {}", dynamicStreamingChatModel.getModels().keySet());
     }
 
     private void refreshDeepSeekChatModel() {
@@ -180,6 +218,52 @@ public class LLMConfig {
                     .build();
         }
     }
+    
+    private void refreshDeepSeekStreamingChatModel() {
+        if (deepSeekApiKey == null || deepSeekApiKey.isEmpty()) {
+            log.warn("DeepSeek API Key未配置，DeepSeek Streaming模型不可用");
+            this.deepSeekStreamingChatModel = null;
+        } else {
+            this.deepSeekStreamingChatModel = OpenAiStreamingChatModel.builder()
+                    .apiKey(deepSeekApiKey)
+                    .modelName(deepSeekModel)
+                    .baseUrl(deepSeekUrl)
+                    .logRequests(true)
+                    .logResponses(true)
+                    .timeout(READ_TIMEOUT)
+                    .build();
+            log.info("DeepSeek Streaming模型初始化成功: {}", deepSeekModel);
+        }
+    }
+    
+    private void refreshOllamaStreamingChatModel() {
+        this.ollamaStreamingChatModel = OllamaStreamingChatModel.builder()
+                .baseUrl(ollamaUrl)
+                .modelName(ollamaModel)
+                .temperature(0.8)
+                .timeout(READ_TIMEOUT)
+                .logRequests(true)
+                .logResponses(true)
+                .build();
+        log.info("Ollama Streaming模型初始化成功: {}", ollamaModel);
+    }
+    
+    private void refreshKimiStreamingChatModel() {
+        if (kimiApiKey == null || kimiApiKey.isEmpty()) {
+            log.warn("Kimi API Key未配置，Kimi Streaming模型不可用");
+            this.kimiStreamingChatModel = null;
+        } else {
+            this.kimiStreamingChatModel = OpenAiStreamingChatModel.builder()
+                    .apiKey(kimiApiKey)
+                    .modelName(kimiModel)
+                    .logRequests(true)
+                    .logResponses(true)
+                    .baseUrl(kimiUrl)
+                    .timeout(READ_TIMEOUT)
+                    .build();
+            log.info("Kimi Streaming模型初始化成功: {}", kimiModel);
+        }
+    }
 
     private void refreshOllamaChatModel() {
         this.ollamaChatModel = OllamaChatModel.builder()
@@ -193,18 +277,17 @@ public class LLMConfig {
     }
 
     private void refreshKimiChatModel() {
-        if (kimiModel == null || kimiModel.isEmpty()) {
+        if (kimiApiKey == null || kimiApiKey.isEmpty()) {
             log.warn("Kimi API Key未配置，Kimi模型不可用");
             this.kimiChatModel = null;
         } else {
             this.kimiChatModel = OpenAiChatModel.builder()
-                    .apiKey(kimiModel)
+                    .apiKey(kimiApiKey)
                     .modelName(kimiModel)
                     .logRequests(true)
                     .logResponses(true)
                     .baseUrl(kimiUrl)
                     .timeout(READ_TIMEOUT)
-                    .maxRetries(kimiMaxRetries)
                     .build();
         }
     }
@@ -232,6 +315,11 @@ public class LLMConfig {
     @Bean
     public StreamingChatModel streamingChatModel() {
         return streamingChatModel;
+    }
+    
+    @Bean(name = "dynamicStreamingChatModel")
+    public DynamicStreamingChatModel dynamicStreamingChatModel() {
+        return dynamicStreamingChatModel;
     }
 
     @Bean

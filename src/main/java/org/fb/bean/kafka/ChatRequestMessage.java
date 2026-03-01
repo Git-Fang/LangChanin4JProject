@@ -56,6 +56,7 @@ public class ChatRequestMessage implements Serializable {
         private String source;
         private Priority priority;
         private int retryCount;
+        private String modelId;  // 模型ID，用于动态模型切换
     }
     
     public enum Priority { LOW, NORMAL, HIGH, VIP }
@@ -71,6 +72,28 @@ public class ChatRequestMessage implements Serializable {
                         .source("api")
                         .priority(Priority.NORMAL)
                         .retryCount(0)
+                        .build())
+                .build();
+    }
+    
+    /**
+     * 创建带模型ID的请求消息
+     * @param memoryId 会话ID
+     * @param message 消息内容
+     * @param modelId 模型ID（可选，用于动态模型切换）
+     */
+    public static ChatRequestMessage create(Long memoryId, String message, String modelId) {
+        return ChatRequestMessage.builder()
+                .requestId(UUID.randomUUID().toString())
+                .memoryId(memoryId)
+                .message(message)
+                .timestamp(LocalDateTime.now())
+                .messageType(MessageType.CHAT)
+                .metadata(RequestMetadata.builder()
+                        .source("api")
+                        .priority(Priority.NORMAL)
+                        .retryCount(0)
+                        .modelId(modelId)
                         .build())
                 .build();
     }
