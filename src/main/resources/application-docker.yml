@@ -1,0 +1,214 @@
+server:
+  port: 8000
+  address: 0.0.0.0
+  servlet:
+    encoding:
+      charset: utf-8
+      force: true
+      enabled: true
+    context-parameters:
+      tomcat-servlet:
+        async-supported: true
+  tomcat:
+    connection-timeout: 180000
+    max-http-header-size: 65536
+    max-http-form-post-size: 100MB
+
+spring:
+  application:
+    name: RAGTranslationApplication
+  config:
+    import:
+      - optional:nacos:${spring.application.name}-${spring.profiles.active}.yml?group=DEFAULT_GROUP
+      - optional:nacos:${spring.application.name}.yml?group=DEFAULT_GROUP
+  web:
+    timeout: 240s
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 100MB
+
+  # MySQL数据库配置 - 支持环境变量覆盖
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    name: defaultDataSource
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://mysql:3306/mydocker?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true}
+    username: ${SPRING_DATASOURCE_USERNAME:root}
+    password: ${SPRING_DATASOURCE_PASSWORD:root}
+
+  # MongoDB配置 - 支持环境变量覆盖
+  data:
+    mongodb:
+      uri: ${SPRING_DATA_MONGODB_URI:mongodb://mongo:27017/chat_db}
+      metrics:
+        enabled: true
+
+  # Redis配置 - 支持环境变量覆盖
+  redis:
+    host: ${SPRING_REDIS_HOST:localhost}
+    port: ${SPRING_REDIS_PORT:6379}
+
+  # RabbitMQ配置 - 支持环境变量覆盖
+  rabbitmq:
+    host: ${SPRING_RABBITMQ_HOST:localhost}
+    port: ${SPRING_RABBITMQ_PORT:5672}
+    username: ${SPRING_RABBITMQ_USERNAME:admin}
+    password: ${SPRING_RABBITMQ_PASSWORD:admin}
+
+# Kafka配置 - 支持环境变量覆盖
+  kafka:
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:kafka:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      acks: all
+      retries: 3
+      properties:
+        enable.idempotence: true
+        max.in.flight.requests.per.connection: 5
+    consumer:
+      group-id: ai-chat-consumer-group
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "*"
+    listener:
+      ack-mode: manual
+      concurrency: 5
+
+# Nacos 配置中心和服务注册
+  cloud:
+    compatibility-verifier:
+      enabled: false
+    nacos:
+      config:
+        server-addr: ${NACOS_SERVER_ADDR:nacos:8848}
+        namespace: ${NACOS_NAMESPACE:}
+        group: DEFAULT_GROUP
+        data-id: application-docker.yml
+        type: yaml
+        auto-refresh: true
+
+      # Nacos Discovery 服务注册
+      discovery:
+        server-addr: ${NACOS_SERVER_ADDR:nacos:8848}
+        namespace: ${NACOS_NAMESPACE:}
+        group: DEFAULT_GROUP
+        service: ${spring.application.name}
+        cluster-name: docker
+
+# SSE配置
+sse:
+  timeout: 240000
+
+# Kafka自定义配置
+kafka:
+  topics:
+    request: ai-chat-request
+    result: ai-chat-result
+    dlq: ai-dlq
+  consumer-groups:
+    request: ai-request-consumer
+    result: ai-result-consumer
+
+mybatis-plus:
+  configuration:
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+    map-underscore-to-camel-case: true
+  global-config:
+    db-config:
+      table-underline: true
+
+ai:
+  tavily:
+    api-key: ${TAVILY_API_KEY:}
+
+  deepSeek:
+    base-url: https://api.deepseek.com/v1
+    model: deepseek-chat
+    apiKey: ${DeepSeek_API_KEY:}
+    timeout: 300s
+    max-retries: 3
+
+  # Ollama配置（提供默认值，实际不使用）
+  ollama:
+    base-url: http://localhost:11434
+    model: deepseek-r1:8b
+    timeout: 300s
+
+  kimi:
+    base-url: https://api.moonshot.cn/v1
+    model: kimi-k2-turbo-preview
+    apiKey: ${KIMI_API_KEY:}
+    timeout: 300s
+    max-retries: 3
+
+  # Qdrant向量数据库配置 - Docker环境下使用服务名qdrant
+  embeddingStore:
+    qdrant:
+      collectionName: ${AI_EMBEDDINGSTORE_QDRANT_COLLECTIONNAME:ragTranslation-1226}
+      host: ${AI_EMBEDDINGSTORE_QDRANT_HOST:qdrant}
+      port: ${AI_EMBEDDINGSTORE_QDRANT_PORT:6334}
+
+  dashscope:
+    apiKey: ${DASHSCOPE_API_KEY:}
+    model: qwen-max
+    base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
+    timeout: 300s
+    max-retries: 3
+
+  mcp:
+    baiduMap:
+      apiKey: ${BAIDU_MAP_API_KEY:}
+
+# 日志配置
+logging:
+  level:
+    root: INFO
+    org.fb: DEBUG
+    org.springframework.data.mongodb: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] [traceId=%X{traceId}/spanId=%X{spanId}] %-5level %logger{36} - %msg%n"
+
+# 链路追踪配置
+tracing:
+  sampling:
+    probability: 1.0
+  enabled: true
+  propagation:
+    type: w3c
+
+# Actuator配置
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+    prometheus:
+      enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}
+    export:
+      prometheus:
+        enabled: true
+
+# Netty DNS解析配置 - 解决Docker环境中的DNS SERVFAIL问题
+netty:
+  dns:
+    resolver:
+      # 使用系统DNS服务器
+      use-temporary-dns-server: true
+      # DNS服务器列表
+      dns-servers: 8.8.8.8,114.114.114.114
+      # 搜索域
+      search-domains: localdomain
+      # 超时时间（毫秒）
+      query-timeout: 5000
+      # 最大重试次数
+      max-retry: 3
