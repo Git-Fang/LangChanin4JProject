@@ -25,6 +25,11 @@ public class BusinessConstant {
      */
     public static final String RAG_RETRIEVAL_TYPE = "rag_retrieval";
 
+    /**
+     * 股票价值分析类型 - 需要对公司进行深度价值分析
+     */
+    public static final String STOCK_ANALYSIS_TYPE = "stock_analysis";
+
 
     //  业务使用常量信息
     public static final int MAX_PARAGRAPH_LENGTH = 1500;

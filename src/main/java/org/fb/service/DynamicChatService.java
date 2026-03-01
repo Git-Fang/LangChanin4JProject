@@ -3,6 +3,8 @@ package org.fb.service;
 import org.fb.bean.ChatModelInfo;
 import org.fb.config.DynamicAiServiceFactory;
 import org.fb.config.ModelRegistry;
+import org.fb.constant.BusinessConstant;
+import org.fb.engine.IntentRecognitionEngine;
 import org.fb.service.assistant.ChatAssistant;
 import org.fb.service.assistant.TranslaterService;
 import org.slf4j.Logger;
@@ -25,6 +27,12 @@ public class DynamicChatService {
 
     @Autowired
     private ModelRegistry modelRegistry;
+
+    @Autowired
+    private IntentRecognitionEngine intentRecognitionEngine;
+
+    @Autowired
+    private StockAnalysisService stockAnalysisService;
 
     // 已有的AiService Bean
     @Autowired(required = false)
@@ -52,6 +60,23 @@ public class DynamicChatService {
         log.info("用户消息: {}", message != null && message.length() > 100 ? message.substring(0, 100) + "..." : message);
         
         try {
+            // ====== 意图识别 ======
+            String intent = intentRecognitionEngine.recognize(message);
+            log.info("【意图识别】识别到意图: {}", intent);
+            
+            // ====== 股票分析意图处理 ======
+            if (BusinessConstant.STOCK_ANALYSIS_TYPE.equals(intent)) {
+                log.info("【意图路由】进入股票分析流程");
+                long startTime = System.currentTimeMillis();
+                String result = stockAnalysisService.analyzeStock(memoryId, message);
+                long endTime = System.currentTimeMillis();
+                
+                log.info("【股票分析完成】耗时: {}ms, 结果长度: {}", (endTime - startTime), result != null ? result.length() : 0);
+                log.info("========== 聊天请求结束 ==========");
+                return result;
+            }
+            
+            // ====== 其他意图使用默认聊天服务 ======
             // 当前实现：记录模型选择，实际调用使用默认的ChatAssistant
             // 真正的动态切换需要更复杂的实现（如动态代理）
             log.info("【模型切换】使用模型: {} ({}) 进行聊天", 

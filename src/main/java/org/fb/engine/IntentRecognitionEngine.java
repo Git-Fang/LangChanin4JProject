@@ -66,7 +66,26 @@ public class IntentRecognitionEngine {
                         "知识库检索"
                 ),
 
-                // ====== 2. 医疗类规则 ======
+                // ====== 2. 股票价值分析类规则 ======
+                IntentRule.of(BusinessConstant.STOCK_ANALYSIS_TYPE, 15,
+                        List.of(
+                                "分析.*公司",
+                                "帮我分析.*公司",
+                                "股票.*分析",
+                                "价值.*投资",
+                                "投资.*建议",
+                                "公司.*估值",
+                                "基本面.*分析",
+                                "财报.*分析",
+                                "市盈率",
+                                "市值.*分析",
+                                "st(ock)?\\s+analy",
+                                "analy(ze|ysis)\\s+.*(company|stock)"
+                        ),
+                        "股票价值分析"
+                ),
+
+                // ====== 3. 医疗类规则 ======
                 IntentRule.of(BusinessConstant.MEDICAL_TYPE, 20,
                         List.of(
                                 "医疗|健康|医院|挂号|预约|医生|看病|疾病|症状|治疗|体检|就诊|问诊",
