@@ -216,6 +216,13 @@
             <version>2023.0.3.4</version>
         </dependency>
 
+        <!-- PDFBox for better PDF parsing with Chinese support -->
+        <dependency>
+            <groupId>org.apache.pdfbox</groupId>
+            <artifactId>pdfbox</artifactId>
+            <version>3.0.0</version>
+        </dependency>
+
         <!-- Test dependencies -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

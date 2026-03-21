@@ -3,12 +3,15 @@ package org.fb.service.impl;
 import dev.langchain4j.data.document.Document;
 import dev.langchain4j.data.document.loader.FileSystemDocumentLoader;
 import dev.langchain4j.data.document.parser.apache.tika.ApacheTikaDocumentParser;
-import dev.langchain4j.data.embedding.Embedding;
-import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.store.embedding.EmbeddingStore;
+import dev.langchain4j.data.segment.TextSegment;
+import dev.langchain4j.data.embedding.Embedding;
 import org.apache.commons.io.FilenameUtils;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.text.PDFTextStripper;
+import org.apache.pdfbox.text.PDFTextStripperByArea;
 import org.fb.bean.SummaryChunk;
 import org.fb.service.DocumentSummarizationService;
 import org.slf4j.Logger;
@@ -22,6 +25,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -452,17 +456,31 @@ public class DocumentSummarizationServiceImpl implements DocumentSummarizationSe
         // 保存临时文件
         Path tempDir = Files.createTempDirectory("summarization");
         String originalFilename = file.getOriginalFilename();
-        String extension = FilenameUtils.getExtension(originalFilename);
+        String extension = FilenameUtils.getExtension(originalFilename).toLowerCase();
         Path tempFile = tempDir.resolve(UUID.randomUUID().toString() + "." + extension);
         
         try {
             // 保存上传的文件
             Files.copy(file.getInputStream(), tempFile, StandardCopyOption.REPLACE_EXISTING);
             
-            // 使用Apache Tika解析
-            Document document = FileSystemDocumentLoader.loadDocument(tempFile.toString(), new ApacheTikaDocumentParser());
+            String text;
             
-            return document.text();
+            // 根据文件类型选择解析方法
+            if ("pdf".equals(extension)) {
+                // PDF文件使用Tika原生解析器，确保中文编码正确
+                text = parsePdfWithTika(tempFile);
+            } else {
+                // 其他文件使用LangChain4j的解析器
+                Document document = FileSystemDocumentLoader.loadDocument(tempFile.toString(), new ApacheTikaDocumentParser());
+                text = document.text();
+            }
+            
+            // 清理和规范化文本
+            text = normalizeText(text);
+            
+            log.info("文档解析完成，提取文本长度: {} 字符", text.length());
+            return text;
+            
         } finally {
             // 清理临时文件
             try {
@@ -472,5 +490,61 @@ public class DocumentSummarizationServiceImpl implements DocumentSummarizationSe
                 log.warn("清理临时文件失败", e);
             }
         }
+    }
+
+    /**
+     * 使用PDFBox解析PDF（更好的中文支持）
+     */
+    private String parsePdfWithTika(Path pdfPath) throws IOException {
+        try (InputStream is = Files.newInputStream(pdfPath);
+             PDDocument document = org.apache.pdfbox.Loader.loadPDF(is.readAllBytes())) {
+            PDFTextStripper stripper = new PDFTextStripper();
+            stripper.setSortByPosition(true);  // 按位置排序
+            
+            String text = stripper.getText(document);
+            
+            log.debug("PDF解析完成，页数: {}, 提取字符数: {}", document.getNumberOfPages(), text.length());
+            
+            return text;
+            
+        } catch (Exception e) {
+            log.error("PDF解析失败: {}", e.getMessage(), e);
+            throw new IOException("PDF解析失败: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 清理和规范化文本
+     */
+    private String normalizeText(String text) {
+        if (text == null || text.isEmpty()) {
+            return "";
+        }
+        
+        String result = text;
+        
+        // 移除控制字符（保留换行和制表符）
+        result = result.replaceAll("[\\x00-\\x08\\x0B\\x0C\\x0E-\\x1F\\x7F]", "");
+        
+        // 规范化换行符
+        result = result.replaceAll("\\r\\n", "\n").replaceAll("\\r", "\n");
+        
+        // 合并多个连续空行
+        result = result.replaceAll("\\n{3,}", "\n\n");
+        
+        // 移除行首行尾空白（保留段落缩进）
+        String[] lines = result.split("\n");
+        StringBuilder normalized = new StringBuilder();
+        for (int i = 0; i < lines.length; i++) {
+            String line = lines[i].trim();
+            if (!line.isEmpty()) {
+                normalized.append(line);
+                if (i < lines.length - 1) {
+                    normalized.append("\n");
+                }
+            }
+        }
+        
+        return normalized.toString().trim();
     }
 }

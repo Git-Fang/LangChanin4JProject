@@ -439,6 +439,128 @@
             display: block;
         }
 
+        .file-list {
+            margin-top: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .file-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background-color: #f5f5f5;
+            padding: 10px 15px;
+            border-radius: 6px;
+            border: 1px solid #e0e0e0;
+        }
+
+        .file-item-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex: 1;
+        }
+
+        .file-item-icon {
+            font-size: 20px;
+        }
+
+        .file-item-details {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .file-item-name {
+            font-size: 13px;
+            color: #333;
+            font-weight: 500;
+        }
+
+        .file-item-size {
+            font-size: 11px;
+            color: #999;
+        }
+
+        .file-item-status {
+            font-size: 12px;
+            padding: 4px 10px;
+            border-radius: 4px;
+            margin-left: 10px;
+        }
+
+        .file-item-status.pending {
+            background-color: #fff3e0;
+            color: #e65100;
+        }
+
+        .file-item-status.processing {
+            background-color: #e3f2fd;
+            color: #1565c0;
+        }
+
+        .file-item-status.success {
+            background-color: #e8f5e9;
+            color: #2e7d32;
+        }
+
+        .file-item-status.error {
+            background-color: #ffebee;
+            color: #c62828;
+        }
+
+        .file-item-remove {
+            background: none;
+            border: none;
+            color: #999;
+            cursor: pointer;
+            font-size: 18px;
+            padding: 5px;
+            margin-left: 10px;
+        }
+
+        .file-item-remove:hover {
+            color: #c62828;
+        }
+
+        .file-count {
+            font-size: 12px;
+            color: #666;
+            margin-top: 10px;
+            text-align: center;
+        }
+
+        .file-count.warning {
+            color: #e65100;
+        }
+
+        .batch-summary {
+            background-color: #e8f5e9;
+            border-left: 4px solid #4caf50;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+        }
+
+        .batch-summary h4 {
+            color: #2e7d32;
+            margin-bottom: 10px;
+        }
+
+        .batch-summary-stats {
+            display: flex;
+            gap: 20px;
+            font-size: 13px;
+            color: #333;
+        }
+
+        .batch-summary-stats span {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
         /* 响应式 */
         @media (max-width: 768px) {
             .container {
@@ -473,6 +595,7 @@
             <h3>💡 使用说明</h3>
             <ul>
                 <li>支持上传 PDF、Markdown、Word、TXT 等文档格式</li>
+                <li>支持同时上传最多5个文档文件</li>
                 <li>系统将自动对文档进行语义切分（每段约1024字符）</li>
                 <li>基于大语言模型为每个切片生成150字以内的摘要</li>
                 <li>点击下方上传区域选择文件开始处理</li>
@@ -485,21 +608,18 @@
                 <div class="upload-icon">📁</div>
                 <div class="upload-text">
                     <strong>点击此处</strong> 或拖拽文件到此处上传<br>
-                    <span style="color: #999; font-size: 12px;">支持格式: PDF, MD, TXT, DOC, DOCX, PPTX</span>
+                    <span style="color: #999; font-size: 12px;">支持格式: PDF, MD, TXT, DOC, DOCX, PPTX（最多5个文件）</span>
                 </div>
-                <div class="file-info" id="fileInfo">
-                    <div class="file-name" id="fileName"></div>
-                    <div class="file-size" id="fileSize"></div>
-                </div>
+                <div class="file-list" id="fileList"></div>
                 <input type="file" id="fileInput" class="file-input" 
-                       accept=".pdf,.md,.txt,.doc,.docx,.pptx">
+                       accept=".pdf,.md,.txt,.doc,.docx,.pptx" multiple>
             </div>
 
             <div class="error-message" id="errorMessage"></div>
             <div class="success-message" id="successMessage"></div>
 
             <div style="text-align: center;">
-                <button class="action-btn" id="processBtn" onclick="processDocument()" disabled>
+                <button class="action-btn" id="processBtn" onclick="processDocuments()" disabled>
                     开始处理
                 </button>
             </div>
@@ -550,7 +670,8 @@
             window.API_BASE_URL = baseUrl;
         })();
 
-        let selectedFile = null;
+        let selectedFiles = [];
+        const MAX_FILES = 5;
 
         // 返回主页
         function goBack() {
@@ -560,9 +681,7 @@
         // 文件上传区域元素
         const uploadArea = document.getElementById('uploadArea');
         const fileInput = document.getElementById('fileInput');
-        const fileInfo = document.getElementById('fileInfo');
-        const fileName = document.getElementById('fileName');
-        const fileSize = document.getElementById('fileSize');
+        const fileListEl = document.getElementById('fileList');
         const processBtn = document.getElementById('processBtn');
         const loading = document.getElementById('loading');
         const errorMessage = document.getElementById('errorMessage');
@@ -606,15 +725,15 @@
             fileInput.click();
         });
 
-        // 文件选择
+        // 文件选择（支持多选）
         fileInput.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (file) {
-                selectFile(file);
-            }
+            const files = Array.from(e.target.files);
+            files.forEach(file => addFile(file));
+            // 清空input以允许重复选择相同文件
+            fileInput.value = '';
         });
 
-        // 拖拽上传
+        // 拖拽上传（支持多选）
         uploadArea.addEventListener('dragover', (e) => {
             e.preventDefault();
             uploadArea.classList.add('dragover');
@@ -627,44 +746,83 @@
         uploadArea.addEventListener('drop', (e) => {
             e.preventDefault();
             uploadArea.classList.remove('dragover');
-            const file = e.dataTransfer.files[0];
-            if (file) {
-                selectFile(file);
-            }
+            const files = Array.from(e.dataTransfer.files);
+            files.forEach(file => addFile(file));
         });
 
-        // 选择文件
-        function selectFile(file) {
+        // 添加文件
+        function addFile(file) {
             // 校验文件类型
             const validExtensions = ['pdf', 'md', 'txt', 'doc', 'docx', 'pptx'];
             const extension = file.name.split('.').pop().toLowerCase();
             
             if (!validExtensions.includes(extension)) {
-                showError('不支持的文件类型，请上传 PDF、MD、TXT、DOC、DOCX 或 PPTX 文件');
+                showError('不支持的文件类型: ' + file.name);
                 return;
             }
 
             // 校验文件大小（限制50MB）
             if (file.size > 50 * 1024 * 1024) {
-                showError('文件过大，请上传小于 50MB 的文件');
+                showError('文件过大: ' + file.name);
+                return;
+            }
+
+            // 检查是否已存在
+            if (selectedFiles.some(f => f.name === file.name && f.size === file.size)) {
+                showError('文件已存在: ' + file.name);
+                return;
+            }
+
+            // 检查数量限制
+            if (selectedFiles.length >= MAX_FILES) {
+                showError('最多支持同时处理 ' + MAX_FILES + ' 个文件');
                 return;
             }
 
             hideError();
-            selectedFile = file;
-            
-            // 显示文件信息
-            fileName.textContent = file.name;
-            fileSize.textContent = formatFileSize(file.size);
-            fileInfo.classList.add('show');
-            
-            // 启用处理按钮
-            processBtn.disabled = false;
-            processBtn.textContent = '开始处理';
+            selectedFiles.push(file);
+            renderFileList();
+            updateProcessButton();
             
             // 隐藏之前的结果
             resultsSection.classList.remove('show');
             successMessage.classList.remove('show');
+        }
+
+        // 移除文件
+        function removeFile(index) {
+            selectedFiles.splice(index, 1);
+            renderFileList();
+            updateProcessButton();
+        }
+
+        // 渲染文件列表
+        function renderFileList() {
+            fileListEl.innerHTML = selectedFiles.map((file, index) => `
+                <div class="file-item">
+                    <div class="file-item-info">
+                        <span class="file-item-icon">📄</span>
+                        <div class="file-item-details">
+                            <span class="file-item-name">${escapeHtml(file.name)}</span>
+                            <span class="file-item-size">${formatFileSize(file.size)}</span>
+                        </div>
+                    </div>
+                    <button class="file-item-remove" onclick="removeFile(${index})" title="移除">×</button>
+                </div>
+            `).join('');
+        }
+
+        // 更新处理按钮状态
+        function updateProcessButton() {
+            if (selectedFiles.length > 0) {
+                processBtn.disabled = false;
+                processBtn.textContent = selectedFiles.length === 1 
+                    ? '开始处理' 
+                    : `开始处理 (${selectedFiles.length}个文件)`;
+            } else {
+                processBtn.disabled = true;
+                processBtn.textContent = '选择文件';
+            }
         }
 
         // 格式化文件大小
@@ -688,9 +846,9 @@
             errorMessage.classList.remove('show');
         }
 
-        // 处理文档
-        async function processDocument() {
-            if (!selectedFile) {
+        // 处理多个文档
+        async function processDocuments() {
+            if (selectedFiles.length === 0) {
                 showError('请先选择文件');
                 return;
             }
@@ -703,16 +861,30 @@
             // 显示加载状态
             loading.classList.add('show');
             processBtn.disabled = true;
-            progressInfo.textContent = '正在上传文件...';
+            progressInfo.textContent = `正在处理 ${selectedFiles.length} 个文件...`;
 
             const formData = new FormData();
-            formData.append('file', selectedFile);
+            
+            // 根据文件数量选择参数名和端点
+            const endpoint = selectedFiles.length > 1 
+                ? '/ragTranslation/doc/summarizeMultiple' 
+                : '/ragTranslation/doc/summarize';
+            
+            if (selectedFiles.length > 1) {
+                // 多文件：使用 files 参数名
+                selectedFiles.forEach(file => {
+                    formData.append('files', file);
+                });
+            } else {
+                // 单文件：使用 file 参数名
+                formData.append('file', selectedFiles[0]);
+            }
 
             try {
                 // 更新进度
-                progressInfo.textContent = '正在解析文档...';
+                progressInfo.textContent = `正在处理 ${selectedFiles.length} 个文件...`;
                 
-                const response = await fetch(window.API_BASE_URL + '/ragTranslation/doc/summarize', {
+                const response = await fetch(window.API_BASE_URL + endpoint, {
                     method: 'POST',
                     body: formData
                 });
@@ -725,12 +897,43 @@
                 const result = await response.json();
                 
                 if (result.code === 200 && result.data) {
-                    // 显示成功消息
-                    successMessage.textContent = `✓ 文档处理完成，共生成 ${result.data.length} 个切片摘要`;
+                    // 获取所有切片 - 兼容单文件和批量文件响应格式
+                    let allChunks = [];
+                    let successCount = 0;
+                    let totalFiles = selectedFiles.length;
+                    
+                    // 单文件响应：result.data 是数组
+                    if (Array.isArray(result.data)) {
+                        allChunks = result.data;
+                        successCount = allChunks.length > 0 ? 1 : 0;
+                    } 
+                    // 批量文件响应：result.data 是对象
+                    else if (typeof result.data === 'object') {
+                        allChunks = result.data.allChunks || [];
+                        successCount = result.data.successCount || 0;
+                        totalFiles = result.data.totalFiles || selectedFiles.length;
+                    }
+                    
+                    // 显示处理摘要
+                    if (selectedFiles.length > 1) {
+                        successMessage.innerHTML = `
+                            <div class="batch-summary">
+                                <h4>✓ 批量处理完成</h4>
+                                <div class="batch-summary-stats">
+                                    <span>📄 成功: ${successCount}/${totalFiles} 个文件</span>
+                                    <span>📊 共生成 ${allChunks.length} 个切片摘要</span>
+                                </div>
+                            </div>
+                        `;
+                        resultsCount.textContent = `批量处理 - 共 ${allChunks.length} 个切片`;
+                    } else {
+                        successMessage.textContent = `✓ 文档处理完成，共生成 ${allChunks.length} 个切片摘要`;
+                        resultsCount.textContent = `共 ${allChunks.length} 个切片`;
+                    }
                     successMessage.classList.add('show');
                     
                     // 显示结果
-                    displayResults(result.data);
+                    displayResults(allChunks);
                 } else {
                     throw new Error(result.message || '处理失败');
                 }
@@ -748,7 +951,6 @@
         // 显示结果
         function displayResults(data) {
             resultsBody.innerHTML = '';
-            resultsCount.textContent = `共 ${data.length} 个切片`;
 
             data.forEach((chunk, index) => {
                 const summary = chunk.summary || '';
