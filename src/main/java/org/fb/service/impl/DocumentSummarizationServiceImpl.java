@@ -109,7 +109,7 @@ public class DocumentSummarizationServiceImpl implements DocumentSummarizationSe
      * 获取默认提示词模板
      */
     private String getDefaultPromptTemplate() {
-        return "请为以下文本生成150字以内的中文摘要，要求简洁准确，突出核心要点。\n\n摘要只需输出摘要内容，不要输出其他解释或说明。\n\n文本内容：\n{{content}}";
+        return "请为以下文本生成一段150字以内的精炼中文摘要。\n\n要求：\n1. 严格控制在150字以内\n2. 突出核心信息，去除冗余表达\n3. 保留关键数据、名词和动词\n4. 句意完整，不截断句子\n5. 只输出摘要内容，不要任何解释说明\n\n文本内容：\n{{content}}";
     }
 
     @Override

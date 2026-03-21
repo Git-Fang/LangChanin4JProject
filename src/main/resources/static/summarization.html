@@ -759,6 +759,12 @@
                 const needsTruncateSummary = summaryLen > 150;
                 const needsTruncateContent = contentLen > 200;
 
+                // 显示摘要（如果超过150字则截断显示）
+                let displaySummary = escapeHtml(summary);
+                if (needsTruncateSummary) {
+                    displaySummary = escapeHtml(summary.substring(0, 150)) + '...';
+                }
+
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
                     <td>
@@ -766,9 +772,9 @@
                     </td>
                     <td class="article-title">${escapeHtml(title)}</td>
                     <td class="summary-content">
-                        <div class="summary-text${needsTruncateSummary ? ' truncated' : ''}">${escapeHtml(summary)}</div>
-                        <div class="char-count">摘要字数: ${summaryLen}</div>
-                        ${needsTruncateSummary ? `<button class="expand-btn" onclick="openFullContent('段落摘要 - ${escapeHtml(title)}', '${escapeHtml(summary).replace(/'/g, "\\'").replace(/\n/g, '\\n')}', 'summary')">查看完整摘要</button>` : ''}
+                        <div class="summary-text">${displaySummary}</div>
+                        <div class="char-count">摘要字数: ${summaryLen}/150</div>
+                        ${needsTruncateSummary ? `<button class="expand-btn" onclick="openFullContent('段落摘要 - ${escapeHtml(title)} (完整版)', '${escapeHtml(summary).replace(/'/g, "\\'").replace(/\n/g, '\\n')}', 'summary')">查看完整摘要</button>` : '<span style="color:#4caf50;font-size:11px;">✓ 已完整</span>'}
                     </td>
                     <td>
                         <div class="chunk-content">${escapeHtml(content)}</div>
