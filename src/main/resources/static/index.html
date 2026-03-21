@@ -661,6 +661,13 @@
                 <h3 class="upload-title">文件管理</h3>
                 <button class="upload-btn" onclick="document.getElementById('fileInput').click()">上传文件</button>
                 <input type="file" id="fileInput" class="file-input" accept=".pdf,.txt,.doc,.docx" onchange="uploadFile(this)">
+                <button class="upload-btn" onclick="window.open('/summarization.html', '_blank')" 
+                        style="background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%); margin-top: 10px;">
+                    概要总结
+                </button>
+                <p style="font-size: 11px; color: #999; margin-top: 6px; line-height: 1.4;">
+                    文档智能切片+摘要生成，轻松理解长文档
+                </p>
             </div>
         </div>
 

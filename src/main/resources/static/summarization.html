@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>文档概要总结</title>
+    <link rel="icon" type="image/png" href="/icon.png">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+            background-color: #f5f5f5;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px 30px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+
+        .header h1 {
+            font-size: 24px;
+            font-weight: 500;
+        }
+
+        .back-btn {
+            padding: 8px 16px;
+            background-color: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+
+        .back-btn:hover {
+            background-color: rgba(255, 255, 255, 0.3);
+        }
+
+        .upload-section {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        }
+
+        .upload-section h2 {
+            font-size: 18px;
+            color: #333;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #667eea;
+        }
+
+        .upload-area {
+            border: 2px dashed #ddd;
+            border-radius: 8px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .upload-area:hover {
+            border-color: #667eea;
+            background-color: #f8f8ff;
+        }
+
+        .upload-area.dragover {
+            border-color: #667eea;
+            background-color: #f0f0ff;
+        }
+
+        .upload-icon {
+            font-size: 48px;
+            color: #667eea;
+            margin-bottom: 15px;
+        }
+
+        .upload-text {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .upload-text strong {
+            color: #667eea;
+        }
+
+        .file-info {
+            margin-top: 15px;
+            padding: 12px;
+            background-color: #f5f5f5;
+            border-radius: 6px;
+            display: none;
+        }
+
+        .file-info.show {
+            display: block;
+        }
+
+        .file-name {
+            font-weight: 500;
+            color: #333;
+            word-break: break-all;
+        }
+
+        .file-size {
+            color: #999;
+            font-size: 12px;
+            margin-top: 5px;
+        }
+
+        .action-btn {
+            margin-top: 20px;
+            padding: 12px 30px;
+            background-color: #667eea;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .action-btn:hover:not(:disabled) {
+            background-color: #5568d3;
+        }
+
+        .action-btn:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 40px;
+        }
+
+        .loading.show {
+            display: block;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid #f3f3f3;
+            border-top-color: #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .loading-text {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .progress-info {
+            margin-top: 10px;
+            color: #999;
+            font-size: 12px;
+        }
+
+        .results-section {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            display: none;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        }
+
+        .results-section.show {
+            display: block;
+        }
+
+        .results-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #667eea;
+        }
+
+        .results-header h2 {
+            font-size: 18px;
+            color: #333;
+        }
+
+        .results-count {
+            color: #667eea;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .results-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .results-table th,
+        .results-table td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+            vertical-align: top;
+        }
+
+        .results-table th {
+            background-color: #f8f8f8;
+            font-weight: 500;
+            color: #333;
+            font-size: 14px;
+        }
+
+        .results-table td {
+            font-size: 13px;
+            color: #666;
+        }
+
+        .results-table tr:hover {
+            background-color: #f8f8ff;
+        }
+
+        .chunk-index {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 28px;
+            height: 28px;
+            background-color: #667eea;
+            color: white;
+            border-radius: 50%;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .article-title {
+            max-width: 150px;
+            word-break: break-all;
+            font-weight: 500;
+            color: #333;
+        }
+
+        .summary-content {
+            max-width: 300px;
+            line-height: 1.6;
+        }
+
+        .summary-text {
+            color: #e65100;
+            font-weight: 500;
+        }
+
+        .summary-text.truncated {
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .chunk-content {
+            max-width: 350px;
+            line-height: 1.6;
+            background-color: #f9f9f9;
+            padding: 10px;
+            border-radius: 4px;
+            max-height: 150px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+            font-size: 12px;
+        }
+
+        .expand-btn {
+            display: inline-block;
+            padding: 2px 8px;
+            font-size: 11px;
+            background-color: #667eea;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 5px;
+            transition: background-color 0.2s;
+        }
+
+        .expand-btn:hover {
+            background-color: #5568d3;
+        }
+
+        .full-content-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .full-content-modal.show {
+            display: flex;
+        }
+
+        .modal-content {
+            background-color: white;
+            padding: 30px;
+            border-radius: 12px;
+            max-width: 800px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #667eea;
+        }
+
+        .modal-header h3 {
+            color: #333;
+            font-size: 18px;
+        }
+
+        .close-modal-btn {
+            padding: 6px 16px;
+            background-color: #f5f5f5;
+            color: #666;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .close-modal-btn:hover {
+            background-color: #e0e0e0;
+        }
+
+        .modal-body {
+            line-height: 1.8;
+            color: #333;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        .char-count {
+            font-size: 11px;
+            color: #999;
+            margin-top: 5px;
+        }
+
+        .error-message {
+            background-color: #ffebee;
+            color: #c62828;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+            display: none;
+        }
+
+        .error-message.show {
+            display: block;
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .tips {
+            background-color: #fff8e1;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+        }
+
+        .tips h3 {
+            font-size: 14px;
+            color: #f57c00;
+            margin-bottom: 8px;
+        }
+
+        .tips ul {
+            margin: 0;
+            padding-left: 20px;
+            color: #666;
+            font-size: 13px;
+        }
+
+        .tips li {
+            margin-bottom: 4px;
+        }
+
+        .success-message {
+            background-color: #e8f5e9;
+            color: #2e7d32;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+            display: none;
+        }
+
+        .success-message.show {
+            display: block;
+        }
+
+        /* 响应式 */
+        @media (max-width: 768px) {
+            .container {
+                padding: 10px;
+            }
+
+            .header {
+                flex-direction: column;
+                gap: 15px;
+                text-align: center;
+            }
+
+            .results-table {
+                font-size: 12px;
+            }
+
+            .results-table th,
+            .results-table td {
+                padding: 8px 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📄 文档概要总结</h1>
+            <button class="back-btn" onclick="goBack()">← 返回主页</button>
+        </div>
+
+        <div class="tips">
+            <h3>💡 使用说明</h3>
+            <ul>
+                <li>支持上传 PDF、Markdown、Word、TXT 等文档格式</li>
+                <li>系统将自动对文档进行语义切分（每段约1024字符）</li>
+                <li>基于大语言模型为每个切片生成150字以内的摘要</li>
+                <li>点击下方上传区域选择文件开始处理</li>
+            </ul>
+        </div>
+
+        <div class="upload-section">
+            <h2>上传文档</h2>
+            <div class="upload-area" id="uploadArea">
+                <div class="upload-icon">📁</div>
+                <div class="upload-text">
+                    <strong>点击此处</strong> 或拖拽文件到此处上传<br>
+                    <span style="color: #999; font-size: 12px;">支持格式: PDF, MD, TXT, DOC, DOCX, PPTX</span>
+                </div>
+                <div class="file-info" id="fileInfo">
+                    <div class="file-name" id="fileName"></div>
+                    <div class="file-size" id="fileSize"></div>
+                </div>
+                <input type="file" id="fileInput" class="file-input" 
+                       accept=".pdf,.md,.txt,.doc,.docx,.pptx">
+            </div>
+
+            <div class="error-message" id="errorMessage"></div>
+            <div class="success-message" id="successMessage"></div>
+
+            <div style="text-align: center;">
+                <button class="action-btn" id="processBtn" onclick="processDocument()" disabled>
+                    开始处理
+                </button>
+            </div>
+        </div>
+
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <div class="loading-text">正在处理文档，请稍候...</div>
+            <div class="progress-info" id="progressInfo">文档解析中...</div>
+        </div>
+
+        <div class="results-section" id="resultsSection">
+            <div class="results-header">
+                <h2>📊 切分摘要结果</h2>
+                <span class="results-count" id="resultsCount"></span>
+            </div>
+            <table class="results-table">
+                <thead>
+                    <tr>
+                        <th style="width: 60px;">序号</th>
+                        <th style="width: 150px;">文章标题</th>
+                        <th style="width: 300px;">段落摘要</th>
+                        <th>切片内容</th>
+                    </tr>
+                </thead>
+                <tbody id="resultsBody">
+                </tbody>
+            </table>
+        </div>
+
+        <!-- 完整内容模态框 -->
+        <div class="full-content-modal" id="fullContentModal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3 id="modalTitle">完整内容</h3>
+                    <button class="close-modal-btn" onclick="closeModal()">关闭</button>
+                </div>
+                <div class="modal-body" id="modalBody"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // API基础地址
+        (function() {
+            const port = window.location.port || (window.location.protocol === 'https:' ? '443' : '80');
+            const baseUrl = window.location.protocol + '//' + window.location.hostname + (port && port !== '80' && port !== '443' ? ':' + port : '');
+            window.API_BASE_URL = baseUrl;
+        })();
+
+        let selectedFile = null;
+
+        // 返回主页
+        function goBack() {
+            window.location.href = '/index.html';
+        }
+
+        // 文件上传区域元素
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const fileInfo = document.getElementById('fileInfo');
+        const fileName = document.getElementById('fileName');
+        const fileSize = document.getElementById('fileSize');
+        const processBtn = document.getElementById('processBtn');
+        const loading = document.getElementById('loading');
+        const errorMessage = document.getElementById('errorMessage');
+        const successMessage = document.getElementById('successMessage');
+        const resultsSection = document.getElementById('resultsSection');
+        const resultsBody = document.getElementById('resultsBody');
+        const resultsCount = document.getElementById('resultsCount');
+        const progressInfo = document.getElementById('progressInfo');
+        const fullContentModal = document.getElementById('fullContentModal');
+        const modalTitle = document.getElementById('modalTitle');
+        const modalBody = document.getElementById('modalBody');
+
+        // 打开完整内容模态框
+        function openFullContent(title, content, type) {
+            modalTitle.textContent = title;
+            modalBody.textContent = content;
+            fullContentModal.classList.add('show');
+        }
+
+        // 关闭模态框
+        function closeModal() {
+            fullContentModal.classList.remove('show');
+        }
+
+        // 点击模态框背景关闭
+        fullContentModal.addEventListener('click', (e) => {
+            if (e.target === fullContentModal) {
+                closeModal();
+            }
+        });
+
+        // ESC键关闭模态框
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && fullContentModal.classList.contains('show')) {
+                closeModal();
+            }
+        });
+
+        // 点击上传区域
+        uploadArea.addEventListener('click', () => {
+            fileInput.click();
+        });
+
+        // 文件选择
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                selectFile(file);
+            }
+        });
+
+        // 拖拽上传
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            const file = e.dataTransfer.files[0];
+            if (file) {
+                selectFile(file);
+            }
+        });
+
+        // 选择文件
+        function selectFile(file) {
+            // 校验文件类型
+            const validExtensions = ['pdf', 'md', 'txt', 'doc', 'docx', 'pptx'];
+            const extension = file.name.split('.').pop().toLowerCase();
+            
+            if (!validExtensions.includes(extension)) {
+                showError('不支持的文件类型，请上传 PDF、MD、TXT、DOC、DOCX 或 PPTX 文件');
+                return;
+            }
+
+            // 校验文件大小（限制50MB）
+            if (file.size > 50 * 1024 * 1024) {
+                showError('文件过大，请上传小于 50MB 的文件');
+                return;
+            }
+
+            hideError();
+            selectedFile = file;
+            
+            // 显示文件信息
+            fileName.textContent = file.name;
+            fileSize.textContent = formatFileSize(file.size);
+            fileInfo.classList.add('show');
+            
+            // 启用处理按钮
+            processBtn.disabled = false;
+            processBtn.textContent = '开始处理';
+            
+            // 隐藏之前的结果
+            resultsSection.classList.remove('show');
+            successMessage.classList.remove('show');
+        }
+
+        // 格式化文件大小
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        // 显示错误
+        function showError(message) {
+            errorMessage.textContent = message;
+            errorMessage.classList.add('show');
+            successMessage.classList.remove('show');
+        }
+
+        // 隐藏错误
+        function hideError() {
+            errorMessage.classList.remove('show');
+        }
+
+        // 处理文档
+        async function processDocument() {
+            if (!selectedFile) {
+                showError('请先选择文件');
+                return;
+            }
+
+            // 隐藏之前的消息和结果
+            hideError();
+            successMessage.classList.remove('show');
+            resultsSection.classList.remove('show');
+            
+            // 显示加载状态
+            loading.classList.add('show');
+            processBtn.disabled = true;
+            progressInfo.textContent = '正在上传文件...';
+
+            const formData = new FormData();
+            formData.append('file', selectedFile);
+
+            try {
+                // 更新进度
+                progressInfo.textContent = '正在解析文档...';
+                
+                const response = await fetch(window.API_BASE_URL + '/ragTranslation/doc/summarize', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.message || '处理失败');
+                }
+
+                const result = await response.json();
+                
+                if (result.code === 200 && result.data) {
+                    // 显示成功消息
+                    successMessage.textContent = `✓ 文档处理完成，共生成 ${result.data.length} 个切片摘要`;
+                    successMessage.classList.add('show');
+                    
+                    // 显示结果
+                    displayResults(result.data);
+                } else {
+                    throw new Error(result.message || '处理失败');
+                }
+
+            } catch (error) {
+                console.error('处理失败:', error);
+                showError('处理失败: ' + error.message);
+            } finally {
+                loading.classList.remove('show');
+                processBtn.disabled = false;
+                processBtn.textContent = '重新处理';
+            }
+        }
+
+        // 显示结果
+        function displayResults(data) {
+            resultsBody.innerHTML = '';
+            resultsCount.textContent = `共 ${data.length} 个切片`;
+
+            data.forEach((chunk, index) => {
+                const summary = chunk.summary || '';
+                const content = chunk.content || '';
+                const title = chunk.articleTitle || '未命名';
+                const summaryLen = summary.length;
+                const contentLen = chunk.charCount || content.length;
+                const needsTruncateSummary = summaryLen > 150;
+                const needsTruncateContent = contentLen > 200;
+
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>
+                        <span class="chunk-index">${chunk.chunkIndex || index + 1}</span>
+                    </td>
+                    <td class="article-title">${escapeHtml(title)}</td>
+                    <td class="summary-content">
+                        <div class="summary-text${needsTruncateSummary ? ' truncated' : ''}">${escapeHtml(summary)}</div>
+                        <div class="char-count">摘要字数: ${summaryLen}</div>
+                        ${needsTruncateSummary ? `<button class="expand-btn" onclick="openFullContent('段落摘要 - ${escapeHtml(title)}', '${escapeHtml(summary).replace(/'/g, "\\'").replace(/\n/g, '\\n')}', 'summary')">查看完整摘要</button>` : ''}
+                    </td>
+                    <td>
+                        <div class="chunk-content">${escapeHtml(content)}</div>
+                        <div class="char-count">切片字数: ${contentLen}</div>
+                        ${needsTruncateContent ? `<button class="expand-btn" onclick="openFullContent('切片内容 - ${escapeHtml(title)}', '${escapeHtml(content).replace(/'/g, "\\'").replace(/\n/g, '\\n')}', 'content')">查看完整内容</button>` : ''}
+                    </td>
+                `;
+                resultsBody.appendChild(tr);
+            });
+
+            resultsSection.classList.add('show');
+            
+            // 滚动到结果区域
+            resultsSection.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        // HTML转义
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+    </script>
+</body>
+</html>

@@ -244,6 +244,18 @@
             background-color: #5568d3;
         }
 
+        .upload-btn + .upload-btn {
+            margin-top: 8px;
+        }
+
+        .upload-btn.success {
+            background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%);
+        }
+
+        .upload-btn.success:hover {
+            background: linear-gradient(135deg, #43a047 0%, #1b5e20 100%);
+        }
+
         .file-input {
             display: none;
         }
@@ -1154,6 +1166,10 @@
             <div class="upload-section" id="fileUploadSection">
                 <h3 class="upload-title">文件管理</h3>
                 <button class="upload-btn" onclick="const modal=document.getElementById('batchModal');if(modal)modal.style.display='flex'">批量上传文件</button>
+                <button class="upload-btn" onclick="window.open('/summarization.html', '_blank')">概要总结</button>
+                <p style="font-size: 11px; color: #999; margin-top: 6px; line-height: 1.4;">
+                    文档智能切片+摘要生成
+                </p>
             </div>
 
             <!-- 上传文档历史区域 -->
