@@ -439,6 +439,51 @@
             display: block;
         }
 
+        .vector-store-info {
+            background-color: #e3f2fd;
+            border-left: 4px solid #2196f3;
+            padding: 12px 15px;
+            margin-top: 12px;
+            border-radius: 4px;
+        }
+
+        .vector-store-info h4 {
+            font-size: 13px;
+            color: #1565c0;
+            margin-bottom: 8px;
+        }
+
+        .vector-store-stats {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            font-size: 12px;
+            color: #333;
+        }
+
+        .vector-store-stats .stat-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .vector-store-stats .stat-label {
+            color: #666;
+        }
+
+        .vector-store-stats .stat-value {
+            color: #1565c0;
+            font-weight: 500;
+        }
+
+        .vector-store-stats .stat-value.success {
+            color: #2e7d32;
+        }
+
+        .vector-store-stats .stat-value.error {
+            color: #c62828;
+        }
+
         .file-list {
             margin-top: 15px;
             display: flex;
@@ -867,8 +912,8 @@
             
             // 根据文件数量选择参数名和端点
             const endpoint = selectedFiles.length > 1 
-                ? '/ragTranslation/doc/summarizeMultiple' 
-                : '/ragTranslation/doc/summarize';
+                ? '/api/summarize/summarizeMultiple' 
+                : '/api/summarize/summarize';
             
             if (selectedFiles.length > 1) {
                 // 多文件：使用 files 参数名
@@ -901,33 +946,79 @@
                     let allChunks = [];
                     let successCount = 0;
                     let totalFiles = selectedFiles.length;
+                    let vectorStoreInfo = null;
+                    let processingTime = 0;
                     
-                    // 单文件响应：result.data 是数组
-                    if (Array.isArray(result.data)) {
+                    // 单文件响应：result.data 是对象，包含 chunks 和 vectorStore
+                    if (typeof result.data === 'object' && !Array.isArray(result.data)) {
+                        allChunks = result.data.chunks || result.data.allChunks || [];
+                        successCount = allChunks.length > 0 ? 1 : 0;
+                        vectorStoreInfo = result.data.vectorStore || result.data.vectorStoreSummary;
+                        processingTime = result.data.processingTimeMs || result.data.totalProcessingTimeMs || 0;
+                        
+                        // 批量文件响应
+                        if (result.data.results) {
+                            successCount = result.data.successCount || 0;
+                            totalFiles = result.data.totalFiles || selectedFiles.length;
+                        }
+                    } 
+                    // 兼容旧格式：result.data 是数组
+                    else if (Array.isArray(result.data)) {
                         allChunks = result.data;
                         successCount = allChunks.length > 0 ? 1 : 0;
-                    } 
-                    // 批量文件响应：result.data 是对象
-                    else if (typeof result.data === 'object') {
-                        allChunks = result.data.allChunks || [];
-                        successCount = result.data.successCount || 0;
-                        totalFiles = result.data.totalFiles || selectedFiles.length;
+                    }
+                    
+                    // 构建向量入库状态显示
+                    let vectorStoreHtml = '';
+                    if (vectorStoreInfo) {
+                        const storeSuccess = vectorStoreInfo.success;
+                        const storeClass = storeSuccess ? 'success' : 'error';
+                        const storeIcon = storeSuccess ? '✓' : '✗';
+                        const storeChunks = vectorStoreInfo.chunkCount || 0;
+                        const storeTime = vectorStoreInfo.storedTimeMs || 0;
+                        const storeCollection = vectorStoreInfo.collectionName || 'doc-summarizer';
+                        
+                        vectorStoreHtml = `
+                            <div class="vector-store-info">
+                                <h4>${storeIcon} 向量数据库存储 ${storeSuccess ? '成功' : '失败'}</h4>
+                                <div class="vector-store-stats">
+                                    <div class="stat-item">
+                                        <span class="stat-label">Collection:</span>
+                                        <span class="stat-value">${storeCollection}</span>
+                                    </div>
+                                    <div class="stat-item">
+                                        <span class="stat-label">入库切片:</span>
+                                        <span class="stat-value ${storeClass}">${storeChunks} 个</span>
+                                    </div>
+                                    <div class="stat-item">
+                                        <span class="stat-label">入库耗时:</span>
+                                        <span class="stat-value">${storeTime}ms</span>
+                                    </div>
+                                    ${storeSuccess ? '' : `<div class="stat-item"><span class="stat-label">错误:</span><span class="stat-value error">${vectorStoreInfo.errorMessage || '未知错误'}</span></div>`}
+                                </div>
+                            </div>
+                        `;
                     }
                     
                     // 显示处理摘要
+                    const processingTimeText = processingTime > 0 ? ` (耗时 ${processingTime}ms)` : '';
                     if (selectedFiles.length > 1) {
                         successMessage.innerHTML = `
                             <div class="batch-summary">
-                                <h4>✓ 批量处理完成</h4>
+                                <h4>✓ 批量处理完成${processingTimeText}</h4>
                                 <div class="batch-summary-stats">
                                     <span>📄 成功: ${successCount}/${totalFiles} 个文件</span>
                                     <span>📊 共生成 ${allChunks.length} 个切片摘要</span>
                                 </div>
                             </div>
+                            ${vectorStoreHtml}
                         `;
                         resultsCount.textContent = `批量处理 - 共 ${allChunks.length} 个切片`;
                     } else {
-                        successMessage.textContent = `✓ 文档处理完成，共生成 ${allChunks.length} 个切片摘要`;
+                        successMessage.innerHTML = `
+                            <div>✓ 文档处理完成，共生成 ${allChunks.length} 个切片摘要${processingTimeText}</div>
+                            ${vectorStoreHtml}
+                        `;
                         resultsCount.textContent = `共 ${allChunks.length} 个切片`;
                     }
                     successMessage.classList.add('show');

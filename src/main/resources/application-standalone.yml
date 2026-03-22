@@ -35,6 +35,7 @@ ai:
       collectionName: ${AI_EMBEDDINGSTORE_QDRANT_COLLECTIONNAME:doc-summarizer}
       host: ${AI_EMBEDDINGSTORE_QDRANT_HOST:localhost}
       port: ${AI_EMBEDDINGSTORE_QDRANT_PORT:6334}
+      timeout: ${AI_EMBEDDINGSTORE_QDRANT_TIMEOUT:30}
 
   dashscope:
     apiKey: ${DASHSCOPE_API_KEY:sk-ca175397022a41a9926ffe30b1faac81}

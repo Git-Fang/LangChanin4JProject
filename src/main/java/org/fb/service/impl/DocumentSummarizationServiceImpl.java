@@ -10,6 +10,9 @@ import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.fb.bean.MarkdownBlock;
 import org.fb.bean.SummaryChunk;
+import org.fb.bean.SummarizationResult;
+import org.fb.bean.VectorStoreResult;
+import org.fb.config.QdrantConfig;
 import org.fb.service.DocumentSummarizationService;
 import org.fb.service.MarkdownDocumentParser;
 import org.fb.service.MarkdownSemanticChunker;
@@ -74,6 +77,9 @@ public class DocumentSummarizationServiceImpl implements DocumentSummarizationSe
     @Autowired
     @Qualifier("qdrantEmbeddingStore")
     private EmbeddingStore<TextSegment> embeddingStore;
+    
+    @Autowired
+    private QdrantConfig qdrantConfig;
     
     @Autowired
     private MarkdownDocumentParser markdownDocumentParser;
@@ -141,8 +147,80 @@ public class DocumentSummarizationServiceImpl implements DocumentSummarizationSe
     }
 
     @Override
+    public SummarizationResult summarizeDocument(MultipartFile file, boolean saveToVectorStore) {
+        log.info("开始处理文档: {} (向量入库: {})", file.getOriginalFilename(), saveToVectorStore);
+        
+        String articleTitle = file.getOriginalFilename();
+        String documentText;
+        
+        try {
+            // 解析文档
+            documentText = parseDocument(file);
+            log.info("文档解析完成，文本长度: {} 字符", documentText.length());
+        } catch (Exception e) {
+            log.error("文档解析失败: {}", file.getOriginalFilename(), e);
+            throw new RuntimeException("文档解析失败: " + e.getMessage(), e);
+        }
+        
+        return summarizeText(documentText, articleTitle, saveToVectorStore);
+    }
+
+    @Override
     public List<SummaryChunk> summarizeText(String documentText, String articleTitle) {
-        return summarizeText(documentText, articleTitle, true);
+        return summarizeText(documentText, articleTitle, true, null);
+    }
+
+    @Override
+    public SummarizationResult summarizeText(String documentText, String articleTitle, boolean saveToVectorStore) {
+        long startTime = System.currentTimeMillis();
+        
+        if (documentText == null || documentText.trim().isEmpty()) {
+            log.warn("文档文本为空");
+            return SummarizationResult.withChunksOnly(Collections.emptyList(), 0);
+        }
+        
+        // 语义切分
+        List<String> chunks = semanticChunking(documentText);
+        log.info("文档切分完成，共 {} 个切片", chunks.size());
+        
+        // 并发生成摘要
+        List<SummaryChunk> results = new ArrayList<>();
+        List<CompletableFuture<SummaryChunk>> futures = new ArrayList<>();
+        
+        for (int i = 0; i < chunks.size(); i++) {
+            final int index = i;
+            final String chunk = chunks.get(i);
+            
+            CompletableFuture<SummaryChunk> future = CompletableFuture.supplyAsync(() -> {
+                String summary = generateSummary(chunk);
+                return new SummaryChunk(articleTitle, summary, chunk, index + 1);
+            }, executorService);
+            
+            futures.add(future);
+        }
+        
+        // 收集结果
+        for (CompletableFuture<SummaryChunk> future : futures) {
+            try {
+                results.add(future.get());
+            } catch (Exception e) {
+                log.error("获取摘要结果失败", e);
+            }
+        }
+        
+        // 按切片顺序排序
+        results.sort((a, b) -> Integer.compare(a.getChunkIndex(), b.getChunkIndex()));
+        
+        log.info("摘要生成完成，共生成 {} 个摘要", results.size());
+        
+        // 保存到Qdrant向量数据库
+        VectorStoreResult vectorStoreResult = null;
+        if (saveToVectorStore && !results.isEmpty()) {
+            vectorStoreResult = saveChunksToQdrant(results);
+        }
+        
+        long processingTime = System.currentTimeMillis() - startTime;
+        return new SummarizationResult(results, vectorStoreResult, processingTime);
     }
 
     /**
@@ -151,9 +229,11 @@ public class DocumentSummarizationServiceImpl implements DocumentSummarizationSe
      * @param documentText 文档文本内容
      * @param articleTitle 文章标题
      * @param saveToQdrant 是否保存到Qdrant向量数据库
+     * @param collectionName 自定义collection名称（可选，为null时使用默认collection）
      * @return 切分摘要结果列表
      */
-    public List<SummaryChunk> summarizeText(String documentText, String articleTitle, boolean saveToQdrant) {
+    @Override
+    public List<SummaryChunk> summarizeText(String documentText, String articleTitle, boolean saveToQdrant, String collectionName) {
         if (documentText == null || documentText.trim().isEmpty()) {
             log.warn("文档文本为空");
             return Collections.emptyList();
@@ -206,12 +286,19 @@ public class DocumentSummarizationServiceImpl implements DocumentSummarizationSe
      * 格式：【文章标题】xxx | 【段落摘要】zzz | 【切片内容】xxx
      *
      * @param chunks 切片摘要列表
+     * @return 向量入库结果
      */
-    private void saveChunksToQdrant(List<SummaryChunk> chunks) {
+    private VectorStoreResult saveChunksToQdrant(List<SummaryChunk> chunks) {
         log.info("开始保存 {} 个切片到Qdrant向量数据库", chunks.size());
+        long startTime = System.currentTimeMillis();
+        String collectionName = qdrantConfig.getCollectionName();
         
         try {
-            for (SummaryChunk chunk : chunks) {
+            StringBuilder pointIdsBuilder = new StringBuilder();
+            
+            for (int i = 0; i < chunks.size(); i++) {
+                SummaryChunk chunk = chunks.get(i);
+                
                 // 构建存储格式：【文章标题】xxx | 【段落摘要】zzz | 【切片内容】xxx
                 String formattedContent = String.format("【文章标题】%s | 【段落摘要】%s | 【切片内容】%s",
                         chunk.getArticleTitle() != null ? chunk.getArticleTitle() : "未命名",
@@ -230,13 +317,30 @@ public class DocumentSummarizationServiceImpl implements DocumentSummarizationSe
                 List<Embedding> embeddings = embeddingModel.embedAll(segments).content();
                 embeddingStore.addAll(embeddings, segments);
                 
-                log.debug("切片 {} 已保存到Qdrant", chunk.getChunkIndex());
+                // 生成point ID (格式: articleTitle_chunkIndex_timestamp)
+                String pointId = String.format("%s_%d_%d", 
+                        chunk.getArticleTitle() != null ? chunk.getArticleTitle().replaceAll("[^a-zA-Z0-9]", "_") : "unknown",
+                        chunk.getChunkIndex(),
+                        System.currentTimeMillis());
+                
+                if (i > 0) {
+                    pointIdsBuilder.append(",");
+                }
+                pointIdsBuilder.append(pointId);
+                
+                log.debug("切片 {} 已保存到Qdrant (pointId: {})", chunk.getChunkIndex(), pointId);
             }
             
-            log.info("切片摘要保存完成，共保存 {} 个切片到Qdrant", chunks.size());
+            long storedTimeMs = System.currentTimeMillis() - startTime;
+            String[] pointIds = pointIdsBuilder.toString().split(",");
+            
+            log.info("切片摘要保存完成，共保存 {} 个切片到Qdrant (耗时 {}ms)", chunks.size(), storedTimeMs);
+            
+            return VectorStoreResult.success(collectionName, chunks.size(), storedTimeMs, pointIds);
             
         } catch (Exception e) {
             log.error("保存切片到Qdrant失败: {}", e.getMessage(), e);
+            return VectorStoreResult.failure(collectionName, e.getMessage());
         }
     }
 
