@@ -1,8 +1,5 @@
 package org.fb.service.impl;
 
-import dev.langchain4j.data.document.Document;
-import dev.langchain4j.data.document.loader.FileSystemDocumentLoader;
-import dev.langchain4j.data.document.parser.apache.tika.ApacheTikaDocumentParser;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.store.embedding.EmbeddingStore;
@@ -11,7 +8,6 @@ import dev.langchain4j.data.embedding.Embedding;
 import org.apache.commons.io.FilenameUtils;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
-import org.apache.pdfbox.text.PDFTextStripperByArea;
 import org.fb.bean.MarkdownBlock;
 import org.fb.bean.SummaryChunk;
 import org.fb.service.DocumentSummarizationService;
@@ -444,7 +440,7 @@ public class DocumentSummarizationServiceImpl implements DocumentSummarizationSe
             }
             summary = summary.replaceAll("[\"']", "").trim();
             
-            // 截断到200字
+            // 截断到150字
             if (summary.length() > SUMMARY_MAX_CHARS) {
                 summary = summary.substring(0, SUMMARY_MAX_CHARS) + "...";
             }
@@ -482,9 +478,8 @@ public class DocumentSummarizationServiceImpl implements DocumentSummarizationSe
                 // Markdown文件使用专用解析器，保留图片、图表等结构
                 text = parseMarkdownDocument(tempFile, tempDir);
             } else {
-                // 其他文件使用LangChain4j的解析器
-                Document document = FileSystemDocumentLoader.loadDocument(tempFile.toString(), new ApacheTikaDocumentParser());
-                text = document.text();
+                // 其他文件使用简单文本读取（doc/docx等建议转换为PDF或TXT）
+                text = Files.readString(tempFile, StandardCharsets.UTF_8);
             }
             
             // 清理和规范化文本

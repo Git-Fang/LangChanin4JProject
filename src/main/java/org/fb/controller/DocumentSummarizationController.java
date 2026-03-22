@@ -25,7 +25,7 @@ import java.util.stream.Collectors;
  * 文档概要摘要控制器
  */
 @RestController
-@RequestMapping("/ragTranslation/doc")
+@RequestMapping("/api/summarize")
 @Tag(name = "文档概要摘要")
 public class DocumentSummarizationController {
     private static final Logger log = LoggerFactory.getLogger(DocumentSummarizationController.class);

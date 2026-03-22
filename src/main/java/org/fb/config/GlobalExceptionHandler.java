@@ -1,13 +1,8 @@
 package org.fb.config;
 
 import lombok.extern.slf4j.Slf4j;
-import org.fb.util.SseRequestDetector;
-import org.springframework.dao.DataAccessException;
-import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.http.converter.HttpMessageNotWritableException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
@@ -17,6 +12,9 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * 全局异常处理器
+ */
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -74,60 +72,18 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(response);
     }
 
-    @ExceptionHandler(RedisConnectionFailureException.class)
-    public ResponseEntity<Map<String, Object>> handleRedisConnectionFailure(
-            RedisConnectionFailureException ex, WebRequest request) {
-        log.error("Redis连接失败: {}", ex.getMessage(), ex);
-        Map<String, Object> response = new HashMap<>();
-        response.put("error", "Redis连接失败");
-        response.put("message", "缓存服务暂时不可用，系统将继续运行");
-        response.put("status", "WARNING");
-        response.put("path", request.getDescription(false).replace("uri=", ""));
-
-        return ResponseEntity.ok(response);
-    }
-
-    @ExceptionHandler(DataAccessException.class)
-    public ResponseEntity<Map<String, Object>> handleDataAccessException(
-            DataAccessException ex, WebRequest request) {
-        log.error("数据访问异常: {}", ex.getMessage(), ex);
-        Map<String, Object> response = new HashMap<>();
-        response.put("error", "数据访问异常");
-        response.put("message", "数据服务暂时不可用，系统将继续运行");
-        response.put("status", "WARNING");
-        response.put("path", request.getDescription(false).replace("uri=", ""));
-
-        return ResponseEntity.ok(response);
-    }
-
-    @ExceptionHandler(HttpMessageNotWritableException.class)
-    public ResponseEntity<Map<String, Object>> handleHttpMessageNotWritableException(
-            HttpMessageNotWritableException ex, WebRequest request) {
-        log.error("HttpMessageNotWritableException: {}", ex.getMessage(), ex);
-
-        boolean isSseRequest = isSseRequest(request);
-        if (isSseRequest) {
-            log.warn("检测到SSE请求的消息转换异常，尝试降级处理");
-        }
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<Map<String, Object>> handleGeneralException(
+            Exception ex, WebRequest request) {
+        log.error("发生异常: {}", ex.getMessage(), ex);
 
         Map<String, Object> response = new HashMap<>();
-        response.put("error", "消息转换失败");
-        response.put("message", getSafeMessage(ex, isSseRequest ? "数据序列化失败，请检查输入格式" : "系统内部错误"));
+        response.put("error", "系统错误");
+        response.put("message", getSafeMessage(ex, "系统内部错误"));
         response.put("status", "ERROR");
-        response.put("errorType", "MESSAGE_CONVERSION_ERROR");
-        response.put("retryable", !isSseRequest);
+        response.put("path", request.getDescription(false).replace("uri=", ""));
 
-        if (isSseRequest) {
-            response.put("fallback", "请尝试刷新页面或重新连接");
-        }
-
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .contentType(MediaType.APPLICATION_JSON)
-                .body(response);
-    }
-
-    private boolean isSseRequest(WebRequest request) {
-        return SseRequestDetector.isSseRequest(request);
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
     }
 
     private String getSafeMessage(Throwable ex, String defaultMessage) {
@@ -145,33 +101,5 @@ public class GlobalExceptionHandler {
             return getSafeMessage(ex.getCause(), defaultMessage);
         }
         return defaultMessage;
-    }
-
-    @ExceptionHandler(Exception.class)
-    public ResponseEntity<Map<String, Object>> handleGeneralException(
-            Exception ex, WebRequest request) {
-        log.error("发生异常: {}", ex.getMessage(), ex);
-
-        if (isSseRequest(request)) {
-            log.warn("检测到SSE请求异常，返回SSE兼容的错误响应");
-            Map<String, Object> errorResponse = new HashMap<>();
-            errorResponse.put("status", "error");
-            errorResponse.put("message", "系统错误: " + getSafeMessage(ex, "未知错误"));
-            errorResponse.put("errorType", "GENERAL_EXCEPTION");
-            errorResponse.put("retryable", true);
-            errorResponse.put("timestamp", System.currentTimeMillis());
-
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .body(errorResponse);
-        }
-
-        Map<String, Object> response = new HashMap<>();
-        response.put("error", "系统错误");
-        response.put("message", getSafeMessage(ex, "系统内部错误"));
-        response.put("status", "ERROR");
-        response.put("path", request.getDescription(false).replace("uri=", ""));
-
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
     }
 }
