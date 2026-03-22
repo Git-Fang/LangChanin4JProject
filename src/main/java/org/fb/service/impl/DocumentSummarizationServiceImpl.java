@@ -12,8 +12,11 @@ import org.apache.commons.io.FilenameUtils;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.apache.pdfbox.text.PDFTextStripperByArea;
+import org.fb.bean.MarkdownBlock;
 import org.fb.bean.SummaryChunk;
 import org.fb.service.DocumentSummarizationService;
+import org.fb.service.MarkdownDocumentParser;
+import org.fb.service.MarkdownSemanticChunker;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -75,6 +78,12 @@ public class DocumentSummarizationServiceImpl implements DocumentSummarizationSe
     @Autowired
     @Qualifier("qdrantEmbeddingStore")
     private EmbeddingStore<TextSegment> embeddingStore;
+    
+    @Autowired
+    private MarkdownDocumentParser markdownDocumentParser;
+    
+    @Autowired
+    private MarkdownSemanticChunker markdownSemanticChunker;
 
     @Value("${summarization.prompt-template:summarization-prompt}")
     private String promptTemplatePath;
@@ -467,8 +476,11 @@ public class DocumentSummarizationServiceImpl implements DocumentSummarizationSe
             
             // 根据文件类型选择解析方法
             if ("pdf".equals(extension)) {
-                // PDF文件使用Tika原生解析器，确保中文编码正确
+                // PDF文件使用PDFBox解析器，确保中文编码正确
                 text = parsePdfWithTika(tempFile);
+            } else if ("md".equals(extension) || "markdown".equals(extension)) {
+                // Markdown文件使用专用解析器，保留图片、图表等结构
+                text = parseMarkdownDocument(tempFile, tempDir);
             } else {
                 // 其他文件使用LangChain4j的解析器
                 Document document = FileSystemDocumentLoader.loadDocument(tempFile.toString(), new ApacheTikaDocumentParser());
@@ -492,6 +504,52 @@ public class DocumentSummarizationServiceImpl implements DocumentSummarizationSe
         }
     }
 
+    /**
+     * 解析Markdown文档
+     * 使用专用解析器提取图片描述、图表信息等
+     */
+    private String parseMarkdownDocument(Path mdFile, Path baseDir) throws IOException {
+        log.info("使用Markdown专用解析器解析文档");
+        
+        try {
+            // 读取Markdown文件内容
+            String mdContent = Files.readString(mdFile, StandardCharsets.UTF_8);
+            
+            if (mdContent == null || mdContent.trim().isEmpty()) {
+                return "";
+            }
+            
+            // 解析Markdown结构并处理图片、图表
+            List<MarkdownBlock> blocks = markdownDocumentParser.parse(mdContent, baseDir);
+            
+            if (blocks == null || blocks.isEmpty()) {
+                return normalizeText(mdContent);
+            }
+            
+            // 使用语义切片器生成切片
+            List<String> chunks = markdownSemanticChunker.chunk(blocks);
+            
+            // 合并为完整文本
+            StringBuilder result = new StringBuilder();
+            for (int i = 0; i < chunks.size(); i++) {
+                if (i > 0) {
+                    result.append("\n\n---\n\n");
+                }
+                result.append(chunks.get(i));
+            }
+            
+            String processedText = result.toString();
+            log.info("Markdown解析完成，原始长度: {}, 处理后长度: {}", mdContent.length(), processedText.length());
+            
+            return processedText;
+            
+        } catch (Exception e) {
+            log.error("Markdown解析失败，使用备用解析: {}", e.getMessage());
+            // 解析失败时，回退到简单文本提取
+            return Files.readString(mdFile, StandardCharsets.UTF_8);
+        }
+    }
+    
     /**
      * 使用PDFBox解析PDF（更好的中文支持）
      */
