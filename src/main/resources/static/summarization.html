@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>文档概要总结</title>
     <link rel="icon" type="image/png" href="/icon.png">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -365,7 +366,87 @@
             font-size: 14px;
             line-height: 1.8;
             color: #333;
-            white-space: pre-wrap;
+        }
+        
+        .rag-answer-content h1,
+        .rag-answer-content h2,
+        .rag-answer-content h3 {
+            color: #2e7d32;
+            margin-top: 16px;
+            margin-bottom: 8px;
+        }
+        
+        .rag-answer-content h1 { font-size: 20px; }
+        .rag-answer-content h2 { font-size: 18px; }
+        .rag-answer-content h3 { font-size: 16px; }
+        
+        .rag-answer-content p {
+            margin-bottom: 12px;
+        }
+        
+        .rag-answer-content ul,
+        .rag-answer-content ol {
+            margin: 12px 0;
+            padding-left: 24px;
+        }
+        
+        .rag-answer-content li {
+            margin-bottom: 6px;
+        }
+        
+        .rag-answer-content blockquote {
+            border-left: 4px solid #4caf50;
+            background-color: #f1f8e9;
+            padding: 12px 16px;
+            margin: 12px 0;
+            border-radius: 4px;
+            color: #33691e;
+        }
+        
+        .rag-answer-content strong {
+            color: #1b5e20;
+        }
+        
+        .rag-answer-content code {
+            background-color: #f5f5f5;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            color: #c62828;
+        }
+        
+        .rag-answer-content pre {
+            background-color: #263238;
+            color: #aed581;
+            padding: 16px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 12px 0;
+        }
+        
+        .rag-answer-content pre code {
+            background: none;
+            padding: 0;
+            color: inherit;
+        }
+        
+        .rag-answer-content table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 12px 0;
+        }
+        
+        .rag-answer-content th,
+        .rag-answer-content td {
+            border: 1px solid #ddd;
+            padding: 10px;
+            text-align: left;
+        }
+        
+        .rag-answer-content th {
+            background-color: #e8f5e9;
+            font-weight: 500;
         }
 
         .rag-chunks-title {
@@ -1418,13 +1499,15 @@
 
             // 如果有AI生成的答案，显示答案区域
             if (generatedWithLlm && answer) {
+                // 使用marked.js解析Markdown
+                const renderedAnswer = marked.parse(answer);
                 html += `
                     <div class="rag-answer-section">
                         <div class="rag-answer-header">
                             <span class="rag-answer-title">🤖 AI答案</span>
                             <span class="rag-answer-time">耗时 ${queryTimeMs}ms</span>
                         </div>
-                        <div class="rag-answer-content">${escapeHtml(answer)}</div>
+                        <div class="rag-answer-content">${renderedAnswer}</div>
                     </div>
                 `;
             }
