@@ -48,6 +48,11 @@ ai:
 summarization:
   prompt-template: summarization-prompt
 
+# RAG配置
+rag:
+  prompt-template: rag-prompt
+  max-context-chunks: 3
+
 # 日志配置
 logging:
   level:
