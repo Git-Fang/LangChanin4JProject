@@ -1166,10 +1166,9 @@
             <div class="upload-section" id="fileUploadSection">
                 <h3 class="upload-title">文件管理</h3>
                 <button class="upload-btn" onclick="const modal=document.getElementById('batchModal');if(modal)modal.style.display='flex'">批量上传文件</button>
-                <button class="upload-btn" onclick="window.open('/summarization.html', '_blank')" 
-                        style="background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%); margin-top: 10px;">
+                <a href="/summarization.html" target="_blank" id="summaryLink" style="display: block; width: 100%; padding: 10px 16px; background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; text-align: center; text-decoration: none; margin-top: 10px; box-sizing: border-box;">
                     概要总结
-                </button>
+                </a>
                 <p style="font-size: 11px; color: #999; margin-top: 6px; line-height: 1.4;">
                     文档智能切片+摘要生成，轻松理解长文档
                 </p>
