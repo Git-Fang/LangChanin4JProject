@@ -561,6 +561,200 @@
             gap: 5px;
         }
 
+        /* RAG问答区域样式 */
+        .qa-section {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        }
+
+        .qa-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #4caf50;
+        }
+
+        .qa-header h2 {
+            font-size: 18px;
+            color: #333;
+        }
+
+        .qa-input-area {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .qa-input {
+            flex: 1;
+            padding: 12px 16px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .qa-input:focus {
+            border-color: #4caf50;
+        }
+
+        .qa-submit-btn {
+            padding: 12px 24px;
+            background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .qa-submit-btn:hover:not(:disabled) {
+            background: linear-gradient(135deg, #43a047 0%, #1b5e20 100%);
+        }
+
+        .qa-submit-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .qa-result {
+            display: none;
+        }
+
+        .qa-result.show {
+            display: block;
+        }
+
+        .qa-answer-section {
+            background: #f8fff8;
+            border: 1px solid #4caf50;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .qa-answer-title {
+            font-size: 14px;
+            color: #4caf50;
+            font-weight: 500;
+            margin-bottom: 10px;
+        }
+
+        .qa-answer-content {
+            line-height: 1.8;
+            color: #333;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        .qa-retrieval-section {
+            margin-top: 20px;
+        }
+
+        .qa-retrieval-title {
+            font-size: 14px;
+            color: #333;
+            font-weight: 500;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .qa-retrieval-count {
+            background: #667eea;
+            color: white;
+            padding: 2px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+        }
+
+        .qa-retrieval-item {
+            background: #f9f9f9;
+            border: 1px solid #eee;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 10px;
+        }
+
+        .qa-retrieval-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .qa-retrieval-index {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 24px;
+            height: 24px;
+            background: #667eea;
+            color: white;
+            border-radius: 50%;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .qa-retrieval-score {
+            font-size: 12px;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 500;
+        }
+
+        .qa-retrieval-score.high {
+            background: #4caf50;
+            color: white;
+        }
+
+        .qa-retrieval-score.medium {
+            background: #ff9800;
+            color: white;
+        }
+
+        .qa-retrieval-score.low {
+            background: #9e9e9e;
+            color: white;
+        }
+
+        .qa-retrieval-content {
+            font-size: 13px;
+            color: #666;
+            line-height: 1.6;
+            max-height: 150px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+            background: white;
+            padding: 10px;
+            border-radius: 4px;
+        }
+
+        .qa-loading {
+            display: none;
+            text-align: center;
+            padding: 30px;
+        }
+
+        .qa-loading.show {
+            display: block;
+        }
+
+        .qa-empty {
+            text-align: center;
+            padding: 30px;
+            color: #999;
+        }
+
         /* 响应式 */
         @media (max-width: 768px) {
             .container {
@@ -581,6 +775,10 @@
             .results-table td {
                 padding: 8px 10px;
             }
+
+            .qa-input-area {
+                flex-direction: column;
+            }
         }
     </style>
 </head>
@@ -598,8 +796,43 @@
                 <li>支持同时上传最多5个文档文件</li>
                 <li>系统将自动对文档进行语义切分（每段约1024字符）</li>
                 <li>基于大语言模型为每个切片生成150字以内的摘要</li>
-                <li>点击下方上传区域选择文件开始处理</li>
+                <li>文档上传后可进行RAG智能问答</li>
             </ul>
+        </div>
+
+        <!-- RAG问答区域 -->
+        <div class="qa-section">
+            <div class="qa-header">
+                <h2>🔍 RAG智能问答</h2>
+            </div>
+            
+            <div class="qa-input-area">
+                <input type="text" id="qaQuestion" class="qa-input" placeholder="请输入您的问题，例如：这份文档讲了什么内容？" 
+                       onkeypress="if(event.key==='Enter')submitQA()">
+                <button id="qaSubmitBtn" class="qa-submit-btn" onclick="submitQA()">提问</button>
+            </div>
+            
+            <div id="qaLoading" class="qa-loading">
+                <div class="spinner"></div>
+                <div class="loading-text">正在检索知识库并生成回答...</div>
+            </div>
+            
+            <div id="qaResult" class="qa-result">
+                <!-- AI回答 -->
+                <div class="qa-answer-section">
+                    <div class="qa-answer-title">💬 AI回答</div>
+                    <div id="qaAnswerContent" class="qa-answer-content"></div>
+                </div>
+                
+                <!-- 检索内容 -->
+                <div class="qa-retrieval-section">
+                    <div class="qa-retrieval-title">
+                        📄 检索内容
+                        <span id="qaRetrievalCount" class="qa-retrieval-count">0</span>条
+                    </div>
+                    <div id="qaRetrievalList"></div>
+                </div>
+            </div>
         </div>
 
         <div class="upload-section">
@@ -999,6 +1232,86 @@
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
+        }
+
+        // RAG问答功能
+        const qaQuestionInput = document.getElementById('qaQuestion');
+        const qaSubmitBtn = document.getElementById('qaSubmitBtn');
+        const qaLoading = document.getElementById('qaLoading');
+        const qaResult = document.getElementById('qaResult');
+        const qaAnswerContent = document.getElementById('qaAnswerContent');
+        const qaRetrievalCount = document.getElementById('qaRetrievalCount');
+        const qaRetrievalList = document.getElementById('qaRetrievalList');
+
+        // 提交问答
+        async function submitQA() {
+            const question = qaQuestionInput.value.trim();
+            if (!question) {
+                alert('请输入问题');
+                return;
+            }
+
+            // 显示加载状态
+            qaLoading.classList.add('show');
+            qaResult.classList.remove('show');
+            qaSubmitBtn.disabled = true;
+            qaSubmitBtn.textContent = '回答中...';
+
+            try {
+                const response = await fetch(window.API_BASE_URL + '/ragTranslation/qa/ask', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ question: question })
+                });
+
+                const result = await response.json();
+
+                if (result.code === 200 && result.data) {
+                    // 显示回答
+                    qaAnswerContent.textContent = result.data.answer;
+                    
+                    // 显示检索结果
+                    const retrievalResults = result.data.retrievalResults || [];
+                    qaRetrievalCount.textContent = retrievalResults.length;
+                    
+                    // 渲染检索列表
+                    qaRetrievalList.innerHTML = '';
+                    
+                    if (retrievalResults.length === 0) {
+                        qaRetrievalList.innerHTML = '<div class="qa-empty">知识库中没有找到相关内容</div>';
+                    } else {
+                        retrievalResults.forEach((item, index) => {
+                            const scoreClass = item.score >= 0.8 ? 'high' : (item.score >= 0.6 ? 'medium' : 'low');
+                            const scorePercent = item.scorePercent || Math.round(item.score * 100);
+                            
+                            const div = document.createElement('div');
+                            div.className = 'qa-retrieval-item';
+                            div.innerHTML = `
+                                <div class="qa-retrieval-header">
+                                    <span class="qa-retrieval-index">${index + 1}</span>
+                                    <span class="qa-retrieval-score ${scoreClass}">${scorePercent}%</span>
+                                </div>
+                                <div class="qa-retrieval-content">${escapeHtml(item.content)}</div>
+                            `;
+                            qaRetrievalList.appendChild(div);
+                        });
+                    }
+                    
+                    qaResult.classList.add('show');
+                } else {
+                    alert(result.message || '问答失败');
+                }
+
+            } catch (error) {
+                console.error('问答失败:', error);
+                alert('问答失败: ' + error.message);
+            } finally {
+                qaLoading.classList.remove('show');
+                qaSubmitBtn.disabled = false;
+                qaSubmitBtn.textContent = '提问';
+            }
         }
     </script>
 </body>
