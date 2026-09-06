@@ -836,11 +836,11 @@
             loadingDiv.appendChild(loadingIndicator);
 
             try {
-                // 添加请求超时处理（180秒，与后端配置一致）
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 180000); // 180秒超时
+                            // 添加请求超时处理（180秒，与后端配置一致）
+                            const controller = new AbortController();
+                            const timeoutId = setTimeout(() => controller.abort(), 180000); // 180秒超时
                 
-                const response = await fetch(API_BASE_URL, {
+                            const response = await fetch(`${API_BASE_URL}/xiaozhi/chat`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',

@@ -207,17 +207,17 @@ public class LLMConfig {
     }
 
     private void refreshStreamingChatModel() {
-        if (dashscopeApiKey == null || dashscopeApiKey.isEmpty() || dashscopeApiKey.equals("demo")) {
-            log.warn("DashScope API Key未配置，Streaming模型不可用");
-            this.streamingChatModel = null;
-        } else {
-            // 使用DashScope原生的QwenStreamingChatModel，避免OpenAI兼容模式的序列化问题
-            this.streamingChatModel = QwenStreamingChatModel.builder()
-                    .apiKey(dashscopeApiKey)
-                    .modelName(dashscopeModel)
-                    .build();
+            if (dashscopeApiKey == null || dashscopeApiKey.isEmpty() || dashscopeApiKey.equals("demo")) {
+                log.warn("DashScope API Key未配置，Streaming模型不可用");
+                this.streamingChatModel = null;
+            } else {
+                // 使用DashScope原生的QwenStreamingChatModel，避免OpenAI兼容模式的序列化问题
+                                this.streamingChatModel = QwenStreamingChatModel.builder()
+                                        .apiKey(dashscopeApiKey)
+                                        .modelName(dashscopeModel)
+                                        .build();
+            }
         }
-    }
     
     private void refreshDeepSeekStreamingChatModel() {
         if (deepSeekApiKey == null || deepSeekApiKey.isEmpty()) {

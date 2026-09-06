@@ -6,6 +6,11 @@ import org.apache.http.client.config.RequestConfig;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.impl.conn.PoolingHttpClientConnectionManager;
+import org.apache.http.impl.client.HttpClients;
+import org.apache.http.client.config.RequestConfig;
+import org.apache.http.impl.conn.SystemDefaultRoutePlanner;
+import org.apache.http.conn.routing.HttpRoutePlanner;
+import org.apache.http.HttpHost;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.web.client.RestTemplateBuilder;
@@ -94,19 +99,31 @@ public class HttpClientConfig {
     }
 
     private CloseableHttpClient createHttpClient(PoolingHttpClientConnectionManager manager) {
-        RequestConfig requestConfig = RequestConfig.custom()
-                .setSocketTimeout(READ_TIMEOUT)
-                .setConnectTimeout(CONNECT_TIMEOUT)
-                .setConnectionRequestTimeout(CONNECT_TIMEOUT)
-                .build();
+            RequestConfig requestConfig = RequestConfig.custom()
+                    .setSocketTimeout(READ_TIMEOUT)
+                    .setConnectTimeout(CONNECT_TIMEOUT)
+                    .setConnectionRequestTimeout(CONNECT_TIMEOUT)
+                    .build();
 
-        return HttpClientBuilder.create()
-                .setConnectionManager(manager)
-                .setDefaultRequestConfig(requestConfig)
-                .evictExpiredConnections()
-                .evictIdleConnections(30, TimeUnit.SECONDS)
-                .build();
-    }
+            // 禁用代理，强制直接连接
+            HttpRoutePlanner routePlanner = new SystemDefaultRoutePlanner(null) {
+                @Override
+                protected HttpHost determineProxy(HttpHost target, org.apache.http.HttpRequest request,
+                                                    org.apache.http.protocol.HttpContext context) throws org.apache.http.HttpException {
+                    // 返回 null 表示不使用代理
+                    return null;
+                }
+            };
+
+            return HttpClientBuilder.create()
+                    .setConnectionManager(manager)
+                    .setDefaultRequestConfig(requestConfig)
+                    .setRoutePlanner(routePlanner)
+                    .disableCookieManagement()
+                    .evictExpiredConnections()
+                    .evictIdleConnections(30, TimeUnit.SECONDS)
+                    .build();
+        }
 
     @Bean
     public SimpleClientHttpRequestFactory clientHttpRequestFactory() {

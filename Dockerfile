@@ -23,4 +23,7 @@ COPY .env /app/.env
 EXPOSE 8000
 
 # 启动应用（支持通过SPRING_PROFILES_ACTIVE环境变量覆盖profile）
-ENTRYPOINT ["java", "-Dfile.encoding=UTF-8", "-jar", "app.jar"]
+# 禁用Java系统代理以解决SSL连接问题
+# 强制禁用 Java 11+ JdkHttpClient 的代理
+# 修复SSL证书问题：移除trustStore=NONE配置，使用Java默认证书库
+ENTRYPOINT ["java", "-Dfile.encoding=UTF-8", "-Dhttp.proxyHost=", "-Dhttp.proxyPort=", "-Dhttps.proxyHost=", "-Dhttps.proxyPort=", "-Djava.net.useSystemProxies=false", "-Dhttp.nonProxyHosts=*", "-Djdk.httpclient.proxySelector.disableDynamicProxyDiscovery=true", "-Djdk.httpclient.allowRestrictedHeaders=Connection,Proxy-Authenticate,Proxy-Authorization", "-Djdk.httpclient.connectionPool.size=20", "-Djdk.httpclient.keepAlive.timeout=60", "-Djdk.tls.client.protocols=TLSv1.2,TLSv1.3", "-Djdk.tls.client.cipherSuites=TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384", "-jar", "app.jar"]
