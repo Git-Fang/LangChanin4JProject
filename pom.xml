@@ -159,10 +159,30 @@
             <artifactId>spring-boot-starter-data-redis</artifactId>
         </dependency>
         <!-- Apache Commons Pool2 for Redis connection pooling -->
-        <dependency>
-            <groupId>org.apache.commons</groupId>
-            <artifactId>commons-pool2</artifactId>
-        </dependency>
+                <dependency>
+                    <groupId>org.apache.commons</groupId>
+                    <artifactId>commons-pool2</artifactId>
+                </dependency>
+
+                <!-- Spring Boot Cache for term matching cache -->
+                <dependency>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-starter-cache</artifactId>
+                </dependency>
+
+                <!-- Apache Commons Text for string similarity -->
+                <dependency>
+                    <groupId>org.apache.commons</groupId>
+                    <artifactId>commons-text</artifactId>
+                    <version>1.10.0</version>
+                </dependency>
+
+                <!-- Pinyin4j for pinyin conversion -->
+                <dependency>
+                    <groupId>com.belerweb</groupId>
+                    <artifactId>pinyin4j</artifactId>
+                    <version>2.5.1</version>
+                </dependency>
 
         <!-- Spring Boot Actuator for Prometheus metrics -->
         <dependency>

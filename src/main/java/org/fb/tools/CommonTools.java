@@ -11,6 +11,8 @@ import dev.langchain4j.store.embedding.EmbeddingSearchResult;
 import dev.langchain4j.store.embedding.EmbeddingStore;
 import dev.langchain4j.store.embedding.filter.Filter;
 import dev.langchain4j.store.embedding.filter.MetadataFilterBuilder;
+import org.fb.matcher.MultiDimensionalTermMatcher;
+import org.fb.model.TermMatchResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -37,6 +39,9 @@ public class CommonTools {
     @Autowired
     @Qualifier("qdrantEmbeddingStore")
     private EmbeddingStore<TextSegment> embeddingStore;
+
+    @Autowired
+    private MultiDimensionalTermMatcher multiDimensionalTermMatcher;
 
 
     @Tool(name = "embedding_search", value="查询qdrant向量数据信息:根据传入数据{{question}}从qdrant向量数据库中查询并返回")
@@ -441,12 +446,49 @@ public class CommonTools {
             return bestTerm;
         } catch (Exception e) {
             log.error("查找相似术语失败: {}", e.getMessage(), e);
-            return "ERROR: " + e.getMessage();
-        }
-    }
-    
-    /**
-     * 从JSON格式的存储内容中提取实际术语
+                        return "ERROR: " + e.getMessage();
+                    }
+                }
+
+                    /**
+                         * 多维度术语匹配工具
+                         * 整合语义、关键词、拼音、字符四种匹配方式
+                         */
+                        @Tool(name = "multi_dimensional_term_match", value = "多维度术语匹配:使用语义、关键词、拼音、字符四种方式匹配术语，返回最相关的术语")
+                        public String multiDimensionalTermMatch(@P(value = "text", required = true) String text) {
+                            log.info("========== 多维度术语匹配工具开始 ==========");
+                            log.info("输入文本: {}", text);
+
+                            try {
+                                if (multiDimensionalTermMatcher == null) {
+                                    log.warn("多维度匹配器未初始化，使用传统方式");
+                                    return findSimilarTerms(text);
+                                }
+
+                                // 执行多维度匹配
+                                List<TermMatchResult> results = multiDimensionalTermMatcher.findMatchingTerms(text);
+
+                                if (results.isEmpty()) {
+                                    log.info("未找到匹配术语");
+                                    return "NO_TERMS_FOUND";
+                                }
+
+                                // 返回最佳匹配结果
+                                TermMatchResult bestResult = results.get(0);
+                                log.info("最佳匹配: 术语={}, 最终分数={}, 匹配类型={}", 
+                                    bestResult.getTerm(), bestResult.getFinalScore(), bestResult.getMatchType());
+
+                                log.info("========== 多维度术语匹配工具完成 ==========");
+                                return bestResult.getTerm();
+
+                            } catch (Exception e) {
+                                log.error("多维度术语匹配失败: {}", e.getMessage(), e);
+                                return "ERROR: " + e.getMessage();
+                            }
+                        }
+
+                        /**
+                         * 从JSON格式的存储内容中提取实际术语
      * 例如: {"terms":"火中取栗","term_count":1} -> "火中取栗"
      */
     private String parseTermFromJson(String storedText) {
