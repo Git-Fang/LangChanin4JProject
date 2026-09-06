@@ -9,10 +9,12 @@ import dev.langchain4j.service.spring.AiServiceWiringMode;
 
 /**
  * chatModel = "ollamaChatModel",表示使用ollama模型
+ * 使用termQueryTool替代commonTools，避免误触发翻译功能
+ * termQueryTool仅用于RAG检索场景的术语查询，不涉及翻译
  * */
 @AiService(wiringMode = AiServiceWiringMode.EXPLICIT,
         chatModel = "chatModel",
-        tools = {"commonTools","mongoDBTools","naturalLanguageSQLAgent","personalDataTools","webSearchTools","knowledgeBaseRetrievalService"},
+        tools = {"termQueryTool","mongoDBTools","naturalLanguageSQLAgent","personalDataTools","webSearchTools","knowledgeBaseRetrievalService"},
         chatMemoryProvider = "chatMemoryProvider",
         contentRetriever = "contentRetriever"
 )
