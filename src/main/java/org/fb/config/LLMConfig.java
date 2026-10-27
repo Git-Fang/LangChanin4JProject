@@ -294,7 +294,12 @@ public class LLMConfig {
 
     @Bean
     public ChatModel chatModel() {
-        return qwenChatModel;
+        // 优先使用 Qwen，不可用时 fallback 到 Ollama
+        if (qwenChatModel != null) {
+            return qwenChatModel;
+        }
+        log.warn("Qwen ChatModel 不可用，fallback 到 Ollama ChatModel");
+        return ollamaChatModel;
     }
 
     @Bean
@@ -309,12 +314,22 @@ public class LLMConfig {
 
     @Bean(name = "qwenVisionChatModel")
     public ChatModel qwenVisionChatModel() {
-        return qwenVisionChatModel;
+        // 优先使用 Qwen Vision，不可用时 fallback 到 Ollama ChatModel
+        if (qwenVisionChatModel != null) {
+            return qwenVisionChatModel;
+        }
+        log.warn("Qwen Vision ChatModel 不可用，fallback 到 Ollama ChatModel");
+        return ollamaChatModel;
     }
 
     @Bean
     public StreamingChatModel streamingChatModel() {
-        return streamingChatModel;
+        // 优先使用 Qwen Streaming，不可用时 fallback 到 Ollama Streaming
+        if (streamingChatModel != null) {
+            return streamingChatModel;
+        }
+        log.warn("Qwen StreamingChatModel 不可用，fallback 到 Ollama StreamingChatModel");
+        return ollamaStreamingChatModel;
     }
     
     @Bean(name = "dynamicStreamingChatModel")

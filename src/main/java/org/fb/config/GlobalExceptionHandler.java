@@ -1,5 +1,6 @@
 package org.fb.config;
 
+import io.swagger.v3.oas.annotations.Hidden;
 import lombok.extern.slf4j.Slf4j;
 import org.fb.util.SseRequestDetector;
 import org.springframework.dao.DataAccessException;
@@ -18,6 +19,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 @Slf4j
+@Hidden
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
