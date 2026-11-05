@@ -9,8 +9,10 @@ import org.springframework.cloud.context.config.annotation.RefreshScope;
 import org.springframework.stereotype.Component;
 
 import jakarta.annotation.PostConstruct;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
@@ -37,6 +39,18 @@ public class ModelRegistry {
     @Value("${ai.kimi.apiKey:}")
     private String kimiApiKey;
 
+    @Value("${ai.kimi.model:kimi-k2.6}")
+    private String kimiModel;
+
+    @Value("${ai.deepSeek.model:deepseek-v4.1-flash-1017}")
+    private String deepSeekModel;
+
+    @Value("${ai.dashscope.model:qwen-max}")
+    private String dashscopeModel;
+
+    @Value("${ai.default-model:deepseek}")
+    private String defaultModelId;
+
     @Value("${ai.ollama.model:deepseek-r1:8b}")
     private String ollamaModel;
 
@@ -62,7 +76,7 @@ public class ModelRegistry {
         // DeepSeek 模型
         registerModel(ChatModelInfo.builder()
                 .modelId("deepseek")
-                .modelName("deepseek-chat")
+                .modelName(deepSeekModel)
                 .displayName("DeepSeek")
                 .provider("DeepSeek")
                 .enabled(isDeepSeekEnabled())
@@ -74,7 +88,7 @@ public class ModelRegistry {
         // 通义千问模型
         registerModel(ChatModelInfo.builder()
                 .modelId("qwen")
-                .modelName("qwen-max")
+                .modelName(dashscopeModel)
                 .displayName("通义千问")
                 .provider("阿里云")
                 .enabled(isQwenEnabled())
@@ -98,7 +112,7 @@ public class ModelRegistry {
         // Kimi 模型
         registerModel(ChatModelInfo.builder()
                 .modelId("kimi")
-                .modelName("kimi-k2-turbo-preview")
+                .modelName(kimiModel)
                 .displayName("Kimi")
                 .provider("月之暗面")
                 .enabled(isKimiEnabled())
@@ -178,7 +192,9 @@ public class ModelRegistry {
      * 获取所有模型
      */
     public List<ChatModelInfo> getAllModels() {
-        return models.values().stream().collect(Collectors.toList());
+        return models.values().stream()
+                .sorted(defaultModelFirst())
+                .collect(Collectors.toList());
     }
 
     /**
@@ -187,7 +203,17 @@ public class ModelRegistry {
     public List<ChatModelInfo> getAvailableModels() {
         return models.values().stream()
                 .filter(ChatModelInfo::isEnabled)
+                .sorted(defaultModelFirst())
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * 排序规则：默认模型排在最前，其余按模型ID排序，保证前端下拉框默认选中当前默认模型
+     */
+    private Comparator<ChatModelInfo> defaultModelFirst() {
+        return Comparator
+                .comparing((ChatModelInfo m) -> !Objects.equals(m.getModelId(), defaultModelId))
+                .thenComparing(ChatModelInfo::getModelId);
     }
 
     /**
@@ -248,11 +274,15 @@ public class ModelRegistry {
         if (available.isEmpty()) {
             return null;
         }
-        // 优先返回 qwen，否则返回第一个可用的
-        return available.stream()
-                .filter(m -> "qwen".equals(m.getModelId()))
-                .findFirst()
-                .map(ChatModelInfo::getModelId)
-                .orElse(available.get(0).getModelId());
+        // 优先使用显式配置的默认模型，其次回退到第一个可用模型
+        if (defaultModelId != null && !defaultModelId.isEmpty()) {
+            boolean configuredAvailable = available.stream()
+                    .anyMatch(m -> defaultModelId.equals(m.getModelId()));
+            if (configuredAvailable) {
+                return defaultModelId;
+            }
+            log.warn("【默认模型】配置的默认模型 {} 不可用，回退到可用模型列表", defaultModelId);
+        }
+        return available.get(0).getModelId();
     }
 }

@@ -62,16 +62,19 @@ public class LLMConfig {
     @Value("${ai.deepSeek.apiKey:}")
     private volatile String deepSeekApiKey;
 
-    @Value("${ai.deepSeek.model:deepseek-chat}")
+    @Value("${ai.deepSeek.model:deepseek-v4.1-flash-1017}")
     private volatile String deepSeekModel;
 
-    @Value("${ai.deepSeek.base-url:https://api.deepseek.com/v1}")
+    @Value("${ai.deepSeek.base-url:https://dashscope.aliyuncs.com/compatible-mode/v1}")
     private volatile String deepSeekUrl;
 
     @Value("${ai.deepSeek.max-retries:3}")
     private volatile int deepSeekMaxRetries;
 
-    @Value("${ai.kimi.model:kimi-k2-turbo-preview}")
+    @Value("${ai.default-model:deepseek}")
+    private volatile String defaultModelId;
+
+    @Value("${ai.kimi.model:kimi-k2.6}")
     private volatile String kimiModel;
 
     @Value("${ai.kimi.apiKey:}")
@@ -147,8 +150,13 @@ public class LLMConfig {
             dynamicStreamingChatModel.registerModel("kimi", kimiStreamingChatModel);
         }
         
-        // 设置默认模型
-        dynamicStreamingChatModel.setCurrentModel("qwen");
+        // 设置默认模型（可通过 ai.default-model 配置，默认 deepseek）
+        String targetDefault = (defaultModelId == null || defaultModelId.isEmpty()) ? "deepseek" : defaultModelId;
+        if (!dynamicStreamingChatModel.hasModel(targetDefault)) {
+            log.warn("【动态流式模型】默认模型 {} 未注册，回退到 deepseek", targetDefault);
+            targetDefault = "deepseek";
+        }
+        dynamicStreamingChatModel.setCurrentModel(targetDefault);
         
         log.info("【动态流式模型】初始化完成，已注册模型: {}", dynamicStreamingChatModel.getModels().keySet());
     }

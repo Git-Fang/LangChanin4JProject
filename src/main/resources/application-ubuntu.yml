@@ -42,13 +42,13 @@ mybatis-plus:
 
 ai:
   deepSeek:
-    base-url: https://api.deepseek.com/v1
-    model: deepseek-chat
+    base-url: ${AI_DEEPSEEK_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode/v1}
+    model: ${AI_DEEPSEEK_MODEL:deepseek-v4.1-flash-1017}
     apiKey: ${DeepSeek_API_KEY}
 
   kimi:
     base-url: https://api.moonshot.cn/v1
-    model: kimi-k2-turbo-preview
+    model: ${AI_KIMI_MODEL:kimi-k2.6}
     apiKey: ${KIMI_API_KEY}
 
   embeddingStore:

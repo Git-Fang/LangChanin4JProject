@@ -36,9 +36,10 @@ public class EnvConf {
     public String baiduMapApiKey;
  
  
-    public String kimiApiKey="sk-iHnlk244Ic6mia74KyVl8r4dxuymAeWP6sKk2xiPj4BYSRAx";
+    @Value("${ai.kimi.apiKey:}")
+    public String kimiApiKey;
  
-    @Value("${ai.kimi.model:kimi-k2-turbo-preview}")
+    @Value("${ai.kimi.model:kimi-k2.6}")
     public String kimiModel;
  
     @Value("${ai.kimi.base-url:https://api.moonshot.cn/v1}")
@@ -48,9 +49,9 @@ public class EnvConf {
     @Value("${ai.deepSeek.apiKey:}")
     public String deepSeekApiKey;
  
-    @Value("${ai.deepSeek.model:deepseek-chat}")
+    @Value("${ai.deepSeek.model:deepseek-v4.1-flash-1017}")
     public String deepSeekModel;
  
-    @Value("${ai.deepSeek.base-url:https://api.deepseek.com/v1}")
+    @Value("${ai.deepSeek.base-url:https://dashscope.aliyuncs.com/compatible-mode/v1}")
     public String deepSeekUrl;
 }
