@@ -48,7 +48,23 @@ import org.fb.config.RedisHealthIndicator;
 @RestController
 @RequestMapping("/xiaozhi")
 public class AsyncChatController implements EnvironmentAware {
-    
+
+    /**
+     * 系统生成的错误提示文案前缀。这类内容只是给用户看的临时提示，
+     * 不属于真实的对话内容，写入历史会导致后续请求带着错误上下文发给大模型。
+     */
+    private static final java.util.List<String> SYSTEM_ERROR_PREFIXES = java.util.List.of(
+            "抱歉，处理您的知识库查询请求时出现错误",
+            "抱歉，处理您的医疗咨询时出现错误",
+            "抱歉，翻译处理时出现错误",
+            "抱歉，术语提取时出现错误",
+            "抱歉，聊天服务暂时不可用",
+            "抱歉，SQL查询时出现类型转换错误",
+            "抱歉，AI生成的SQL包含不合理的值",
+            "抱歉，执行SQL查询时出错",
+            "系统错误"
+    );
+
     private final ChatRequestProducer requestProducer;
     private final StandaloneChatRequestProducer standaloneRequestProducer;
     private final StringRedisTemplate redisTemplate;
@@ -1620,6 +1636,13 @@ emitter.onError(e -> {
      * @param aiResponse AI回复内容
      */
     private void saveChatToDatabase(Long memoryId, String userMessage, String chatType, String aiResponse) {
+        // 系统错误提示不写入会话历史，避免错误文案污染后续对话上下文
+        if (isSystemErrorMessage(aiResponse)) {
+            log.warn("AI回复为系统错误提示，跳过写入会话历史, memoryId: {}, 内容前缀: {}", memoryId,
+                    aiResponse != null && aiResponse.length() > 40 ? aiResponse.substring(0, 40) : aiResponse);
+            return;
+        }
+
         // 先保存到chat_save数据库表（如果chatSaveService可用）
         if (chatSaveService != null) {
             try {
@@ -1656,6 +1679,22 @@ emitter.onError(e -> {
         } catch (Exception e) {
             log.error("保存对话历史到MongoDB失败, memoryId: {}", memoryId, e);
         }
+    }
+
+    /**
+     * 判断AI回复是否为系统错误提示（而非模型正常输出）
+     */
+    private boolean isSystemErrorMessage(String aiResponse) {
+        if (aiResponse == null || aiResponse.isEmpty()) {
+            return false;
+        }
+        String text = aiResponse.trim();
+        for (String prefix : SYSTEM_ERROR_PREFIXES) {
+            if (text.startsWith(prefix)) {
+                return true;
+            }
+        }
+        return false;
     }
     
     /**
