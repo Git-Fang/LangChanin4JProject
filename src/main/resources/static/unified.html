@@ -1191,7 +1191,7 @@
                     <!-- 模型选择器 -->
                     <div class="model-selector">
                         <label for="modelSelect">AI模型:</label>
-                        <select id="modelSelect" onchange="handleModelChange()">
+                        <select id="modelSelect" autocomplete="off" onchange="handleModelChange()">
                             <option value="">加载中...</option>
                         </select>
                         <button class="refresh-model-btn" onclick="refreshModels()" title="刷新模型列表">🔄</button>
@@ -1283,6 +1283,7 @@
         // 全局状态
         let currentMode = 'http'; // 'http' 或 'sse'
         let currentModelId = ''; // 当前选中的模型ID
+        let defaultModelId = ''; // 后端配置的默认模型ID
         let availableModels = []; // 可用模型列表
         let memoryId = null;
         let eventSource = null;
@@ -1319,16 +1320,24 @@
                 if (result.code === 200 && result.data) {
                     availableModels = result.data;
                     updateModelSelector();
+
+                    // 向后端确认当前默认模型，失败时退回列表第一位
+                    defaultModelId = await fetchDefaultModelId();
                     
-                    // 尝试恢复之前选择的模型
+                    // 恢复上次选择的模型：仅当"后端默认模型"没变时才恢复，
+                    // 避免改了默认模型后仍被浏览器里缓存的旧选择覆盖
                     const savedModelId = localStorage.getItem('selectedModelId');
-                    if (savedModelId && availableModels.some(m => m.modelId === savedModelId)) {
+                    const savedAgainstDefault = localStorage.getItem('selectedModelDefault');
+                    if (savedModelId
+                        && availableModels.some(m => m.modelId === savedModelId)
+                        && savedAgainstDefault === defaultModelId) {
                         currentModelId = savedModelId;
                         document.getElementById('modelSelect').value = savedModelId;
-                    } else if (availableModels.length > 0) {
-                        // 默认选择第一个模型
-                        currentModelId = availableModels[0].modelId;
+                    } else if (defaultModelId) {
+                        currentModelId = defaultModelId;
                         document.getElementById('modelSelect').value = currentModelId;
+                        localStorage.removeItem('selectedModelId');
+                        localStorage.removeItem('selectedModelDefault');
                     }
                 }
             } catch (error) {
@@ -1336,6 +1345,20 @@
             }
         }
         initModels();
+
+        // 向后端获取当前默认模型ID，取不到时退回模型列表第一位
+        async function fetchDefaultModelId() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/model/current`);
+                const result = await response.json();
+                if (result && result.code === 200 && result.data && result.data.modelId) {
+                    return result.data.modelId;
+                }
+            } catch (error) {
+                console.warn('获取默认模型失败，使用列表第一位:', error);
+            }
+            return availableModels.length > 0 ? availableModels[0].modelId : '';
+        }
 
         // 更新模型选择器
         function updateModelSelector() {
@@ -1364,8 +1387,9 @@
             const select = document.getElementById('modelSelect');
             currentModelId = select.value;
             
-            // 保存到localStorage
+            // 保存到localStorage（同时记录当时的后端默认模型，默认模型变化后旧选择自动失效）
             localStorage.setItem('selectedModelId', currentModelId);
+            localStorage.setItem('selectedModelDefault', defaultModelId || (availableModels.length > 0 ? availableModels[0].modelId : ''));
             
             // 显示提示
             const selectedModel = availableModels.find(m => m.modelId === currentModelId);
@@ -2261,7 +2285,16 @@
                         if (loadingDiv && loadingDiv.parentNode) {
                             loadingDiv.remove();
                         }
-                        addMessage('抱歉，服务暂时不可用，请稍后重试。', false);
+                        let rawError = '';
+                        try {
+                            if (error && error.data) {
+                                const payload = JSON.parse(error.data);
+                                rawError = payload.message || payload.error || '';
+                            }
+                        } catch (e) {
+                            // 非 JSON 的 SSE 错误帧，忽略解析失败
+                        }
+                        addMessage(describeChatError(rawError), false);
 
                         eventSource.close();
                         loadingDiv._eventSource = null;
@@ -2341,7 +2374,7 @@
                 }
                 
                 // 添加错误提示消息
-                addMessage('抱歉，服务暂时不可用，请稍后重试。', false);
+                addMessage(error.name === 'AbortError' ? '请求已取消' : describeChatError(error.message), false);
             } finally {
                 // 恢复输入和按钮
                 input.disabled = false;
@@ -2357,6 +2390,37 @@
                 event.preventDefault();
                 sendMessage();
             }
+        }
+
+        // 将后端返回的原始错误转换成用户可读的原因，避免统一显示"服务暂时不可用"
+        function describeChatError(rawMessage) {
+            const raw = (rawMessage === null || rawMessage === undefined) ? '' : String(rawMessage);
+            if (!raw.trim()) {
+                return '抱歉，服务暂时不可用，请稍后重试。';
+            }
+            if (raw === '请求已取消') {
+                return raw;
+            }
+            const lower = raw.toLowerCase();
+            if (lower.indexOf('invalid authentication') >= 0 || lower.indexOf('invalid_api_key') >= 0
+                || lower.indexOf('invalidapikey') >= 0 || lower.indexOf('authentication fails') >= 0
+                || lower.indexOf('incorrect api key') >= 0 || lower.indexOf('unauthorized') >= 0
+                || lower.indexOf('401') >= 0) {
+                return '模型鉴权失败：API Key 无效或已过期，请检查服务端的模型密钥配置。';
+            }
+            if (lower.indexOf('arrearage') >= 0 || lower.indexOf('overdue') >= 0
+                || lower.indexOf('access denied') >= 0 || lower.indexOf('余额') >= 0 || lower.indexOf('欠费') >= 0) {
+                return '模型服务不可用：账户余额不足或已欠费，请充值后重试。';
+            }
+            if (lower.indexOf('rate limit') >= 0 || lower.indexOf('rate_limit') >= 0 || lower.indexOf('rpm') >= 0
+                || lower.indexOf('too many requests') >= 0 || lower.indexOf('429') >= 0) {
+                return '请求过于频繁，已触发模型限流，请稍后重试。';
+            }
+            if (lower.indexOf('timeout') >= 0 || lower.indexOf('timed out') >= 0) {
+                return '请求超时，请稍后重试。';
+            }
+            const brief = raw.replace(/\s+/g, ' ').trim();
+            return '服务暂时不可用：' + (brief.length > 120 ? brief.slice(0, 120) + '…' : brief);
         }
 
         // 处理聊天页面文件选择
@@ -2604,10 +2668,27 @@
             memoryId = Date.now();
             sessionStorage.setItem('chatMemoryId', memoryId.toString());
             lastMessage = null;
+            resetModelToDefault();
             const container = document.getElementById('messagesContainer');
             container.innerHTML = '<div class="empty-state">开始新的对话吧</div>';
             // 刷新历史会话列表
             loadHistorySessions();
+        }
+
+        // 新会话时把模型恢复为后端配置的默认模型
+        function resetModelToDefault() {
+            const target = defaultModelId || (availableModels.length > 0 ? availableModels[0].modelId : '');
+            if (!target) {
+                return;
+            }
+            currentModelId = target;
+            const select = document.getElementById('modelSelect');
+            if (select) {
+                select.value = currentModelId;
+            }
+            localStorage.removeItem('selectedModelId');
+            localStorage.removeItem('selectedModelDefault');
+            console.log('新会话已恢复默认模型:', currentModelId);
         }
 
         // 加载历史会话列表
