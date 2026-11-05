@@ -846,13 +846,9 @@
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
-                        jsonrpc: '2.0',
-                        id: Date.now().toString(),
-                        method: 'composite_intelligent_agent',
-                        params: {
-                            memoryId: memoryId,
-                            userMessage: message
-                        }
+                        memoryId: memoryId,
+                        message: message,
+                        modelId: null
                     }),
                     signal: controller.signal
                 });
@@ -865,8 +861,8 @@
                     throw new Error(errorText || `HTTP error! status: ${response.status}`);
                 }
 
-                const data = await response.json();
-                console.log('Response data:', data);
+                const rawBody = await response.text();
+                console.log('Response data:', rawBody);
                 
                 // 移除加载消息，添加实际回复
                 const messages = document.querySelectorAll('.message');
@@ -875,14 +871,24 @@
                     lastMessage.remove();
                 }
                 
-                // 解析JSON-RPC响应
+                // 解析响应：/xiaozhi/chat 直接返回纯文本，同时兼容 JSON / JSON-RPC 结构
                 let replyText = '抱歉，我没有理解您的问题。';
-                if (data.result && data.result.chatResult) {
+                let data = null;
+                try {
+                    data = JSON.parse(rawBody);
+                } catch (e) {
+                    // 非 JSON 响应，按纯文本处理
+                }
+                if (data && data.result && data.result.chatResult) {
                     replyText = data.result.chatResult;
-                } else if (data.result) {
+                } else if (data && data.result) {
                     replyText = typeof data.result === 'string' ? data.result : JSON.stringify(data.result);
-                } else if (data.error) {
+                } else if (data && data.error) {
                     replyText = `错误: ${data.error.message || data.error}`;
+                } else if (data !== null && typeof data === 'string') {
+                    replyText = data;
+                } else if (rawBody) {
+                    replyText = rawBody;
                 }
                 
                 addMessage(replyText, false);
