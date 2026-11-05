@@ -19,8 +19,7 @@ spring:
     name: RAGTranslationApplication
   config:
     import:
-      - optional:nacos:${spring.application.name}-${spring.profiles.active}.yml?group=DEFAULT_GROUP
-      - optional:nacos:${spring.application.name}.yml?group=DEFAULT_GROUP
+      - nacos:${spring.application.name}-${spring.profiles.active}.yml?group=DEFAULT_GROUP
   web:
     timeout: 240s
   servlet:
@@ -87,6 +86,8 @@ spring:
         server-addr: ${NACOS_SERVER_ADDR:nacos:8848}
         namespace: ${NACOS_NAMESPACE:}
         group: DEFAULT_GROUP
+        username: ${NACOS_USERNAME:nacos}
+        password: ${NACOS_PASSWORD:}
         data-id: application-docker.yml
         type: yaml
         auto-refresh: true
@@ -96,6 +97,8 @@ spring:
         server-addr: ${NACOS_SERVER_ADDR:nacos:8848}
         namespace: ${NACOS_NAMESPACE:}
         group: DEFAULT_GROUP
+        username: ${NACOS_USERNAME:nacos}
+        password: ${NACOS_PASSWORD:}
         service: ${spring.application.name}
         cluster-name: docker
 
