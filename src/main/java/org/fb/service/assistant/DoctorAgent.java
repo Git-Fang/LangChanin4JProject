@@ -13,8 +13,7 @@ import dev.langchain4j.service.spring.AiServiceWiringMode;
 @AiService(wiringMode = AiServiceWiringMode.EXPLICIT,
         chatModel = "dynamicChatModel",
         tools = {"appointmentTools","baiduMapMcpAssistant"},
-        chatMemoryProvider = "chatMemoryProvider",
-        contentRetriever = "contentRetriever"
+        chatMemoryProvider = "chatMemoryProvider"
 )
 public interface DoctorAgent {
 
