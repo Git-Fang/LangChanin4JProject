@@ -8,11 +8,11 @@ import dev.langchain4j.service.spring.AiServiceWiringMode;
 
 /**
  * 翻译专用术语提取Agent - 仅用于翻译场景提取术语，不进行任何向量存储操作
- * chatModel = "chatModel",表示使用chatModel模型
+ * chatModel = "dynamicChatModel",表示使用chatModel模型
  * 只配置commonTools进行查询，不配置qdrantOperationTools以避免存储术语
  * */
 @AiService(wiringMode = AiServiceWiringMode.EXPLICIT,
-        chatModel = "chatModel",
+        chatModel = "dynamicChatModel",
         tools = {"commonTools"}
 )
 public interface TranslationTermExtractor {

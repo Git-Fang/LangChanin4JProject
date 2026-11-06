@@ -11,7 +11,7 @@ import dev.langchain4j.service.spring.AiServiceWiringMode;
  * chatModel = "ollamaChatModel",表示使用ollama模型
  * */
 @AiService(wiringMode = AiServiceWiringMode.EXPLICIT,
-        chatModel = "chatModel",
+        chatModel = "dynamicChatModel",
         tools = {"appointmentTools","baiduMapMcpAssistant"},
         chatMemoryProvider = "chatMemoryProvider",
         contentRetriever = "contentRetriever"

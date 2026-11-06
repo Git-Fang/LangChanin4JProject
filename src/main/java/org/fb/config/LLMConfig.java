@@ -111,6 +111,9 @@ public class LLMConfig {
     private volatile ChatModel kimiChatModel;
     private volatile DynamicStreamingChatModel dynamicStreamingChatModel;
 
+    /** 非流式动态模型代理，供 AiService 跟随用户选择的模型 */
+    private volatile DynamicChatModel dynamicChatModel;
+
     @PostConstruct
     public void init() {
         refreshAllModels();
@@ -126,6 +129,7 @@ public class LLMConfig {
         refreshKimiStreamingChatModel();
         refreshOllamaChatModel();
         refreshKimiChatModel();
+        refreshDynamicChatModel();
         refreshDynamicStreamingChatModel();
         log.info("All chat models refreshed successfully");
     }
@@ -159,6 +163,36 @@ public class LLMConfig {
         dynamicStreamingChatModel.setCurrentModel(targetDefault);
         
         log.info("【动态流式模型】初始化完成，已注册模型: {}", dynamicStreamingChatModel.getModels().keySet());
+    }
+
+    /**
+     * 初始化非流式动态模型代理（供 DoctorAgent、翻译、术语提取等 AiService 使用），
+     * 使这些业务也能跟随用户在页面上选择的模型
+     */
+    private void refreshDynamicChatModel() {
+        this.dynamicChatModel = new DynamicChatModel();
+
+        if (qwenChatModel != null) {
+            dynamicChatModel.registerModel("qwen", qwenChatModel);
+        }
+        if (deepSeekChatModel != null) {
+            dynamicChatModel.registerModel("deepseek", deepSeekChatModel);
+        }
+        if (ollamaChatModel != null) {
+            dynamicChatModel.registerModel("ollama", ollamaChatModel);
+        }
+        if (kimiChatModel != null) {
+            dynamicChatModel.registerModel("kimi", kimiChatModel);
+        }
+
+        String targetDefault = (defaultModelId == null || defaultModelId.isEmpty()) ? "deepseek" : defaultModelId;
+        if (!dynamicChatModel.hasModel(targetDefault)) {
+            log.warn("【动态模型-非流式】默认模型 {} 未注册，回退到第一个可用模型", targetDefault);
+        } else {
+            dynamicChatModel.setCurrentModel(targetDefault);
+        }
+
+        log.info("【动态模型-非流式】初始化完成，已注册模型: {}", dynamicChatModel.getModels().keySet());
     }
 
     private void refreshDeepSeekChatModel() {
@@ -343,6 +377,11 @@ public class LLMConfig {
     @Bean(name = "dynamicStreamingChatModel")
     public DynamicStreamingChatModel dynamicStreamingChatModel() {
         return dynamicStreamingChatModel;
+    }
+
+    @Bean(name = "dynamicChatModel")
+    public ChatModel dynamicChatModel() {
+        return dynamicChatModel;
     }
 
     @Bean

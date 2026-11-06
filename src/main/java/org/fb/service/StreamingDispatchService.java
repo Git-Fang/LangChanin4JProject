@@ -3,6 +3,7 @@ package org.fb.service;
 import dev.langchain4j.memory.chat.ChatMemoryProvider;
 import lombok.extern.slf4j.Slf4j;
 import org.fb.bean.ChatModelInfo;
+import org.fb.config.DynamicChatModel;
 import org.fb.config.DynamicStreamingChatModel;
 import org.fb.config.ModelRegistry;
 import org.fb.constant.BusinessConstant;
@@ -69,6 +70,10 @@ public class StreamingDispatchService {
     @Qualifier("dynamicStreamingChatModel")
     private DynamicStreamingChatModel dynamicStreamingChatModel;
 
+    @Autowired(required = false)
+    @Qualifier("dynamicChatModel")
+    private DynamicChatModel dynamicChatModel;
+
     /**
      * 流式处理用户消息（不支持模型切换）
      *
@@ -106,6 +111,14 @@ public class StreamingDispatchService {
         } else if (dynamicStreamingChatModel != null) {
             dynamicStreamingChatModel.setCurrentModel("qwen");
             log.warn("【动态模型切换】未指定模型，使用默认: qwen");
+        }
+
+        // 非流式动态模型同步切换：DoctorAgent、翻译、术语提取、SQL 等 AiService 使用它
+        if (dynamicChatModel != null) {
+            String targetModelId = actualModelId != null
+                    ? actualModelId
+                    : (dynamicStreamingChatModel != null ? dynamicStreamingChatModel.getCurrentModelId() : null);
+            dynamicChatModel.setCurrentModel(targetModelId);
         }
         
         // 记录模型切换日志

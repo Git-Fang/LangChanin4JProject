@@ -9,11 +9,11 @@ import dev.langchain4j.service.spring.AiServiceWiringMode;
 
 /**
  * 术语提取Agent - 无记忆模式，避免上下文干扰
- * chatModel = "chatModel",表示使用chatModel模型
+ * chatModel = "dynamicChatModel",表示使用chatModel模型
  * 不使用chatMemoryProvider，确保每次提取都是独立的，不受之前对话影响
  * */
 @AiService(wiringMode = AiServiceWiringMode.EXPLICIT,
-        chatModel = "chatModel",
+        chatModel = "dynamicChatModel",
         tools = {"qdrantOperationTools", "commonTools"}
 )
 public interface TermExtractionAgent {

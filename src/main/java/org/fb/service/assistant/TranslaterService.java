@@ -15,7 +15,7 @@ import dev.langchain4j.service.spring.AiServiceWiringMode;
  * 移除了qdrantOperationTools，不在翻译过程中保存新术语和别名映射
  * */
 @AiService(wiringMode = AiServiceWiringMode.EXPLICIT,
-        chatModel = "chatModel",
+        chatModel = "dynamicChatModel",
         tools = {"mongoDBTools", "translationTermExtractor", "commonTools"},
         chatMemoryProvider = "chatMemoryProvider"
 )

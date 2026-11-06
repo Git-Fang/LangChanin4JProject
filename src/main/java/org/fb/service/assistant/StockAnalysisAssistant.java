@@ -12,7 +12,7 @@ import dev.langchain4j.service.spring.AiServiceWiringMode;
  * 使用AI对公司进行深度价值分析并给出投资建议
  */
 @AiService(wiringMode = AiServiceWiringMode.EXPLICIT,
-        chatModel = "chatModel",
+        chatModel = "dynamicChatModel",
         tools = {"stockDataFetcher", "webSearchTools"},
         chatMemoryProvider = "chatMemoryProvider"
 )

@@ -13,7 +13,7 @@ import dev.langchain4j.service.spring.AiServiceWiringMode;
  * termQueryTool仅用于RAG检索场景的术语查询，不涉及翻译
  * */
 @AiService(wiringMode = AiServiceWiringMode.EXPLICIT,
-        chatModel = "chatModel",
+        chatModel = "dynamicChatModel",
         tools = {"termQueryTool","mongoDBTools","naturalLanguageSQLAgent","personalDataTools","webSearchTools","knowledgeBaseRetrievalService"},
         chatMemoryProvider = "chatMemoryProvider",
         contentRetriever = "contentRetriever"
