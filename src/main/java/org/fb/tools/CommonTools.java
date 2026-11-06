@@ -124,8 +124,8 @@ public class CommonTools {
         // 调整原因：all-MiniLM-L6-v2 模型对中文支持有限，需要更高阈值过滤噪声
         EmbeddingSearchRequest searchRequest = EmbeddingSearchRequest.builder()
                 .queryEmbedding(queryEmbedding)
-                .maxResults(30)
-                .minScore(0.6)  // 从 0.1 提升到 0.6，过滤低相关度结果
+                .maxResults(10)   // 从 30 降到 10：多路召回会再次叠加，30 条会产生数百片段淹没小模型上下文
+                .minScore(0.65)   // 略提阈值，过滤低相关度结果
                 .build();
 
         return embeddingStore.search(searchRequest);

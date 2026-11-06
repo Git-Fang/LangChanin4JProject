@@ -204,6 +204,12 @@ public class KnowledgeBaseRetrievalService {
                         }
                     }
                     log.info("Qdrant检索 - 查询 '{}' 找到结果，当前去重后: {} 条", sq, allResults.size());
+
+                    // 结果已达上限则停止后续召回，避免数千行片段淹没模型上下文
+                    if (allResults.size() >= 60) {
+                        log.info("Qdrant检索 - 结果已达上限 60 条，停止后续多路召回");
+                        break;
+                    }
                 }
             }
             
