@@ -139,10 +139,10 @@ ai:
     timeout: 300s
     max-retries: 3
 
-  # Ollama配置（提供默认值，实际不使用）
+  # Ollama配置：本地 Ollama 跑在宿主机上，容器需通过 host.docker.internal 访问
   ollama:
-    base-url: http://localhost:11434
-    model: deepseek-r1:8b
+    base-url: ${AI_OLLAMA_BASE_URL:http://host.docker.internal:11434}
+    model: ${AI_OLLAMA_MODEL:qwen3:8b}
     timeout: 300s
 
   kimi:
