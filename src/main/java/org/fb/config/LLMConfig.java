@@ -53,11 +53,25 @@ public class LLMConfig {
     @Value("${ai.dashscope.max-retries:3}")
     private volatile int dashscopeMaxRetries;
 
+    /**
+     * 走网关（new-api）时置 true，Qwen 流式改用 OpenAI 兼容客户端；
+     * 为 false 时保持原生 QwenStreamingChatModel（直连 DashScope）。
+     */
+    @Value("${ai.dashscope.use-openai-streaming:false}")
+    private volatile boolean dashscopeUseOpenAiStreaming;
+
     @Value("${ai.ollama.base-url:http://localhost:11434}")
     private volatile String ollamaUrl;
 
     @Value("${ai.ollama.model:deepseek-r1:8b}")
     private volatile String ollamaModel;
+
+    /**
+     * 非空时 Ollama 请求走 OpenAI 兼容网关（如 new-api:3002），便于统计用量；
+     * 为空时保持原行为，直连 Ollama 原生接口。
+     */
+    @Value("${ai.ollama.api-key:}")
+    private volatile String ollamaApiKey;
 
     @Value("${ai.deepSeek.apiKey:}")
     private volatile String deepSeekApiKey;
@@ -201,6 +215,7 @@ public class LLMConfig {
             this.deepSeekChatModel = null;
         } else {
             this.deepSeekChatModel = OpenAiChatModel.builder()
+                    .listeners(org.fb.trace.LangfuseTracer.listeners())
                     .apiKey(deepSeekApiKey)
                     .modelName(deepSeekModel)
                     .logRequests(true)
@@ -218,6 +233,7 @@ public class LLMConfig {
             this.qwenChatModel = null;
         } else {
             this.qwenChatModel = OpenAiChatModel.builder()
+                    .listeners(org.fb.trace.LangfuseTracer.listeners())
                     .apiKey(dashscopeApiKey)
                     .modelName(dashscopeModel)
                     .baseUrl(dashscopeUrl)
@@ -236,6 +252,7 @@ public class LLMConfig {
         } else {
             // 使用支持视觉能力的qwen-vl模型
             this.qwenVisionChatModel = OpenAiChatModel.builder()
+                    .listeners(org.fb.trace.LangfuseTracer.listeners())
                     .apiKey(dashscopeApiKey)
                     .modelName("qwen-vl-max")
                     .baseUrl(dashscopeUrl)
@@ -252,12 +269,25 @@ public class LLMConfig {
             if (dashscopeApiKey == null || dashscopeApiKey.isEmpty() || dashscopeApiKey.equals("demo")) {
                 log.warn("DashScope API Key未配置，Streaming模型不可用");
                 this.streamingChatModel = null;
+            } else if (dashscopeUseOpenAiStreaming) {
+                // 经网关（new-api）转发，使用 OpenAI 兼容流式客户端，便于统计用量
+                this.streamingChatModel = OpenAiStreamingChatModel.builder()
+                        .listeners(org.fb.trace.LangfuseTracer.listeners())
+                        .apiKey(dashscopeApiKey)
+                        .modelName(dashscopeModel)
+                        .baseUrl(dashscopeUrl)
+                        .timeout(READ_TIMEOUT)
+                        .logRequests(true)
+                        .logResponses(true)
+                        .build();
+                log.info("Qwen Streaming模型通过网关初始化成功: {} @ {}", dashscopeModel, dashscopeUrl);
             } else {
                 // 使用DashScope原生的QwenStreamingChatModel，避免OpenAI兼容模式的序列化问题
                                 this.streamingChatModel = QwenStreamingChatModel.builder()
                                         .apiKey(dashscopeApiKey)
                                         .modelName(dashscopeModel)
                                         .build();
+                log.info("Qwen Streaming模型直连初始化成功: {}", dashscopeModel);
             }
         }
     
@@ -267,6 +297,7 @@ public class LLMConfig {
             this.deepSeekStreamingChatModel = null;
         } else {
             this.deepSeekStreamingChatModel = OpenAiStreamingChatModel.builder()
+                    .listeners(org.fb.trace.LangfuseTracer.listeners())
                     .apiKey(deepSeekApiKey)
                     .modelName(deepSeekModel)
                     .baseUrl(deepSeekUrl)
@@ -279,15 +310,31 @@ public class LLMConfig {
     }
     
     private void refreshOllamaStreamingChatModel() {
-        this.ollamaStreamingChatModel = OllamaStreamingChatModel.builder()
-                .baseUrl(ollamaUrl)
-                .modelName(ollamaModel)
-                .temperature(0.8)
-                .timeout(READ_TIMEOUT)
-                .logRequests(true)
-                .logResponses(true)
-                .build();
-        log.info("Ollama Streaming模型初始化成功: {}", ollamaModel);
+        if (ollamaApiKey != null && !ollamaApiKey.isEmpty()) {
+            // 走 OpenAI 兼容网关（new-api），可在网关侧统计用量
+            this.ollamaStreamingChatModel = OpenAiStreamingChatModel.builder()
+                    .listeners(org.fb.trace.LangfuseTracer.listeners())
+                    .apiKey(ollamaApiKey)
+                    .modelName(ollamaModel)
+                    .baseUrl(ollamaUrl)
+                    .temperature(0.8)
+                    .timeout(READ_TIMEOUT)
+                    .logRequests(true)
+                    .logResponses(true)
+                    .build();
+            log.info("Ollama Streaming模型通过网关初始化成功: {} @ {}", ollamaModel, ollamaUrl);
+        } else {
+            this.ollamaStreamingChatModel = OllamaStreamingChatModel.builder()
+                    .listeners(org.fb.trace.LangfuseTracer.listeners())
+                    .baseUrl(ollamaUrl)
+                    .modelName(ollamaModel)
+                    .temperature(0.8)
+                    .timeout(READ_TIMEOUT)
+                    .logRequests(true)
+                    .logResponses(true)
+                    .build();
+            log.info("Ollama Streaming模型直连初始化成功: {}", ollamaModel);
+        }
     }
     
     private void refreshKimiStreamingChatModel() {
@@ -296,6 +343,7 @@ public class LLMConfig {
             this.kimiStreamingChatModel = null;
         } else {
             this.kimiStreamingChatModel = OpenAiStreamingChatModel.builder()
+                    .listeners(org.fb.trace.LangfuseTracer.listeners())
                     .apiKey(kimiApiKey)
                     .modelName(kimiModel)
                     .logRequests(true)
@@ -308,14 +356,31 @@ public class LLMConfig {
     }
 
     private void refreshOllamaChatModel() {
-        this.ollamaChatModel = OllamaChatModel.builder()
-                .baseUrl(ollamaUrl)
-                .modelName(ollamaModel)
-                .temperature(0.8)
-                .timeout(READ_TIMEOUT)
-                .logRequests(true)
-                .logResponses(true)
-                .build();
+        if (ollamaApiKey != null && !ollamaApiKey.isEmpty()) {
+            // 走 OpenAI 兼容网关（new-api），可在网关侧统计用量
+            this.ollamaChatModel = OpenAiChatModel.builder()
+                    .listeners(org.fb.trace.LangfuseTracer.listeners())
+                    .apiKey(ollamaApiKey)
+                    .modelName(ollamaModel)
+                    .baseUrl(ollamaUrl)
+                    .temperature(0.8)
+                    .timeout(READ_TIMEOUT)
+                    .logRequests(true)
+                    .logResponses(true)
+                    .build();
+            log.info("Ollama模型通过网关初始化成功: {} @ {}", ollamaModel, ollamaUrl);
+        } else {
+            this.ollamaChatModel = OllamaChatModel.builder()
+                    .listeners(org.fb.trace.LangfuseTracer.listeners())
+                    .baseUrl(ollamaUrl)
+                    .modelName(ollamaModel)
+                    .temperature(0.8)
+                    .timeout(READ_TIMEOUT)
+                    .logRequests(true)
+                    .logResponses(true)
+                    .build();
+            log.info("Ollama模型直连初始化成功: {}", ollamaModel);
+        }
     }
 
     private void refreshKimiChatModel() {
@@ -324,6 +389,7 @@ public class LLMConfig {
             this.kimiChatModel = null;
         } else {
             this.kimiChatModel = OpenAiChatModel.builder()
+                    .listeners(org.fb.trace.LangfuseTracer.listeners())
                     .apiKey(kimiApiKey)
                     .modelName(kimiModel)
                     .logRequests(true)
