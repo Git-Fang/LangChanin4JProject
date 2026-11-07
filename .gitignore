@@ -37,3 +37,5 @@ build/
 
 ### Mac OS ###
 .DS_Store
+# 含明文密钥，禁止提交
+docker-compose-ragapplication.yml
